@@ -40,13 +40,139 @@ const Expenses = () => {
     const [categories, setCategories] = useState(['supplies', 'utilities', 'maintenance', 'rent', 'misc']);
     const [stats, setStats] = useState({ total: 0 });
     const [selectedDate, setSelectedDate] = useState(null);
+    const [editingExpense, setEditingExpense] = useState(null);
 
     useEffect(() => {
         fetchCategories();
         fetchExpenses();
     }, []);
 
-    // ... (fetchCategories and fetchExpenses remain same) ...
+    const fetchCategories = async () => {
+        try {
+            const docRef = doc(db, 'settings', 'expenses');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists() && docSnap.data().categories) {
+                setCategories(docSnap.data().categories);
+            }
+        } catch (error) {
+            console.error('Error fetching categories:', error);
+        }
+    };
+
+    const fetchExpenses = async () => {
+        try {
+            setLoading(true);
+            const q = query(collection(db, 'expenses'), orderBy('date', 'desc'));
+            const snapshot = await getDocs(q);
+            const expensesList = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setExpenses(expensesList);
+
+            // Calculate stats
+            const today = new Date().toISOString().split('T')[0];
+            const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+            const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+            const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+            const statsCalc = {
+                total: 0,
+                today: 0,
+                yesterday: 0,
+                week: 0,
+                month: 0,
+                supplies: 0,
+                utilities: 0,
+                maintenance: 0,
+                rent: 0,
+                misc: 0,
+                dailyBreakdown: []
+            };
+
+            // Calculate daily breakdown for last 30 days
+            const dailyMap = {};
+            for (let i = 0; i < 30; i++) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                const dateStr = d.toISOString().split('T')[0];
+                dailyMap[dateStr] = 0;
+            }
+
+            expensesList.forEach(exp => {
+                const amount = exp.amount || 0;
+                statsCalc.total += amount;
+
+                if (exp.date === today) statsCalc.today += amount;
+                if (exp.date === yesterday) statsCalc.yesterday += amount;
+                if (exp.date >= weekAgo) statsCalc.week += amount;
+                if (exp.date >= monthStart) statsCalc.month += amount;
+
+                if (exp.category && statsCalc[exp.category] !== undefined) {
+                    statsCalc[exp.category] += amount;
+                }
+
+                if (dailyMap[exp.date] !== undefined) {
+                    dailyMap[exp.date] += amount;
+                }
+            });
+
+            statsCalc.dailyBreakdown = Object.entries(dailyMap)
+                .filter(([_, total]) => total > 0)
+                .map(([date, total]) => ({ date, total }));
+
+            setStats(statsCalc);
+        } catch (error) {
+            console.error('Error fetching expenses:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const deleteExpense = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this expense?')) return;
+        try {
+            await deleteDoc(doc(db, 'expenses', id));
+            fetchExpenses();
+        } catch (error) {
+            console.error('Error deleting expense:', error);
+        }
+    };
+
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(amount || 0);
+    };
+
+    const getCategoryIcon = (category) => {
+        switch (category) {
+            case 'supplies': return <Package size={18} />;
+            case 'utilities': return <Zap size={18} />;
+            case 'maintenance': return <Wrench size={18} />;
+            case 'rent': return <Home size={18} />;
+            default: return <MoreVertical size={18} />;
+        }
+    };
+
+    const exportToExcel = () => {
+        const dataToExport = filteredExpenses.map(exp => ({
+            Date: exp.date,
+            Title: exp.title,
+            Category: exp.category,
+            Amount: exp.amount,
+            'Payment Mode': exp.paymentMode || 'N/A',
+            Note: exp.note || ''
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
+        XLSX.writeFile(wb, `Expenses_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
 
     const filteredExpenses = expenses.filter(e => {
         if (selectedDate && e.date !== selectedDate) return false;
