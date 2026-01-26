@@ -15,6 +15,7 @@ import Materials from './pages/Materials';
 import MaterialUsageAnalytics from './pages/MaterialUsageAnalytics';
 import Payroll from './pages/Payroll';
 import Attendance from './pages/Attendance';
+import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import CRMHistory from './pages/CRMHistory';
 import AMCPlans from './pages/AMCPlans';
@@ -108,6 +109,9 @@ function AppRoutes() {
           <ProtectedRoute permission="audit"><AuditLog /></ProtectedRoute>
         } />        <Route path="settings" element={
           <ProtectedRoute permission="settings"><Settings /></ProtectedRoute>
+        } />
+        <Route path="analytics" element={
+          <ProtectedRoute permission="finance"><Analytics /></ProtectedRoute>
         } />
         <Route path="crm-history" element={
           <ProtectedRoute permission="crm"><CRMHistory /></ProtectedRoute>

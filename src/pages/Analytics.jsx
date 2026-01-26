@@ -48,19 +48,26 @@ const Analytics = () => {
     const fetchAnalytics = async () => {
         try {
             setLoading(true);
+            // Use local date string (YYYY-MM-DD)
+            const toLocalDateStr = (date) => {
+                const offset = date.getTimezoneOffset() * 60000;
+                const localDate = new Date(date.getTime() - offset);
+                return localDate.toISOString().split('T')[0];
+            };
+
             const today = new Date();
-            const todayStr = today.toISOString().split('T')[0];
+            const todayStr = toLocalDateStr(today);
 
             const yesterday = new Date(today);
             yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toISOString().split('T')[0];
+            const yesterdayStr = toLocalDateStr(yesterday);
 
             const weekAgo = new Date(today);
             weekAgo.setDate(weekAgo.getDate() - 7);
-            const weekAgoStr = weekAgo.toISOString().split('T')[0];
+            const weekAgoStr = toLocalDateStr(weekAgo);
 
             const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-            const monthStartStr = monthStart.toISOString().split('T')[0];
+            const monthStartStr = toLocalDateStr(monthStart);
 
             // Fetch all bookings
             const bookingsRef = collection(db, 'bookings');
