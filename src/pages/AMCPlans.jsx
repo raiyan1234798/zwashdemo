@@ -910,12 +910,31 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
     const [vehicleType, setVehicleType] = useState('hatchback');
     const [salePrice, setSalePrice] = useState(0);
 
-    // Filter customers
-    const filteredCustomers = customers.filter(c => 
-        (c.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
-        (c.phone || '').includes(searchTerm) || 
-        (c.licensePlate?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-    );
+    // List of all customers for dropdown
+    const [customerList, setCustomerList] = useState([]);
+    const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+
+    // Filter customers by search term - searches by vehicle number, phone, and name
+    const filteredCustomers = customers.filter(c => {
+        const search = searchTerm.toLowerCase().trim();
+        if (!search) return true; // Show all when empty to help discovery
+
+        // Normalize search and data for robust matching
+        const searchClean = search.replace(/[^a-z0-9]/g, '');
+
+        // Search by license plate (vehicle number)
+        const plate = (c.licensePlate || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const licensePlateMatch = plate.includes(searchClean);
+
+        // Search by phone number
+        const phone = (c.phone || '').toString().replace(/[^0-9]/g, '');
+        const phoneMatch = phone.includes(searchClean);
+
+        // Search by customer name
+        const nameMatch = (c.name || '').toLowerCase().includes(search);
+
+        return licensePlateMatch || phoneMatch || nameMatch;
+    });
 
     const customersLoading = false; // Placeholder if used in render
 
@@ -991,22 +1010,23 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
 
             // Create Subscription
             const subscriptionData = {
-                customerId: customerId,
+                customerId: customerId || 'unknown',
                 customerName: custName || custPhone || 'Unknown',
-                customerPhone: custPhone,
-                vehicleNumber: custVehicle || 'N/A',
+                customerPhone: custPhone || '',
+                vehicleNumber: (custVehicle || 'N/A').toUpperCase(),
                 vehicleType: vehicleType,
                 planId: plan.id,
                 planName: plan.name,
-                price: Number(salePrice),
-                startDate: startDate,
-                expiryDate: expiryDate,
+                price: Number(salePrice) || 0,
+                startDate: Timestamp.fromDate(startDate),
+                expiryDate: Timestamp.fromDate(expiryDate),
                 status: 'active',
-                remainingServices: plan.serviceCount, // Legacy support
-                services: serviceTracking,
-                createdAt: serverTimestamp()
+                remainingServices: Number(plan.serviceCount) || 0, // Legacy support
+                serviceTracking: serviceTracking, // Fixed field name to match UI
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
             };
-            
+
             await addDoc(collection(db, 'customer_amc_subscriptions'), subscriptionData);
 
             // Create Invoice
@@ -1014,8 +1034,8 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
                 invoiceNumber: `INV-AMC-${Date.now()}`,
                 customerId: customerId,
                 customerName: custName || custPhone || 'Unknown',
-                customerPhone: custPhone,
-                vehicleNumber: custVehicle || 'N/A',
+                customerPhone: custPhone || '',
+                vehicleNumber: (custVehicle || 'N/A').toUpperCase(),
                 type: 'AMC Subscription',
                 items: [
                     {
@@ -1091,9 +1111,9 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
                             type="number"
                             value={salePrice}
                             onChange={e => setSalePrice(e.target.value)}
-                            style={{ 
-                                fontWeight: 'bold', 
-                                fontSize: '1.1rem', 
+                            style={{
+                                fontWeight: 'bold',
+                                fontSize: '1.1rem',
                                 color: 'var(--primary)',
                                 padding: '0.75rem',
                                 width: '100%',
@@ -1144,47 +1164,90 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
                     </div>
 
                     {activeTab === 'existing' ? (
-                        <div className="form-group">
+                        <div className="form-group" style={{ position: 'relative' }}>
                             <div className="search-box mb-2">
                                 <Search size={16} />
                                 <input
-                                    placeholder="Search by name, phone or number plate..."
+                                    placeholder="Search by name, phone or vehicle plate..."
                                     value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
+                                    onChange={e => {
+                                        setSearchTerm(e.target.value);
+                                        setShowCustomerDropdown(true);
+                                    }}
+                                    onFocus={() => setShowCustomerDropdown(true)}
+                                    autoComplete="off"
                                 />
                             </div>
-                            <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--navy-200)', borderRadius: '8px', minHeight: '100px' }}>
-                                {customersLoading ? (
-                                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--navy-400)' }}>
-                                        Loading customers...
-                                    </div>
-                                ) : customers.length === 0 ? (
-                                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--navy-400)' }}>
-                                        No customers in database.
-                                    </div>
-                                ) : filteredCustomers.length === 0 ? (
-                                    <div style={{ padding: '20px', textAlign: 'center', color: 'var(--navy-400)' }}>
-                                        No customers found for "{searchTerm}"
-                                    </div>
-                                ) : (
-                                    filteredCustomers.map(c => (
-                                        <div
-                                            key={c.id}
-                                            onClick={() => setSelectedCustomer(c)}
-                                            style={{
-                                                padding: '12px',
-                                                borderBottom: '1px solid #eee',
-                                                background: selectedCustomer?.id === c.id ? 'var(--primary-light)' : 'white',
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            <strong>{c.name || 'N/A'}</strong> - {c.phone}
-                                            <br />
-                                            <small style={{ color: 'var(--primary)', fontWeight: '600' }}>{c.licensePlate}</small>
+
+                            {showCustomerDropdown && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    left: 0,
+                                    right: 0,
+                                    background: 'white',
+                                    border: '1px solid var(--navy-200)',
+                                    borderRadius: '8px',
+                                    maxHeight: '200px',
+                                    overflowY: 'auto',
+                                    zIndex: 100,
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                }}>
+                                    {filteredCustomers.length === 0 ? (
+                                        <div style={{ padding: '20px', textAlign: 'center', color: 'var(--navy-400)' }}>
+                                            No customers found for "{searchTerm}"
                                         </div>
-                                    ))
-                                )}
-                            </div>
+                                    ) : (
+                                        filteredCustomers.slice(0, 10).map(c => (
+                                            <div
+                                                key={c.id}
+                                                onClick={() => {
+                                                    setSelectedCustomer(c);
+                                                    setShowCustomerDropdown(false);
+                                                    setSearchTerm(c.name || c.phone || '');
+                                                }}
+                                                style={{
+                                                    padding: '12px',
+                                                    borderBottom: '1px solid #eee',
+                                                    background: selectedCustomer?.id === c.id ? 'var(--primary-light)' : 'white',
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <strong>{c.name || 'Unnamed'}</strong>
+                                                    <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{c.licensePlate}</span>
+                                                </div>
+                                                <small style={{ color: 'var(--navy-500)' }}>{c.phone}</small>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+
+                            {selectedCustomer && !showCustomerDropdown && (
+                                <div style={{
+                                    marginTop: '0.5rem',
+                                    padding: '0.5rem',
+                                    background: '#f0fdf4',
+                                    borderRadius: '6px',
+                                    border: '1px solid #bbf7d0',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center'
+                                }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#166534' }}>
+                                        Selected: <strong>{selectedCustomer.name}</strong> ({selectedCustomer.licensePlate})
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className="btn-link"
+                                        onClick={() => setSelectedCustomer(null)}
+                                        style={{ fontSize: '0.75rem', color: '#166534' }}
+                                    >
+                                        Change
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="form-column" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
