@@ -44,7 +44,7 @@ const Sidebar = () => {
         { path: '/invoices', icon: FileText, label: 'Invoices', permission: 'invoices' },
         { path: '/employees', icon: UserCog, label: 'Employees', permission: 'employees' },
         { path: '/payroll', icon: Receipt, label: 'Payroll', permission: 'payroll' },
-        { path: '/attendance', icon: CalendarCheck, label: 'Attendance', permission: 'payroll' },
+        { path: '/attendance', icon: CalendarCheck, label: 'Attendance', permission: 'attendance' },
         { path: '/expenses', icon: DollarSign, label: 'Expenses', permission: 'expenses' },
         { path: '/materials', icon: Package, label: 'Materials', permission: 'expenses' },
         { path: '/crm-history', icon: Database, label: 'CRM History', permission: 'customers' },
