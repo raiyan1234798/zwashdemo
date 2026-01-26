@@ -190,7 +190,8 @@ const Bookings = () => {
         return (
             booking.bookingReference?.toLowerCase().includes(search) ||
             booking.serviceName?.toLowerCase().includes(search) ||
-            booking.contactPhone?.includes(search) ||
+            booking.contactPhone?.toLowerCase().includes(search) ||
+            (booking.customerName && booking.customerName.toLowerCase().includes(search)) ||
             booking.licensePlate?.toLowerCase().includes(search)
         );
     });
@@ -525,7 +526,7 @@ const Bookings = () => {
                     onComplete={async (data) => {
                         // 1. Update Booking
                         await updateBookingStatus(completingBooking.id, 'completed', data);
-                        
+
                         // 2. Generate Invoice
                         try {
                             const materialItems = (data.materialsUsed || []).map(m => ({
@@ -547,7 +548,7 @@ const Bookings = () => {
 
                             const finalTotal = Number(completingBooking.price || 0) + (data.totalMaterialCost || 0);
 
-                             await addDoc(collection(db, 'invoices'), {
+                            await addDoc(collection(db, 'invoices'), {
                                 invoiceNumber: `INV-${Date.now()}`,
                                 bookingId: completingBooking.id,
                                 customerId: completingBooking.customerId || 'walk-in',
@@ -563,7 +564,7 @@ const Bookings = () => {
                                 status: 'paid',
                                 date: serverTimestamp(),
                                 createdAt: serverTimestamp()
-                             });
+                            });
                         } catch (err) {
                             console.error("Error generating invoice:", err);
                         }
@@ -649,7 +650,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
     const [selectedServices, setSelectedServices] = useState([]); // Array of full service objects
     const [currentServiceId, setCurrentServiceId] = useState(''); // Control for the dropdown
     const [extraTime, setExtraTime] = useState(0); // Manually added extra time in minutes
-    
+
     // Custom Service State
     const [isCustomService, setIsCustomService] = useState(false);
     const [customServiceData, setCustomServiceData] = useState({ name: '', price: '', category: 'Custom' });
@@ -782,11 +783,19 @@ const WalkInModal = ({ onClose, onSuccess }) => {
     };
 
     // Filter customers by search term
-    const filteredCustomers = customers.filter(c =>
-        c.phone?.includes(customerSearch) ||
-        c.licensePlate?.toLowerCase().includes(customerSearch.toLowerCase()) ||
-        c.name?.toLowerCase().includes(customerSearch.toLowerCase())
-    );
+    const filteredCustomers = customers.filter(c => {
+        if (!customerSearch) return false; // Don't show all by default in dropdown, or maybe show? Original code implied showing all if empty? No, usually dropdowns filter.
+        // Wait, original was: c.phone?.includes...
+        // Let's keep it safe.
+        const search = customerSearch.toLowerCase().trim();
+        if (!search) return false;
+
+        return (
+            (c.phone || '').toString().includes(search) ||
+            (c.licensePlate || '').toLowerCase().includes(search) ||
+            (c.name || '').toLowerCase().includes(search)
+        );
+    });
 
     const selectCustomer = (customer) => {
         setFormData({
@@ -817,7 +826,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
             setCurrentServiceId('custom');
             return;
         }
-        
+
         if (!serviceId) return;
 
         // Prevent duplicates
@@ -875,10 +884,10 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                 createdAt: serverTimestamp(),
                 vehicleType: vehicleType
             });
-            
+
             // Refresh customers list
             fetchCustomers();
-            
+
             alert('Customer added to database successfully!');
             setShowAddCustomer(false);
         } catch (error) {
@@ -1065,21 +1074,21 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                             type="button"
                                             onClick={() => setExtraTime(mins)}
                                             className={extraTime === mins ? 'btn-primary' : 'btn-secondary'}
-                                            style={{ 
-                                                fontSize: '0.8rem', 
+                                            style={{
+                                                fontSize: '0.8rem',
                                                 padding: '4px 8px',
                                                 background: extraTime === mins ? 'var(--primary)' : 'white'
                                             }}
                                         >
-                                            {mins === 0 ? 'None' : mins >= 60 ? `${mins/60}h` : `${mins}m`}
+                                            {mins === 0 ? 'None' : mins >= 60 ? `${mins / 60}h` : `${mins}m`}
                                         </button>
                                     ))}
-                                    <input 
-                                       type="number"
-                                       placeholder="Custom"
-                                       value={extraTime}
-                                       onChange={e => setExtraTime(Number(e.target.value))}
-                                       style={{ width: '80px', padding: '4px 8px', fontSize: '0.8rem' }}
+                                    <input
+                                        type="number"
+                                        placeholder="Custom"
+                                        value={extraTime}
+                                        onChange={e => setExtraTime(Number(e.target.value))}
+                                        style={{ width: '80px', padding: '4px 8px', fontSize: '0.8rem' }}
                                     />
                                 </div>
                             </div>
@@ -1200,41 +1209,41 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                     })}
                                 </select>
                             ) : (
-                                <div className="custom-service-form" style={{ 
-                                    padding: '1rem', 
-                                    background: 'var(--navy-50)', 
+                                <div className="custom-service-form" style={{
+                                    padding: '1rem',
+                                    background: 'var(--navy-50)',
                                     borderRadius: '8px',
                                     border: '1px solid var(--primary)'
                                 }}>
                                     <h4 style={{ margin: '0 0 0.5rem 0', color: 'var(--primary)' }}>Add Custom Service</h4>
                                     <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                        <input 
+                                        <input
                                             placeholder="Service Name"
                                             value={customServiceData.name}
-                                            onChange={e => setCustomServiceData({...customServiceData, name: e.target.value})}
+                                            onChange={e => setCustomServiceData({ ...customServiceData, name: e.target.value })}
                                             style={{ flex: 2 }}
                                             autoFocus
                                         />
-                                        <input 
+                                        <input
                                             placeholder="Price (₹)"
                                             type="number"
                                             value={customServiceData.price}
-                                            onChange={e => setCustomServiceData({...customServiceData, price: e.target.value})}
+                                            onChange={e => setCustomServiceData({ ...customServiceData, price: e.target.value })}
                                             style={{ flex: 1 }}
                                         />
                                     </div>
                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                        <button 
-                                            type="button" 
-                                            className="btn btn-primary btn-sm" 
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary btn-sm"
                                             onClick={handleAddCustomService}
                                             style={{ flex: 1 }}
                                         >
                                             Add Service
                                         </button>
-                                        <button 
-                                            type="button" 
-                                            className="btn btn-secondary btn-sm" 
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary btn-sm"
                                             onClick={() => { setIsCustomService(false); setCurrentServiceId(''); }}
                                         >
                                             Cancel
@@ -1258,8 +1267,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                             <div className="form-group" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                                 <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     Time
-                                    <button 
-                                        type="button" 
+                                    <button
+                                        type="button"
                                         className="btn-link"
                                         onClick={() => {
                                             const currentVal = prompt("Add extra duration (minutes):", "0");
@@ -1267,9 +1276,9 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                                 setExtraTime(Number(currentVal));
                                             }
                                         }}
-                                        style={{ 
-                                            background: 'none', border: 'none', color: 'var(--primary)', 
-                                            fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' 
+                                        style={{
+                                            background: 'none', border: 'none', color: 'var(--primary)',
+                                            fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline'
                                         }}
                                     >
                                         + Extra Time {extraTime > 0 ? `(${extraTime}m)` : ''}
@@ -1347,8 +1356,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                         <div className="form-group" style={{ position: 'relative' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                 <label style={{ marginBottom: 0 }}>Search Existing Customer</label>
-                                <button 
-                                    type="button" 
+                                <button
+                                    type="button"
                                     className="btn btn-sm btn-secondary"
                                     onClick={() => setShowAddCustomer(!showAddCustomer)}
                                     style={{ fontSize: '0.75rem', padding: '2px 8px' }}
@@ -1356,7 +1365,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                     {showAddCustomer ? 'Hide Options' : '+ Save to Database'}
                                 </button>
                             </div>
-                            
+
                             <input
                                 type="text"
                                 value={customerSearch}
@@ -1409,28 +1418,28 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                         </div>
 
                         {showAddCustomer && (
-                             <div style={{ 
-                                 marginBottom: '1rem', 
-                                 padding: '0.75rem', 
-                                 background: '#f0fdf4', 
-                                 borderRadius: '6px', 
-                                 border: '1px solid #bbf7d0',
-                                 display: 'flex',
-                                 alignItems: 'center',
-                                 justifyContent: 'space-between'
-                             }}>
-                                 <div style={{ fontSize: '0.85rem', color: '#166534' }}>
-                                     Fill the details below to add this customer to database
-                                 </div>
-                                 <button
-                                     type="button"
-                                     className="btn btn-sm"
-                                     onClick={saveNewCustomer}
-                                     style={{ background: '#166534', color: 'white', border: 'none' }}
-                                 >
-                                     Save Customer
-                                 </button>
-                             </div>
+                            <div style={{
+                                marginBottom: '1rem',
+                                padding: '0.75rem',
+                                background: '#f0fdf4',
+                                borderRadius: '6px',
+                                border: '1px solid #bbf7d0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}>
+                                <div style={{ fontSize: '0.85rem', color: '#166534' }}>
+                                    Fill the details below to add this customer to database
+                                </div>
+                                <button
+                                    type="button"
+                                    className="btn btn-sm"
+                                    onClick={saveNewCustomer}
+                                    style={{ background: '#166534', color: 'white', border: 'none' }}
+                                >
+                                    Save Customer
+                                </button>
+                            </div>
                         )}
 
                         <div className="form-group">

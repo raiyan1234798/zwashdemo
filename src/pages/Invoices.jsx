@@ -45,7 +45,7 @@ const Invoices = () => {
                 setSettings(docSnap.data());
             }
         } catch (error) {
-            console.error('Error fetching settings:', error);
+            console.log('Settings fetch not available or permission denied');
         }
     };
 
@@ -521,6 +521,7 @@ const Invoices = () => {
             inv.bookingReference?.toLowerCase().includes(search) ||
             inv.serviceName?.toLowerCase().includes(search) ||
             inv.contactPhone?.includes(search) ||
+            (inv.customerName && inv.customerName.toLowerCase().includes(search)) ||
             inv.licensePlate?.toLowerCase().includes(search)
         );
     });
@@ -757,46 +758,136 @@ const Invoices = () => {
                         {filteredInvoices.map(invoice => (
                             <div key={invoice.id} className="booking-card">
                                 <div className="booking-card-header">
-                                    <strong>{invoice.bookingReference || invoice.id.slice(0, 8)}</strong>
-                                    <span className="badge badge-completed">Completed</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <strong>{invoice.bookingReference || invoice.id.slice(0, 8)}</strong>
+                                        <span className={`badge ${getPaymentBadge(invoice).class}`}>{getPaymentBadge(invoice).label}</span>
+                                    </div>
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{invoice.bookingDate}</span>
                                 </div>
                                 <div className="booking-card-body">
-                                    <p><strong>{invoice.serviceName}</strong></p>
-                                    <p>{invoice.bookingDate} | {invoice.licensePlate}</p>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                        <span style={{ fontWeight: '600' }}>{invoice.serviceName}</span>
+                                        <span className="booking-price">{formatCurrency(invoice.price)}</span>
+                                    </div>
+                                    <p style={{ fontSize: '0.9rem', marginBottom: '4px' }}>{invoice.customerName} ({invoice.contactPhone})</p>
                                     <p style={{ fontSize: '0.85rem', color: 'var(--navy-600)' }}>
-                                        {invoice.customerName} - {invoice.contactPhone}
+                                        <Car size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+                                        {invoice.licensePlate} • {invoice.carMake} {invoice.carModel}
                                     </p>
-                                    <p className="booking-price">{formatCurrency(invoice.price)}</p>
+                                    {invoice.paidAmount > 0 && invoice.paidAmount < invoice.price && (
+                                        <p style={{ fontSize: '0.8rem', color: '#10b981', marginTop: '4px' }}>
+                                            Paid: {formatCurrency(invoice.paidAmount)} (Bal: {formatCurrency(invoice.price - invoice.paidAmount)})
+                                        </p>
+                                    )}
                                 </div>
-                                <div className="booking-card-footer" style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <button
-                                        className="btn btn-sm btn-secondary"
-                                        onClick={() => generatePDF(invoice, false)}
-                                    >
-                                        <Printer size={14} /> Invoice
-                                    </button>
-                                    {settings?.gstEnabled && (
+
+                                {/* Mobile Actions */}
+                                <div className="booking-card-footer" style={{ flexDirection: 'column', gap: '0.75rem' }}>
+                                    {/* Primary Action Row: Pay & Edit */}
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        {invoice.paymentStatus !== 'paid' && (
+                                            <button
+                                                className="btn btn-sm btn-primary"
+                                                style={{ flex: 1 }}
+                                                onClick={() => {
+                                                    setPaymentInvoice(invoice);
+                                                    setDiscount(invoice.discount || '');
+                                                    setExtraCharge(invoice.extraCharge || '');
+                                                    setPaymentPrice(String(invoice.price || 0));
+                                                    const balance = (invoice.price || 0) - (invoice.paidAmount || 0);
+                                                    setPaymentAmount(String(Math.max(0, balance)));
+                                                    setShowPaymentModal(true);
+                                                }}
+                                            >
+                                                💳 Pay Now
+                                            </button>
+                                        )}
+                                        {/* Edit Button */}
+                                        {hasPermission('bookings', 'edit') && (
+                                            <button
+                                                className="btn btn-sm btn-secondary"
+                                                onClick={() => { setEditingInvoice(invoice); setShowEditModal(true); }}
+                                                title="Edit"
+                                            >
+                                                <Edit size={16} />
+                                            </button>
+                                        )}
+                                        {/* Archive Button */}
+                                        {hasPermission('bookings', 'delete') && (
+                                            <button
+                                                className="btn btn-sm"
+                                                onClick={() => archiveInvoice(invoice)}
+                                                title="Archive"
+                                                style={{ background: '#fee2e2', color: '#ef4444', border: 'none' }}
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Secondary Action Row: Print & Share */}
+                                    <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '2px' }}>
+                                        <button
+                                            className="btn btn-sm btn-secondary"
+                                            onClick={() => generatePDF(invoice, false)}
+                                            style={{ flex: 1, whiteSpace: 'nowrap' }}
+                                        >
+                                            <Printer size={14} /> Invoice
+                                        </button>
+                                        {settings?.gstEnabled && (
+                                            <button
+                                                className="btn btn-sm"
+                                                onClick={() => generatePDF(invoice, true)}
+                                                style={{ flex: 1, background: '#10b981', color: 'white', whiteSpace: 'nowrap' }}
+                                            >
+                                                <Receipt size={14} /> GST
+                                            </button>
+                                        )}
                                         <button
                                             className="btn btn-sm"
-                                            onClick={() => generatePDF(invoice, true)}
-                                            style={{ background: '#10b981', color: 'white' }}
+                                            onClick={() => shareViaWhatsApp(invoice)}
+                                            style={{ flex: 1, background: '#25D366', color: 'white', whiteSpace: 'nowrap' }}
                                         >
-                                            <Receipt size={14} /> GST Bill
+                                            <MessageCircle size={14} /> WA
                                         </button>
-                                    )}
-                                    <button
-                                        className="btn btn-sm"
-                                        onClick={() => shareViaWhatsApp(invoice)}
-                                        style={{ background: '#25D366', color: 'white' }}
-                                    >
-                                        <MessageCircle size={14} /> WhatsApp
-                                    </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
                     </div>
                 </div>
             </div>
+
+            <style>{`
+                @media (max-width: 768px) {
+                    .page-header {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 1rem;
+                    }
+                    
+                    .header-actions {
+                        width: 100%;
+                        flex-wrap: wrap;
+                        gap: 0.5rem;
+                    }
+                    
+                    .tab-group {
+                        width: 100%;
+                        display: flex; /* Ensure tabs take full width row */
+                    }
+                    
+                    .tab-btn {
+                        flex: 1; /* Tabs split space equally */
+                        justify-content: center;
+                    }
+                    
+                    .header-actions .btn {
+                        flex: 1;
+                        white-space: nowrap;
+                    }
+                }
+            `}</style>
 
             {/* Payment Modal */}
             {
@@ -990,10 +1081,10 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                                     onChange={e => {
                                         // Simple split logic
                                         const parts = e.target.value.split(' ');
-                                        setFormData({ 
-                                            ...formData, 
-                                            carMake: parts[0] || '', 
-                                            carModel: parts.slice(1).join(' ') || '' 
+                                        setFormData({
+                                            ...formData,
+                                            carMake: parts[0] || '',
+                                            carModel: parts.slice(1).join(' ') || ''
                                         });
                                     }}
                                     placeholder="Toyota Camry"
@@ -1058,7 +1149,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
         try {
             // Generate ID similar to bookings but for manual invoices
             const ref = `INV-${Date.now().toString().slice(-6)}`;
-            
+
             await addDoc(collection(db, 'invoices'), {
                 ...formData,
                 bookingReference: ref,
@@ -1089,7 +1180,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
-                         <div className="form-row">
+                        <div className="form-row">
                             <div className="form-group">
                                 <label>Date</label>
                                 <input
@@ -1117,17 +1208,17 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                                 placeholder="Customer phone"
                             />
                         </div>
-                         <div className="form-row">
+                        <div className="form-row">
                             <div className="form-group">
                                 <label>Make & Model</label>
                                 <input
                                     value={`${formData.carMake} ${formData.carModel}`.trim()}
                                     onChange={e => {
                                         const parts = e.target.value.split(' ');
-                                        setFormData({ 
-                                            ...formData, 
-                                            carMake: parts[0] || '', 
-                                            carModel: parts.slice(1).join(' ') || '' 
+                                        setFormData({
+                                            ...formData,
+                                            carMake: parts[0] || '',
+                                            carModel: parts.slice(1).join(' ') || ''
                                         });
                                     }}
                                     placeholder="e.g. Honda City"

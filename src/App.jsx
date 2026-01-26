@@ -8,6 +8,7 @@ import Calendar from './pages/Calendar';
 import Services from './pages/Services';
 import Customers from './pages/Customers';
 import Employees from './pages/Employees';
+import EmployeeDetails from './pages/EmployeeDetails';
 import Expenses from './pages/Expenses';
 import Invoices from './pages/Invoices';
 import Materials from './pages/Materials';
@@ -69,7 +70,7 @@ function AppRoutes() {
         <Route index element={<Dashboard />} />
 
         <Route path="calendar" element={
-          <ProtectedRoute permission="bookings"><Calendar /></ProtectedRoute>
+          <ProtectedRoute permission="calendar"><Calendar /></ProtectedRoute>
         } />
         <Route path="bookings" element={
           <ProtectedRoute permission="bookings"><Bookings /></ProtectedRoute>
@@ -83,6 +84,9 @@ function AppRoutes() {
         <Route path="employees" element={
           <ProtectedRoute permission="employees"><Employees /></ProtectedRoute>
         } />
+        <Route path="employees/:id" element={
+          <ProtectedRoute permission="employees"><EmployeeDetails /></ProtectedRoute>
+        } />
         <Route path="expenses" element={
           <ProtectedRoute permission="expenses"><Expenses /></ProtectedRoute>
         } />
@@ -93,10 +97,10 @@ function AppRoutes() {
           <ProtectedRoute permission="payroll"><Payroll /></ProtectedRoute>
         } />
         <Route path="materials" element={
-          <ProtectedRoute permission="expenses"><Materials /></ProtectedRoute>
+          <ProtectedRoute permission="materials"><Materials /></ProtectedRoute>
         } />
         <Route path="material-usage" element={
-          <ProtectedRoute permission="expenses"><MaterialUsageAnalytics /></ProtectedRoute>
+          <ProtectedRoute permission="materials"><MaterialUsageAnalytics /></ProtectedRoute>
         } />
         <Route path="attendance" element={
           <ProtectedRoute permission="attendance"><Attendance /></ProtectedRoute>
@@ -106,11 +110,11 @@ function AppRoutes() {
           <ProtectedRoute permission="settings"><Settings /></ProtectedRoute>
         } />
         <Route path="crm-history" element={
-          <ProtectedRoute permission="customers"><CRMHistory /></ProtectedRoute>
+          <ProtectedRoute permission="crm"><CRMHistory /></ProtectedRoute>
         } />
 
         <Route path="amc-plans" element={
-          <ProtectedRoute permission="services"><AMCPlans /></ProtectedRoute>
+          <ProtectedRoute permission="amc"><AMCPlans /></ProtectedRoute>
         } />
       </Route>
 

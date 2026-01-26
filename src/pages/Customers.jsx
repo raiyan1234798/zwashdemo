@@ -128,12 +128,12 @@ const Customers = () => {
 
     const filteredCustomers = customers.filter(customer => {
         if (!searchTerm) return true;
-        const search = searchTerm.toLowerCase();
+        const search = searchTerm.toLowerCase().trim();
         return (
-            customer.name?.toLowerCase().includes(search) ||
-            customer.phone?.includes(search) ||
-            customer.email?.toLowerCase().includes(search) ||
-            customer.licensePlate?.toLowerCase().includes(search)
+            (customer.name || '').toLowerCase().includes(search) ||
+            (customer.phone || '').toString().includes(search) ||
+            (customer.email || '').toLowerCase().includes(search) ||
+            (customer.licensePlate || '').toLowerCase().includes(search)
         );
     });
 

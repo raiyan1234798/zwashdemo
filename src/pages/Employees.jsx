@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth, ROLES, PERMISSIONS } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import { logAction } from '../utils/logger';
@@ -27,8 +28,10 @@ import {
     Eye,
     Edit,
     Trash2,
-    AlertTriangle
+    AlertTriangle,
+    Shield
 } from 'lucide-react';
+import PermissionSelector from '../components/PermissionSelector';
 
 const Employees = () => {
     const { hasPermission, isAdmin, userProfile } = useAuth();
@@ -40,9 +43,10 @@ const Employees = () => {
     const [pendingUsers, setPendingUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showInviteModal, setShowInviteModal] = useState(false);
-    const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [filter, setFilter] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
+
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchEmployees();
@@ -69,6 +73,7 @@ const Employees = () => {
             setEmployees(approved);
         } catch (error) {
             console.error('Error fetching employees:', error);
+
         } finally {
             setLoading(false);
         }
@@ -284,11 +289,11 @@ const Employees = () => {
                                 {employee.phone && <p><Phone size={14} /> {employee.phone}</p>}
                             </div>
                             <div className="employee-card-footer">
-                                <button className="btn btn-sm btn-secondary" onClick={() => setSelectedEmployee(employee)}>
+                                <button className="btn btn-sm btn-secondary" onClick={() => navigate(`/employees/${employee.id}`)}>
                                     <Eye size={14} /> View
                                 </button>
                                 {canEdit && (
-                                    <button className="btn btn-sm btn-primary" onClick={() => setSelectedEmployee(employee)}>
+                                    <button className="btn btn-sm btn-primary" onClick={() => navigate(`/employees/${employee.id}`)}>
                                         <Edit size={14} /> Edit Role
                                     </button>
                                 )}
@@ -301,19 +306,6 @@ const Employees = () => {
             {/* Invite Modal */}
             {showInviteModal && (
                 <InviteModal onClose={() => setShowInviteModal(false)} onSuccess={fetchEmployees} />
-            )}
-
-            {/* Employee Details Modal */}
-            {selectedEmployee && (
-                <EmployeeDetailsModal
-                    employee={selectedEmployee}
-                    onClose={() => setSelectedEmployee(null)}
-                    isAdmin={isAdmin}
-                    canEdit={canEdit}
-                    canDelete={canDelete}
-                    onUpdate={fetchEmployees}
-                    onDelete={deleteUser}
-                />
             )}
 
             <style>{`
@@ -536,23 +528,7 @@ const InviteModal = ({ onClose, onSuccess }) => {
         setCustomPermissions(JSON.parse(JSON.stringify(defaultPerms)));
     }, [selectedRole]);
 
-    const handlePermissionChange = (resource, action, value) => {
-        setCustomPermissions(prev => {
-            const next = { ...prev };
-
-            if (action === null) {
-                // Boolean permission
-                next[resource] = value;
-            } else {
-                // Object permission
-                if (typeof next[resource] !== 'object') {
-                    next[resource] = {};
-                }
-                next[resource][action] = value;
-            }
-            return next;
-        });
-    };
+    // handlePermissionChange removed - generic onChange used instead
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -583,47 +559,8 @@ const InviteModal = ({ onClose, onSuccess }) => {
         }
     };
 
-    const renderPermissionToggle = (resource, label) => {
-        const perms = customPermissions[resource];
+    // Render permission toggle removed - replaced by PermissionSelector
 
-        // If undefined in current role standard, assume false/empty but allow enabling?
-        // Better to use ADMIN permissions as the "available" set
-        const availableOptions = PERMISSIONS[ROLES.ADMIN][resource];
-
-        if (availableOptions === undefined) return null;
-
-        const isBoolean = typeof availableOptions === 'boolean';
-
-        return (
-            <div className="permission-item" key={resource} style={{ marginBottom: '1rem', borderBottom: '1px solid #eee', paddingBottom: '0.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                    <strong>{label}</strong>
-                    {isBoolean && (
-                        <input
-                            type="checkbox"
-                            checked={perms === true}
-                            onChange={(e) => handlePermissionChange(resource, null, e.target.checked)}
-                        />
-                    )}
-                </div>
-
-                {!isBoolean && (
-                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                        {Object.keys(availableOptions).map(action => (
-                            <label key={action} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.8rem' }}>
-                                <input
-                                    type="checkbox"
-                                    checked={perms?.[action] === true}
-                                    onChange={(e) => handlePermissionChange(resource, action, e.target.checked)}
-                                />
-                                {action.charAt(0).toUpperCase() + action.slice(1)}
-                            </label>
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-    };
 
     return (
         <div className="modal">
@@ -655,17 +592,11 @@ const InviteModal = ({ onClose, onSuccess }) => {
 
                         <div className="permissions-section" style={{ marginTop: '1.5rem' }}>
                             <h3 style={{ fontSize: '1rem', marginBottom: '1rem' }}>Customize Permissions</h3>
-                            {renderPermissionToggle('dashboard', 'Dashboard')}
-                            {renderPermissionToggle('bookings', 'Bookings')}
-                            {renderPermissionToggle('services', 'Services')}
-                            {renderPermissionToggle('customers', 'Customers')}
-                            {renderPermissionToggle('employees', 'Employees')}
-                            {renderPermissionToggle('invoices', 'Invoices')}
-                            {renderPermissionToggle('expenses', 'Expenses')}
-                            {renderPermissionToggle('payroll', 'Payroll')}
-                            {renderPermissionToggle('attendance', 'Attendance')}
-                            {renderPermissionToggle('analytics', 'Analytics')}
-                            {renderPermissionToggle('settings', 'Settings')}
+                            <PermissionSelector
+                                currentPermissions={customPermissions}
+                                onChange={setCustomPermissions}
+                                role={selectedRole}
+                            />
                         </div>
 
                         <div className="alert alert-info">
@@ -686,6 +617,8 @@ const InviteModal = ({ onClose, onSuccess }) => {
 
 const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, onUpdate, onDelete }) => {
     const [role, setRole] = useState(employee.role);
+    const [permissions, setPermissions] = useState(employee.permissions || (PERMISSIONS[employee.role] ? JSON.parse(JSON.stringify(PERMISSIONS[employee.role])) : {}));
+
     const [loading, setLoading] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [activeTab, setActiveTab] = useState('overview');
@@ -706,6 +639,13 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
         if (activeTab === 'overview') fetchKPIs();
         if (activeTab === 'attendance') fetchAttendance();
         if (activeTab === 'payroll' && isAdmin) fetchPayroll();
+
+        // Reset permissions when role changes in the dropdown, 
+        // IF the permissions haven't been manually touched yet (optional, maybe safer to not auto-reset if they are just browsing)
+        // But usually changing role implies resetting to that role's defaults
+        // For now, let's NOT auto-reset on role change to avoid losing custom work if they accidentally switch,
+        // unless we want to enforce role-based defaults.
+        // Better approach: When role changes, we could prompt or just let them adjust permissions manually.
     }, [activeTab]);
 
     const fetchKPIs = async () => {
@@ -780,6 +720,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
         try {
             await updateDoc(doc(db, 'adminUsers', employee.id), {
                 role: role,
+                permissions: permissions,
                 address: address,
                 emergencyContact: emergencyContact,
                 dateOfJoining: dateOfJoining,
@@ -841,7 +782,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
 
                 {/* Tabs */}
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--navy-100)', padding: '0 1rem' }}>
-                    {['overview', 'attendance', ...(isAdmin ? ['payroll'] : [])].map(tab => (
+                    {['overview', 'permissions', 'attendance', ...(isAdmin ? ['payroll'] : [])].map(tab => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
@@ -920,6 +861,21 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                                     </div>
                                 </>
                             )}
+                        </div>
+                    )}
+
+                    {/* Permissions Tab */}
+                    {activeTab === 'permissions' && (
+                        <div className="tab-content" style={{ padding: '0 0.5rem' }}>
+                            <div className="alert alert-info" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                                <Shield size={16} />
+                                <span>Adjusting permissions here will override the default role-based permissions for this user.</span>
+                            </div>
+                            <PermissionSelector
+                                currentPermissions={permissions}
+                                onChange={setPermissions}
+                                role={role}
+                            />
                         </div>
                     )}
 

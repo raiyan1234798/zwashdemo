@@ -42,7 +42,12 @@ export const PERMISSIONS = {
         settings: true,
         finance: true,
         attendance: true,
-        audit: true
+        attendance: true,
+        audit: true,
+        materials: { view: true, create: true, edit: true, delete: true },
+        crm: true,
+        amc: { view: true, create: true, edit: true, delete: true },
+        calendar: true
     },
     [ROLES.MANAGER]: {
         dashboard: true,
@@ -56,7 +61,13 @@ export const PERMISSIONS = {
         analytics: true,
         settings: false,
         finance: false,
-        attendance: true
+        finance: false,
+        attendance: true,
+        materials: { view: true, create: true, edit: true, delete: true },
+        crm: true,
+        amc: { view: true, create: true, edit: true, delete: false },
+        calendar: true,
+        audit: false
     },
     [ROLES.SENIOR_EMPLOYEE]: {
         dashboard: true,
@@ -70,7 +81,12 @@ export const PERMISSIONS = {
         analytics: false,
         settings: false,
         finance: false,
-        attendance: true
+        attendance: true,
+        materials: { view: true, create: true, edit: false, delete: false },
+        crm: false,
+        amc: { view: true, create: false, edit: false, delete: false },
+        calendar: true,
+        audit: false
     },
     [ROLES.EMPLOYEE]: {
         dashboard: true,
@@ -84,7 +100,12 @@ export const PERMISSIONS = {
         analytics: false,
         settings: false,
         finance: false,
-        attendance: true
+        attendance: true,
+        materials: { view: false, create: false, edit: false, delete: false },
+        crm: false,
+        amc: { view: false, create: false, edit: false, delete: false },
+        calendar: true,
+        audit: false
     }
 };
 

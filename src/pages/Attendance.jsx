@@ -352,7 +352,7 @@ const Attendance = () => {
                     <h3>{isEmployee ? 'My Monthly Summary' : 'Monthly Summary'}</h3>
                 </div>
                 <div className="card-body">
-                    <div className="table-container">
+                    <div className="table-container desktop-table">
                         <table className="data-table">
                             <thead>
                                 <tr>
@@ -384,6 +384,52 @@ const Attendance = () => {
                                 })}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Mobile Cards for Summary */}
+                    <div className="mobile-cards">
+                        {(isEmployee ? employees.filter(e => e.id === userProfile?.uid) : employees).map(emp => {
+                            const empAtt = attendance.filter(a => a.userId === emp.id);
+                            const otHours = empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
+
+                            return (
+                                <div key={emp.id} style={{
+                                    background: 'var(--navy-50)',
+                                    borderRadius: '8px',
+                                    padding: '1rem',
+                                    marginBottom: '0.75rem',
+                                    border: '1px solid var(--navy-100)'
+                                }}>
+                                    {!isEmployee && <div style={{ fontWeight: '600', marginBottom: '0.75rem', fontSize: '1rem' }}>{emp.displayName}</div>}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+                                        <div style={{ textAlign: 'center', background: '#dcfce7', padding: '0.5rem', borderRadius: '6px' }}>
+                                            <div style={{ color: '#10b981', fontWeight: 'bold', fontSize: '1.1rem' }}>{empAtt.filter(a => a.status === 'present').length}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#166534' }}>Present</div>
+                                        </div>
+                                        <div style={{ textAlign: 'center', background: '#fee2e2', padding: '0.5rem', borderRadius: '6px' }}>
+                                            <div style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '1.1rem' }}>{empAtt.filter(a => a.status === 'absent').length}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#991b1b' }}>Absent</div>
+                                        </div>
+                                        <div style={{ textAlign: 'center', background: '#fef3c7', padding: '0.5rem', borderRadius: '6px' }}>
+                                            <div style={{ color: '#d97706', fontWeight: 'bold', fontSize: '1.1rem' }}>{empAtt.filter(a => a.status === 'half-day').length}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#92400e' }}>Half-Day</div>
+                                        </div>
+                                        <div style={{ textAlign: 'center', background: '#dbeafe', padding: '0.5rem', borderRadius: '6px' }}>
+                                            <div style={{ color: '#2563eb', fontWeight: 'bold', fontSize: '1.1rem' }}>{empAtt.filter(a => a.status === 'paid_leave').length}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#1e40af' }}>Paid Leave</div>
+                                        </div>
+                                        <div style={{ textAlign: 'center', background: '#ffe4e6', padding: '0.5rem', borderRadius: '6px' }}>
+                                            <div style={{ color: '#e11d48', fontWeight: 'bold', fontSize: '1.1rem' }}>{empAtt.filter(a => a.status === 'unpaid_leave').length}</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#9f1239' }}>Unpaid</div>
+                                        </div>
+                                        <div style={{ textAlign: 'center', background: '#f3e8ff', padding: '0.5rem', borderRadius: '6px' }}>
+                                            <div style={{ color: '#7c3aed', fontWeight: 'bold', fontSize: '1.1rem' }}>{otHours}h</div>
+                                            <div style={{ fontSize: '0.7rem', color: '#5b21b6' }}>Overtime</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
@@ -486,6 +532,8 @@ const Attendance = () => {
                 .stat-icon.red { background: #fee2e2; color: #ef4444; }
                 .stat-icon.purple { background: linear-gradient(135deg, #e9d5ff 0%, #d8b4fe 100%); color: #8b5cf6; }
                 
+                .mobile-cards { display: none; }
+                
                 @media (max-width: 768px) {
                     .calendar-day {
                         min-height: 50px;
@@ -505,6 +553,9 @@ const Attendance = () => {
                         flex-wrap: wrap;
                         gap: 0.75rem;
                     }
+
+                    .desktop-table { display: none; }
+                    .mobile-cards { display: block; }
                 }
             `}</style>
         </div>

@@ -91,10 +91,11 @@ const Dashboard = () => {
                     case 'pending_confirmation': pending++; break;
                     case 'confirmed': confirmed++; break;
                     case 'in_progress': inProgress++; break;
-                    case 'completed':
-                        completed++;
-                        todayRevenue += booking.price || 0;
-                        break;
+                    case 'completed': completed++; break;
+                }
+                // Calculate revenue based on actual paid amount, regardless of status
+                if (booking.paidAmount) {
+                    todayRevenue += Number(booking.paidAmount) || 0;
                 }
             });
 
@@ -368,13 +369,7 @@ const Dashboard = () => {
                         <span className="stat-text">Services</span>
                     </div>
                 </div>
-                <div className="stat-card-compact amber">
-                    <div className="stat-icon-sm"><Star size={18} fill="#f59e0b" /></div>
-                    <div className="stat-content">
-                        <span className="stat-number">{stats.avgRating}</span>
-                        <span className="stat-text">Rating</span>
-                    </div>
-                </div>
+
             </div>
 
             {/* Dashboard Grid - Charts and Widgets */}

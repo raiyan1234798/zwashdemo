@@ -1,0 +1,117 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+
+    // Check if user is logged in
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // specific role checks (requires reading the user profile doc)
+    // Note: get() costs 1 read operation.
+    function getUserData() {
+      return get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+
+    function isManager() {
+      // Managers can do most things, Admins can do everything
+      return isAuthenticated() && (getUserData().role == 'manager' || getUserData().role == 'admin');
+    }
+
+    // --- Collection Rules ---
+
+    // 1. Users / Employees Collection
+    // FIX: Allow ALL logged-in staff to read the employee list.
+    // This allows Managers to see the "Employees" page and Staff to see names in dropdowns.
+    match /adminUsers/{userId} {
+      allow read: if isAuthenticated();
+      // Only Admins can create/edit roles or delete users
+      allow write: if isAdmin();
+      // Users can update their own profile (e.g. password/name)
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 2. Settings / Theme (CRITICAL FIX FOR THEME ERROR)
+    // Users need to read settings to load the theme.
+    match /settings/{docId} {
+      allow read: if isAuthenticated();
+      // Only Admins (or the user themselves) can update settings
+      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == docId);
+    }
+
+    // 3. Bookings
+    // All staff need to read/create/update bookings to do their job.
+    match /bookings/{bookingId} {
+      allow read, create, update: if isAuthenticated();
+      // Only Managers/Admins should delete bookings
+      allow delete: if isManager();
+    }
+    
+    // Archive Bookings (Read-only for most, writable by system/manager)
+    match /archived_bookings/{bookingId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+
+    // 4. Customers
+    // Staff need to search/add customers.
+    match /customers/{customerId} {
+      allow read, create, update: if isAuthenticated();
+      allow delete: if isAdmin(); // Strict delete for customer data
+    }
+
+    // 5. Invoices
+    // Staff generate invoices.
+    match /invoices/{invoiceId} {
+      allow read, create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // 6. Attendance
+    match /attendance/{attendanceId} {
+      // Everyone can see attendance (or at least their own query)
+      allow read: if isAuthenticated();
+      // Staff can mark their own attendance
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Managers can edit/fix attendance records
+      allow update, delete: if isManager();
+    }
+
+    // 7. Inventory & Materials
+    match /materials/{materialId} {
+      allow read: if isAuthenticated();
+      // Staff use materials (update stock), but maybe restriction needed? 
+      // For now, allow update to subtract stock.
+      allow update: if isAuthenticated(); 
+      allow create, delete: if isManager();
+    }
+
+    match /materialUsage/{usageId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 8. Services (Catalog)
+    match /services/{serviceId} {
+      allow read: if isAuthenticated();
+      // Only Managers change prices/services
+      allow write: if isManager();
+    }
+    
+    // 9. CRM / Subscriptions
+    match /customer_amc_subscriptions/{subId} {
+      allow read: if isAuthenticated();
+      allow write: if isManager();
+    }
+
+    // Default: Deny everything else unless Admin
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
