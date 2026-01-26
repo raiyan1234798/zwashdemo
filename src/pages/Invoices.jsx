@@ -796,7 +796,6 @@ const Invoices = () => {
                                                                     // Default payment amount is remaining balance
                                                                     const balance = currentPrice - currentPaid;
                                                                     const safeBalance = Math.max(0, balance);
-                                                                    setPaymentAmount(String(safeBalance));
                                                                     setPaymentSplits([{ mode: 'cash', amount: String(safeBalance) }]);
 
                                                                     setShowPaymentModal(true);
@@ -905,7 +904,6 @@ const Invoices = () => {
                                                     setPaymentPrice(String(invoice.price || 0));
                                                     const balance = (invoice.price || 0) - (invoice.paidAmount || 0);
                                                     const safeBalance = Math.max(0, balance);
-                                                    setPaymentAmount(String(safeBalance));
                                                     setPaymentSplits([{ mode: 'cash', amount: String(safeBalance) }]);
                                                     setShowPaymentModal(true);
                                                 }}
@@ -1037,7 +1035,12 @@ const Invoices = () => {
                                                     const base = (paymentInvoice.price || 0) + (Number(paymentInvoice.discount) || 0) - (Number(paymentInvoice.extraCharge) || 0);
                                                     const newTotal = base - (Number(val) || 0) + (Number(extraCharge) || 0);
                                                     setPaymentPrice(String(newTotal));
-                                                    setPaymentAmount(String(Math.max(0, newTotal - (paymentInvoice.paidAmount || 0))));
+
+                                                    // Update split if single
+                                                    const newBalance = Math.max(0, newTotal - (paymentInvoice.paidAmount || 0));
+                                                    if (paymentSplits.length === 1) {
+                                                        setPaymentSplits([{ ...paymentSplits[0], amount: String(newBalance) }]);
+                                                    }
                                                 }}
                                                 placeholder="0"
                                                 style={{ borderColor: '#ef4444', color: '#b91c1c' }}
@@ -1055,7 +1058,12 @@ const Invoices = () => {
                                                     const base = (paymentInvoice.price || 0) + (Number(paymentInvoice.discount) || 0) - (Number(paymentInvoice.extraCharge) || 0);
                                                     const newTotal = base - (Number(discount) || 0) + (Number(val) || 0);
                                                     setPaymentPrice(String(newTotal));
-                                                    setPaymentAmount(String(Math.max(0, newTotal - (paymentInvoice.paidAmount || 0))));
+
+                                                    // Update split if single
+                                                    const newBalance = Math.max(0, newTotal - (paymentInvoice.paidAmount || 0));
+                                                    if (paymentSplits.length === 1) {
+                                                        setPaymentSplits([{ ...paymentSplits[0], amount: String(newBalance) }]);
+                                                    }
                                                 }}
                                                 placeholder="0"
                                                 style={{ borderColor: '#10b981', color: '#059669' }}
