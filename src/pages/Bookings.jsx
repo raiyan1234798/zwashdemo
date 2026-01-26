@@ -877,12 +877,19 @@ const WalkInModal = ({ onClose, onSuccess }) => {
     // Filter customers by search term - searches by vehicle number, phone, and name
     const filteredCustomers = customers.filter(c => {
         const search = customerSearch.toLowerCase().trim();
-        if (!search) return false; // Don't show all by default
+        if (!search) return true; // Show all (limited later) when search is empty to help discovery
 
-        // Search by license plate (vehicle number) - prioritized
-        const licensePlateMatch = (c.licensePlate || '').toLowerCase().replace(/[\s-]/g, '').includes(search.replace(/[\s-]/g, ''));
+        // Normalize search and data for robust matching
+        const searchClean = search.replace(/[^a-z0-9]/g, '');
+
+        // Search by license plate (vehicle number)
+        const plate = (c.licensePlate || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const licensePlateMatch = plate.includes(searchClean);
+
         // Search by phone number
-        const phoneMatch = (c.phone || '').toString().replace(/[\s-]/g, '').includes(search.replace(/[\s-]/g, ''));
+        const phone = (c.phone || '').toString().replace(/[^0-9]/g, '');
+        const phoneMatch = phone.includes(searchClean);
+
         // Search by customer name
         const nameMatch = (c.name || '').toLowerCase().includes(search);
 
@@ -1472,9 +1479,11 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                     setShowCustomerDropdown(true);
                                 }}
                                 onFocus={() => setShowCustomerDropdown(true)}
-                                placeholder="Search by phone or number plate..."
+                                placeholder="Search by name, phone or vehicle plate..."
+                                autoComplete="off"
+                                id="customer-search-input"
                             />
-                            {showCustomerDropdown && customerSearch && (
+                            {showCustomerDropdown && (
                                 <div style={{
                                     position: 'absolute',
                                     top: '100%',
@@ -1483,33 +1492,53 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                     background: 'white',
                                     border: '1px solid var(--navy-200)',
                                     borderRadius: '8px',
-                                    maxHeight: '200px',
+                                    maxHeight: '300px',
                                     overflowY: 'auto',
-                                    zIndex: 10,
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                    zIndex: 100,
+                                    boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
                                 }}>
                                     {filteredCustomers.length === 0 ? (
-                                        <div style={{ padding: '12px', color: 'var(--navy-400)', textAlign: 'center' }}>
-                                            No customers found
+                                        <div style={{ padding: '16px', color: 'var(--navy-400)', textAlign: 'center' }}>
+                                            No customers found matching "{customerSearch}"
                                         </div>
                                     ) : (
-                                        filteredCustomers.slice(0, 5).map(c => (
-                                            <div
-                                                key={c.id}
-                                                onClick={() => selectCustomer(c)}
-                                                style={{
-                                                    padding: '10px 12px',
-                                                    borderBottom: '1px solid #eee',
-                                                    cursor: 'pointer'
-                                                }}
-                                                onMouseOver={(e) => e.target.style.background = 'var(--navy-50)'}
-                                                onMouseOut={(e) => e.target.style.background = 'white'}
-                                            >
-                                                <strong>{c.name || 'N/A'}</strong> - {c.phone}
-                                                <br />
-                                                <small style={{ color: 'var(--primary)' }}>{c.licensePlate}</small>
-                                            </div>
-                                        ))
+                                        <>
+                                            {customerSearch === '' && (
+                                                <div style={{ padding: '8px 12px', fontSize: '0.75rem', color: 'var(--navy-400)', borderBottom: '1px solid #eee', background: 'var(--navy-50)' }}>
+                                                    Recently Added / All Customers
+                                                </div>
+                                            )}
+                                            {filteredCustomers.slice(0, 10).map(c => (
+                                                <div
+                                                    key={c.id}
+                                                    onClick={() => selectCustomer(c)}
+                                                    style={{
+                                                        padding: '12px',
+                                                        borderBottom: '1px solid #f0f0f0',
+                                                        cursor: 'pointer',
+                                                        transition: 'background 0.2s'
+                                                    }}
+                                                    onMouseOver={(e) => e.currentTarget.style.background = 'var(--primary-light)'}
+                                                    onMouseOut={(e) => e.currentTarget.style.background = 'white'}
+                                                >
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                        <div>
+                                                            <div style={{ fontWeight: '600', color: 'var(--navy-800)' }}>{c.name || 'Unnamed Customer'}</div>
+                                                            <div style={{ fontSize: '0.85rem', color: 'var(--navy-500)' }}>{c.phone}</div>
+                                                        </div>
+                                                        <div style={{ textAlign: 'right' }}>
+                                                            <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--primary)' }}>{c.licensePlate}</div>
+                                                            {c.carMake && <div style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{c.carMake} {c.carModel}</div>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {filteredCustomers.length > 10 && (
+                                                <div style={{ padding: '8px', textAlign: 'center', fontSize: '0.75rem', color: 'var(--navy-400)', background: '#f9f9f9' }}>
+                                                    Keep typing to narrow down {filteredCustomers.length - 10} more results...
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             )}
