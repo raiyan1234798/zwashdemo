@@ -661,6 +661,71 @@ const Bookings = () => {
           flex: 1;
           justify-content: center;
         }
+
+        .full-page-form {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: white;
+          z-index: 2000;
+          overflow-y: auto;
+          padding: 2rem;
+          animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+
+        .full-page-form-container {
+          max-width: 800px;
+          margin: 0 auto;
+          padding-bottom: 4rem;
+        }
+
+        .full-page-form-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 2rem;
+          padding-bottom: 1rem;
+          border-bottom: 1px solid var(--navy-100);
+        }
+
+        .full-page-form-header h2 {
+          margin: 0;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          color: var(--navy-800);
+        }
+
+        .full-page-form-body {
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+        }
+
+        .full-page-form-footer {
+          display: flex;
+          justify-content: flex-end;
+          gap: 1rem;
+          margin-top: 2rem;
+          padding-top: 1.5rem;
+          border-top: 1px solid var(--navy-100);
+        }
+
+        @media (max-width: 768px) {
+          .full-page-form {
+            padding: 1rem;
+          }
+          .full-page-form-header h2 {
+            font-size: 1.25rem;
+          }
+        }
       `}</style>
         </div>
     );
@@ -809,30 +874,36 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         }
     };
 
-    // Filter customers by search term
+    // Filter customers by search term - searches by vehicle number, phone, and name
     const filteredCustomers = customers.filter(c => {
-        if (!customerSearch) return false; // Don't show all by default in dropdown, or maybe show? Original code implied showing all if empty? No, usually dropdowns filter.
-        // Wait, original was: c.phone?.includes...
-        // Let's keep it safe.
         const search = customerSearch.toLowerCase().trim();
-        if (!search) return false;
+        if (!search) return false; // Don't show all by default
 
-        return (
-            (c.phone || '').toString().includes(search) ||
-            (c.licensePlate || '').toLowerCase().includes(search) ||
-            (c.name || '').toLowerCase().includes(search)
-        );
+        // Search by license plate (vehicle number) - prioritized
+        const licensePlateMatch = (c.licensePlate || '').toLowerCase().replace(/[\s-]/g, '').includes(search.replace(/[\s-]/g, ''));
+        // Search by phone number
+        const phoneMatch = (c.phone || '').toString().replace(/[\s-]/g, '').includes(search.replace(/[\s-]/g, ''));
+        // Search by customer name
+        const nameMatch = (c.name || '').toLowerCase().includes(search);
+
+        return licensePlateMatch || phoneMatch || nameMatch;
     });
 
     const selectCustomer = (customer) => {
-        setFormData({
+        // Preserve existing bookingDate and startTime when selecting a customer
+        setFormData(prev => ({
+            ...prev,
             customerId: customer.id,
             customerName: customer.name || '',
             carMake: customer.carMake || '',
             carModel: customer.carModel || '',
             licensePlate: customer.licensePlate || '',
             phone: customer.phone || ''
-        });
+        }));
+        // Also set the vehicle type from customer if available
+        if (customer.vehicleType) {
+            setVehicleType(customer.vehicleType);
+        }
         setCustomerSearch('');
         setShowCustomerDropdown(false);
     };
@@ -1016,14 +1087,14 @@ const WalkInModal = ({ onClose, onSuccess }) => {
     };
 
     return (
-        <div className="modal">
-            <div className="modal-content">
-                <div className="modal-header">
+        <div className="full-page-form">
+            <div className="full-page-form-container">
+                <div className="full-page-form-header">
                     <h2><Plus size={20} /> Add Walk-in Booking</h2>
-                    <button className="modal-close" onClick={onClose}>&times;</button>
+                    <button className="btn btn-secondary" onClick={onClose}>← Back to Bookings</button>
                 </div>
                 <form onSubmit={handleSubmit}>
-                    <div className="modal-body">
+                    <div className="full-page-form-body">
                         {/* Vehicle Type Selection */}
                         <div className="form-group">
                             <label>Vehicle Type *</label>
@@ -1520,7 +1591,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                             </div>
                         </div>
                     </div>
-                    <div className="modal-footer">
+                    <div className="full-page-form-footer">
                         <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
                             {loading ? 'Creating...' : 'Create Booking'}
