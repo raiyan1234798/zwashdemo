@@ -57,7 +57,126 @@ const Bookings = () => {
         fetchBookings();
     }, [filter, viewMode]);
 
-    // ... (fetchBookings and other functions) ...
+    const fetchBookings = async () => {
+        try {
+            setLoading(true);
+            let q;
+
+            if (viewMode === 'archived') {
+                q = query(
+                    collection(db, 'archivedBookings'),
+                    orderBy('bookingDate', 'desc')
+                );
+            } else {
+                if (filter === 'all') {
+                    q = query(
+                        collection(db, 'bookings'),
+                        orderBy('bookingDate', 'desc')
+                    );
+                } else {
+                    q = query(
+                        collection(db, 'bookings'),
+                        where('status', '==', filter),
+                        orderBy('bookingDate', 'desc')
+                    );
+                }
+            }
+
+            const snapshot = await getDocs(q);
+            const bookingsList = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            setBookings(bookingsList);
+        } catch (error) {
+            console.error('Error fetching bookings:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const getStatusBadge = (status) => {
+        switch (status) {
+            case 'pending_confirmation':
+                return { label: 'Pending', class: 'badge-warning' };
+            case 'confirmed':
+                return { label: 'Confirmed', class: 'badge-info' };
+            case 'in_progress':
+                return { label: 'In Progress', class: 'badge-primary' };
+            case 'completed':
+                return { label: 'Completed', class: 'badge-success' };
+            case 'cancelled':
+                return { label: 'Cancelled', class: 'badge-danger' };
+            default:
+                return { label: status || 'Unknown', class: 'badge-secondary' };
+        }
+    };
+
+    const updateBookingStatus = async (bookingId, newStatus, completionData = null) => {
+        try {
+            const updateData = {
+                status: newStatus,
+                updatedAt: serverTimestamp()
+            };
+
+            if (newStatus === 'completed' && completionData) {
+                updateData.completedAt = serverTimestamp();
+                updateData.completedByName = userProfile?.name || 'Staff';
+                updateData.completedById = userProfile?.uid;
+                if (completionData.materialsUsed) {
+                    updateData.materialsUsed = completionData.materialsUsed;
+                }
+                if (completionData.totalMaterialCost) {
+                    updateData.totalMaterialCost = completionData.totalMaterialCost;
+                }
+            }
+
+            await updateDoc(doc(db, 'bookings', bookingId), updateData);
+            fetchBookings();
+        } catch (error) {
+            console.error('Error updating booking status:', error);
+        }
+    };
+
+    const handleCompleteClick = (booking) => {
+        setCompletingBooking(booking);
+        setShowCompletionModal(true);
+    };
+
+    const handleDeleteBooking = async (booking) => {
+        if (viewMode === 'archived') {
+            // Permanently delete from archive
+            if (!window.confirm('Are you sure you want to permanently delete this booking? This cannot be undone.')) {
+                return;
+            }
+            try {
+                await deleteDoc(doc(db, 'archivedBookings', booking.id));
+                fetchBookings();
+            } catch (error) {
+                console.error('Error deleting archived booking:', error);
+            }
+        } else {
+            // Archive the booking
+            if (!window.confirm('Are you sure you want to archive this booking?')) {
+                return;
+            }
+            try {
+                const batch = writeBatch(db);
+                // Add to archive
+                const archiveRef = doc(db, 'archivedBookings', booking.id);
+                batch.set(archiveRef, {
+                    ...booking,
+                    archivedAt: serverTimestamp()
+                });
+                // Delete from active bookings
+                batch.delete(doc(db, 'bookings', booking.id));
+                await batch.commit();
+                fetchBookings();
+            } catch (error) {
+                console.error('Error archiving booking:', error);
+            }
+        }
+    };
 
     const filteredBookings = bookings.filter(booking => {
         // Date Range Filter
