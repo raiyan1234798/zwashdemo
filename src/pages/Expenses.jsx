@@ -66,15 +66,64 @@ const Expenses = () => {
             const snapshot = await getDocs(q);
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
+            // Helper for Date String (YYYY-MM-DD) in Local Time
+            const toLocalDateStr = (date) => {
+                const offset = date.getTimezoneOffset() * 60000;
+                const localDate = new Date(date.getTime() - offset);
+                return localDate.toISOString().split('T')[0];
+            };
+
+            const now = new Date();
+            const todayStr = toLocalDateStr(now);
+
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = toLocalDateStr(yesterday);
+
+            const startOfWeek = new Date(now);
+            startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday start
+            const startOfWeekStr = toLocalDateStr(startOfWeek);
+
+            const currentMonthPrefix = todayStr.substring(0, 7); // YYYY-MM
+
             // Calculate stats
             let total = 0;
+            let today = 0;
+            let yesterdayVal = 0;
+            let week = 0;
+            let month = 0;
             const categoryStats = {};
+            const dailyStats = {};
+
             data.forEach(exp => {
-                total += exp.amount || 0;
-                categoryStats[exp.category] = (categoryStats[exp.category] || 0) + (exp.amount || 0);
+                const amount = exp.amount || 0;
+                total += amount;
+                categoryStats[exp.category] = (categoryStats[exp.category] || 0) + amount;
+
+                // Time-based stats
+                if (exp.date === todayStr) today += amount;
+                if (exp.date === yesterdayStr) yesterdayVal += amount;
+                if (exp.date >= startOfWeekStr) week += amount;
+                if (exp.date && exp.date.startsWith(currentMonthPrefix)) {
+                    month += amount;
+                    dailyStats[exp.date] = (dailyStats[exp.date] || 0) + amount;
+                }
             });
 
-            setStats({ total, ...categoryStats });
+            // Convert dailyStats to array for list view (sorted by date desc)
+            const dailyBreakdown = Object.keys(dailyStats)
+                .sort((a, b) => b.localeCompare(a))
+                .map(date => ({ date, total: dailyStats[date] }));
+
+            setStats({
+                total,
+                today,
+                yesterday: yesterdayVal,
+                week,
+                month,
+                dailyBreakdown,
+                ...categoryStats
+            });
             setExpenses(data);
         } catch (error) {
             console.error('Error fetching expenses:', error);
@@ -158,22 +207,60 @@ const Expenses = () => {
                         <IndianRupee size={24} />
                     </div>
                     <div className="expense-content">
-                        <span className="expense-label">Total Expenses</span>
-                        <span className="expense-value">{formatCurrency(stats.total)}</span>
+                        <span className="expense-label">Today</span>
+                        <span className="expense-value">{formatCurrency(stats.today)}</span>
                     </div>
                 </div>
-                {categories.slice(0, 3).map(cat => (
-                    <div key={cat} className="expense-summary-card">
-                        <div className={`expense-icon ${cat}`}>
-                            {getCategoryIcon(cat)}
-                        </div>
-                        <div className="expense-content">
-                            <span className="expense-label" style={{ textTransform: 'capitalize' }}>{cat}</span>
-                            <span className="expense-value">{formatCurrency(stats[cat] || 0)}</span>
+                <div className="expense-summary-card">
+                    <div className="expense-icon utilities">
+                        <IndianRupee size={24} />
+                    </div>
+                    <div className="expense-content">
+                        <span className="expense-label">Yesterday</span>
+                        <span className="expense-value">{formatCurrency(stats.yesterday)}</span>
+                    </div>
+                </div>
+                <div className="expense-summary-card">
+                    <div className="expense-icon maintenance">
+                        <IndianRupee size={24} />
+                    </div>
+                    <div className="expense-content">
+                        <span className="expense-label">This Week</span>
+                        <span className="expense-value">{formatCurrency(stats.week)}</span>
+                    </div>
+                </div>
+                <div className="expense-summary-card">
+                    <div className="expense-icon supplies">
+                        <IndianRupee size={24} />
+                    </div>
+                    <div className="expense-content">
+                        <span className="expense-label">This Month</span>
+                        <span className="expense-value">{formatCurrency(stats.month)}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Daily Breakdown */}
+            {stats.dailyBreakdown && stats.dailyBreakdown.length > 0 && (
+                <div className="card" style={{ marginBottom: '1.5rem' }}>
+                    <div className="card-header">
+                        <h3>📅 Daily Breakdown (This Month)</h3>
+                    </div>
+                    <div className="card-body">
+                        <div className="daily-list-container">
+                            {stats.dailyBreakdown.map((day) => (
+                                <div key={day.date} className="daily-list-item">
+                                    <span className="daily-date">
+                                        {new Date(day.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                    </span>
+                                    <div className="daily-line-spacer"></div>
+                                    <span className="daily-amount">{formatCurrency(day.total)}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                ))}
-            </div>
+                </div>
+            )}
 
             {/* Category Breakdown Chart */}
             {stats.total > 0 && (
@@ -373,6 +460,38 @@ const Expenses = () => {
         @media (max-width: 600px) {
           .category-bar-row { grid-template-columns: 80px 1fr 80px; gap: 0.5rem; }
           .cat-value { font-size: 0.7rem; }
+        }
+
+        /* Daily Breakdown Styles */
+        .daily-list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .daily-list-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--navy-50);
+            border-radius: var(--radius-md);
+        }
+
+        .daily-date {
+            font-weight: 600;
+            color: var(--navy-700);
+            min-width: 120px;
+        }
+
+        .daily-line-spacer {
+            flex: 1;
+            margin: 0 1rem;
+            border-bottom: 1px dashed var(--navy-200);
+        }
+
+        .daily-amount {
+            font-weight: 700;
+            color: var(--navy-900);
         }
       `}</style>
         </div>

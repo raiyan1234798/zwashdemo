@@ -160,7 +160,7 @@ const Invoices = () => {
             if (newPaidTotal >= newTotalPrice) status = 'paid';
             else if (newPaidTotal > 0) status = 'partial';
 
-            await updateDoc(doc(db, 'bookings', paymentInvoice.id), {
+            await updateDoc(doc(db, paymentInvoice.source === 'invoice' ? 'invoices' : 'bookings', paymentInvoice.id), {
                 price: newTotalPrice, // Save the potentially edited price
                 discount: Number(discount) || 0,
                 extraCharge: Number(extraCharge) || 0,
@@ -389,7 +389,7 @@ const Invoices = () => {
             <div class="invoice-title">
                 <h2>${includeGST ? 'Tax Invoice' : 'Invoice'}</h2>
                 <p class="invoice-number">#${invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}</p>
-                <p class="invoice-date">Date: ${invoice.bookingDate}</p>
+                <p class="invoice-date">Date: ${invoice.bookingDate || invoice.invoiceDate}</p>
             </div>
         </div>
         
@@ -491,7 +491,7 @@ const Invoices = () => {
             `📋 Invoice: #${invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}\n` +
             `🚗 Service: ${invoice.serviceName}\n` +
             `💰 Amount: ${formatCurrency(invoice.price)}\n` +
-            `📅 Date: ${invoice.bookingDate}\n\n` +
+            `📅 Date: ${invoice.bookingDate || invoice.invoiceDate}\n\n` +
             `View your invoice online: ${link}\n\n` +
             `Thank you for choosing us! 🙏`;
 
@@ -655,7 +655,7 @@ const Invoices = () => {
                                         return (
                                             <tr key={invoice.id}>
                                                 <td><strong>{invoice.bookingReference || invoice.id.slice(0, 8)}</strong></td>
-                                                <td>{invoice.bookingDate}</td>
+                                                <td>{invoice.bookingDate || invoice.invoiceDate}</td>
                                                 <td>{invoice.serviceName}</td>
                                                 <td>
                                                     <div>{formatCurrency(invoice.price)}</div>
@@ -762,7 +762,7 @@ const Invoices = () => {
                                         <strong>{invoice.bookingReference || invoice.id.slice(0, 8)}</strong>
                                         <span className={`badge ${getPaymentBadge(invoice).class}`}>{getPaymentBadge(invoice).label}</span>
                                     </div>
-                                    <span style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{invoice.bookingDate}</span>
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{invoice.bookingDate || invoice.invoiceDate}</span>
                                 </div>
                                 <div className="booking-card-body">
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
@@ -1143,6 +1143,39 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
     });
     const [loading, setLoading] = useState(false);
 
+    // Services Fetching & Search Logic
+    const [services, setServices] = useState([]);
+    const [showServiceDropdown, setShowServiceDropdown] = useState(false);
+
+    useEffect(() => {
+        const fetchServices = async () => {
+            try {
+                const q = query(collection(db, 'services'), where('isActive', '==', true));
+                const snapshot = await getDocs(q);
+                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setServices(data);
+            } catch (error) {
+                console.error("Error fetching services", error);
+            }
+        };
+        fetchServices();
+    }, []);
+
+    const filteredServices = services.filter(s =>
+        s.name.toLowerCase().includes(formData.serviceName.toLowerCase())
+    );
+
+    const handleServiceSelect = (service) => {
+        // Default to sedan price or base price, user can edit
+        const defaultPrice = service.prices?.sedan || service.price || 0;
+        setFormData({
+            ...formData,
+            serviceName: service.name,
+            price: String(defaultPrice)
+        });
+        setShowServiceDropdown(false);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -1234,15 +1267,60 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                                 />
                             </div>
                         </div>
-                        <div className="form-group">
-                            <label>Service Name</label>
+
+                        {/* Searchable Service Dropdown */}
+                        <div className="form-group" style={{ position: 'relative' }}>
+                            <label>Service Name *</label>
                             <input
                                 value={formData.serviceName}
-                                onChange={e => setFormData({ ...formData, serviceName: e.target.value })}
+                                onChange={e => {
+                                    setFormData({ ...formData, serviceName: e.target.value });
+                                    setShowServiceDropdown(true);
+                                }}
+                                onFocus={() => setShowServiceDropdown(true)}
+                                onBlur={() => setTimeout(() => setShowServiceDropdown(false), 200)}
                                 required
-                                placeholder="e.g. Full Wash"
+                                placeholder="Search or type service name..."
+                                autoComplete="off"
                             />
+                            {showServiceDropdown && formData.serviceName.length > 0 && filteredServices.length > 0 && (
+                                <div className="dropdown-list" style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    left: 0,
+                                    right: 0,
+                                    background: 'white',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '0.5rem',
+                                    zIndex: 10,
+                                    maxHeight: '200px',
+                                    overflowY: 'auto',
+                                    boxShadow: 'var(--shadow-md)'
+                                }}>
+                                    {filteredServices.map(service => (
+                                        <div
+                                            key={service.id}
+                                            onClick={() => handleServiceSelect(service)}
+                                            style={{
+                                                padding: '0.75rem 1rem',
+                                                cursor: 'pointer',
+                                                borderBottom: '1px solid #f1f5f9',
+                                                transition: 'background 0.2s'
+                                            }}
+                                            className="dropdown-item"
+                                            onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                                            onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                                        >
+                                            <div style={{ fontWeight: '500', fontSize: '0.9rem' }}>{service.name}</div>
+                                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                {service.description ? service.description.slice(0, 50) + '...' : 'No description'}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
+
                         <div className="form-group">
                             <label>Amount (₹)</label>
                             <input
@@ -1257,7 +1335,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                     <div className="modal-footer">
                         <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Create Invoice' : 'Create Invoice'}
+                            {loading ? 'Creating...' : 'Create Invoice'}
                         </button>
                     </div>
                 </form>

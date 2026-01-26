@@ -203,12 +203,14 @@ const EmployeeDetails = () => {
                 >
                     Overview
                 </button>
-                <button
-                    className={`tab-btn ${activeTab === 'permissions' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('permissions')}
-                >
-                    Permissions
-                </button>
+                {isAdmin && (
+                    <button
+                        className={`tab-btn ${activeTab === 'permissions' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('permissions')}
+                    >
+                        Permissions
+                    </button>
+                )}
                 <button
                     className={`tab-btn ${activeTab === 'attendance' ? 'active' : ''}`}
                     onClick={() => setActiveTab('attendance')}
@@ -316,7 +318,7 @@ const EmployeeDetails = () => {
                                         <select
                                             value={role}
                                             onChange={(e) => setRole(e.target.value)}
-                                            disabled={!canEdit}
+                                            disabled={!isAdmin}
                                             className="role-select"
                                         >
                                             <option value={ROLES.EMPLOYEE}>Employee</option>

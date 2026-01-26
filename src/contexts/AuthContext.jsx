@@ -14,7 +14,8 @@ import {
     query,
     where,
     getDocs,
-    serverTimestamp
+    serverTimestamp,
+    onSnapshot
 } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../config/firebase';
 
@@ -40,8 +41,6 @@ export const PERMISSIONS = {
         payroll: { view: true, create: true, edit: true, delete: true },
         analytics: true,
         settings: true,
-        finance: true,
-        attendance: true,
         attendance: true,
         audit: true,
         materials: { view: true, create: true, edit: true, delete: true },
@@ -60,8 +59,6 @@ export const PERMISSIONS = {
         payroll: { view: false, create: false, edit: false, delete: false },
         analytics: true,
         settings: false,
-        finance: false,
-        finance: false,
         attendance: true,
         materials: { view: true, create: true, edit: true, delete: true },
         crm: true,
@@ -80,7 +77,6 @@ export const PERMISSIONS = {
         payroll: { view: false, create: false, edit: false, delete: false },
         analytics: false,
         settings: false,
-        finance: false,
         attendance: true,
         materials: { view: true, create: true, edit: false, delete: false },
         crm: false,
@@ -99,7 +95,6 @@ export const PERMISSIONS = {
         payroll: { view: false, create: false, edit: false, delete: false },
         analytics: false,
         settings: false,
-        finance: false,
         attendance: true,
         materials: { view: false, create: false, edit: false, delete: false },
         crm: false,
@@ -302,6 +297,30 @@ export function AuthProvider({ children }) {
 
         return () => unsubscribe();
     }, []);
+
+    // Real-time Profile Listener
+    useEffect(() => {
+        if (!user) return;
+
+        const unsubscribe = onSnapshot(doc(db, 'adminUsers', user.uid), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+
+                // Handle status changes in real-time
+                if (data.status === 'rejected') {
+                    setError('Your account access has been rejected.');
+                    signOut(auth);
+                    return;
+                }
+
+                setUserProfile({ id: docSnap.id, ...data });
+            }
+        }, (err) => {
+            console.error("Profile listener error:", err);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
 
     // Sign in with Google
     const signInWithGoogle = async () => {

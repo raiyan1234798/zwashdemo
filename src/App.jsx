@@ -111,7 +111,7 @@ function AppRoutes() {
           <ProtectedRoute permission="settings"><Settings /></ProtectedRoute>
         } />
         <Route path="analytics" element={
-          <ProtectedRoute permission="finance"><Analytics /></ProtectedRoute>
+          <ProtectedRoute permission="analytics"><Analytics /></ProtectedRoute>
         } />
         <Route path="crm-history" element={
           <ProtectedRoute permission="crm"><CRMHistory /></ProtectedRoute>

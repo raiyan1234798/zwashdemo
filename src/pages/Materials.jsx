@@ -224,12 +224,12 @@ const Materials = () => {
                     />
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <button 
+                    <button
                         className={`btn ${showLowStock ? 'btn-danger' : 'btn-secondary'}`}
                         onClick={() => setShowLowStock(!showLowStock)}
                         style={{ whiteSpace: 'nowrap' }}
                     >
-                        <AlertTriangle size={16} /> 
+                        <AlertTriangle size={16} />
                         {showLowStock ? 'Show All' : 'Low Stock Only'}
                     </button>
                     <select
@@ -276,7 +276,10 @@ const Materials = () => {
                                         </div>
                                         <div className="material-details">
                                             <div className="material-header">
-                                                <h4>{material.name}</h4>
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <h4>{material.name}</h4>
+                                                    {material.brand && <span style={{ fontSize: '0.75rem', color: 'var(--navy-500)', fontWeight: 500 }}>{material.brand}</span>}
+                                                </div>
                                                 {isLowStock && (
                                                     <span className="badge badge-warning">
                                                         <AlertTriangle size={12} /> Low Stock
@@ -664,6 +667,7 @@ const MaterialModal = ({ material, onClose, onSuccess }) => {
 
         const data = {
             name: formData.get('name'),
+            brand: formData.get('brand') || '',
             category: formData.get('category'),
             unit: formData.get('unit'),
             currentStock: Number(formData.get('currentStock')),
@@ -702,9 +706,15 @@ const MaterialModal = ({ material, onClose, onSuccess }) => {
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
-                        <div className="form-group">
-                            <label>Material Name *</label>
-                            <input name="name" defaultValue={material?.name} required placeholder="e.g., Car Shampoo" />
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label>Material Name *</label>
+                                <input name="name" defaultValue={material?.name} required placeholder="e.g., Car Shampoo" />
+                            </div>
+                            <div className="form-group">
+                                <label>Brand</label>
+                                <input name="brand" defaultValue={material?.brand} placeholder="e.g., 3M, Bosch" />
+                            </div>
                         </div>
                         <div className="form-row">
                             <div className="form-group">
