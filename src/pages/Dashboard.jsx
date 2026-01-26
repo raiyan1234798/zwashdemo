@@ -85,17 +85,24 @@ const Dashboard = () => {
 
             // Today's stats
             const todayBookings = allBookings.filter(b => b.bookingDate === todayStr);
+
+            // Count all bookings by status (not just today's)
             let pending = 0, confirmed = 0, inProgress = 0, completed = 0, todayRevenue = 0;
-            todayBookings.forEach(booking => {
+            allBookings.forEach(booking => {
                 switch (booking.status) {
                     case 'pending_confirmation': pending++; break;
                     case 'confirmed': confirmed++; break;
                     case 'in_progress': inProgress++; break;
                     case 'completed': completed++; break;
                 }
-                // Calculate revenue based on actual paid amount, regardless of status
+            });
+
+            // Calculate today's revenue separately
+            todayBookings.forEach(booking => {
                 if (booking.paidAmount) {
                     todayRevenue += Number(booking.paidAmount) || 0;
+                } else if (booking.status === 'completed') {
+                    todayRevenue += Number(booking.price) || 0;
                 }
             });
 
