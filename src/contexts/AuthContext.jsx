@@ -114,6 +114,10 @@ export function AuthProvider({ children }) {
     const hasPermission = (resource, action = null) => {
         if (!userProfile?.role) return false;
 
+        const normalizedRole = userProfile.role.toLowerCase();
+        const rolePermissions = PERMISSIONS[normalizedRole];
+        const defaultPerms = rolePermissions ? rolePermissions[resource] : undefined;
+
         // 1. Check for Custom Permissions (Override)
         if (userProfile.permissions && userProfile.permissions[resource] !== undefined) {
             const customPerms = userProfile.permissions[resource];
@@ -123,47 +127,54 @@ export function AuthProvider({ children }) {
 
             // If action specified, check action
             if (action && typeof customPerms === 'object') {
-                return customPerms[action] === true;
+                // If explicitly set in custom permissions, use it
+                if (customPerms[action] !== undefined) {
+                    return customPerms[action] === true;
+                }
+                // If missing in custom permissions, fallback to role default
+                if (defaultPerms && typeof defaultPerms === 'object') {
+                    return defaultPerms[action] === true;
+                }
+                return false;
             }
 
             // If no action but object, check if ANY action allowed (view usually)
+            // Or better: if they have the resource object, they probably have access.
+            // But let's check basic CRUD if defined.
             if (typeof customPerms === 'object') {
-                return customPerms.view === true ||
-                    customPerms.create === true ||
-                    customPerms.edit === true ||
-                    customPerms.delete === true;
+                // If any known action is true in custom
+                if (customPerms.view || customPerms.create || customPerms.edit || customPerms.delete) return true;
+
+                // Fallback to default check if custom keys missing
+                if (defaultPerms && typeof defaultPerms === 'object') {
+                    return defaultPerms.view || defaultPerms.create || defaultPerms.edit || defaultPerms.delete;
+                }
             }
-        }
-
-        // 2. Fallback to Role-based Permissions
-        // Normalize role to lowercase to handle case mismatches
-        const normalizedRole = userProfile.role.toLowerCase();
-        const permissions = PERMISSIONS[normalizedRole];
-
-        if (!permissions) {
-            console.warn('No permissions found for role:', userProfile.role);
             return false;
         }
 
-        const resourcePerms = permissions[resource];
-
-        // If no permissions defined for this resource, deny
-        if (resourcePerms === undefined) return false;
-
-        // If it's a boolean, return it directly
-        if (typeof resourcePerms === 'boolean') return resourcePerms;
-
-        // If action is specified, return that specific action
-        if (action && typeof resourcePerms === 'object') {
-            return resourcePerms[action] === true;
+        // 2. Fallback to Role-based Permissions (No custom override found)
+        if (!rolePermissions) {
+            // console.warn('No permissions found for role:', userProfile.role); // Optional logging
+            return false;
         }
 
-        // If no action specified but resource is an object, check if ANY action is allowed
-        if (typeof resourcePerms === 'object') {
-            return resourcePerms.view === true ||
-                resourcePerms.create === true ||
-                resourcePerms.edit === true ||
-                resourcePerms.delete === true;
+        if (defaultPerms === undefined) return false;
+
+        // If it's a boolean
+        if (typeof defaultPerms === 'boolean') return defaultPerms;
+
+        // If action is specified
+        if (action && typeof defaultPerms === 'object') {
+            return defaultPerms[action] === true;
+        }
+
+        // If no action specified
+        if (typeof defaultPerms === 'object') {
+            return defaultPerms.view === true ||
+                defaultPerms.create === true ||
+                defaultPerms.edit === true ||
+                defaultPerms.delete === true;
         }
 
         return false;

@@ -795,7 +795,9 @@ const Invoices = () => {
 
                                                                     // Default payment amount is remaining balance
                                                                     const balance = currentPrice - currentPaid;
-                                                                    setPaymentAmount(String(Math.max(0, balance)));
+                                                                    const safeBalance = Math.max(0, balance);
+                                                                    setPaymentAmount(String(safeBalance));
+                                                                    setPaymentSplits([{ mode: 'cash', amount: String(safeBalance) }]);
 
                                                                     setShowPaymentModal(true);
                                                                 }}
@@ -902,7 +904,9 @@ const Invoices = () => {
                                                     setExtraCharge(invoice.extraCharge || '');
                                                     setPaymentPrice(String(invoice.price || 0));
                                                     const balance = (invoice.price || 0) - (invoice.paidAmount || 0);
-                                                    setPaymentAmount(String(Math.max(0, balance)));
+                                                    const safeBalance = Math.max(0, balance);
+                                                    setPaymentAmount(String(safeBalance));
+                                                    setPaymentSplits([{ mode: 'cash', amount: String(safeBalance) }]);
                                                     setShowPaymentModal(true);
                                                 }}
                                             >
