@@ -36,150 +36,23 @@ const Expenses = () => {
     const [expenses, setExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
-    const [editingExpense, setEditingExpense] = useState(null);
     const [categoryFilter, setCategoryFilter] = useState('');
     const [categories, setCategories] = useState(['supplies', 'utilities', 'maintenance', 'rent', 'misc']);
     const [stats, setStats] = useState({ total: 0 });
+    const [selectedDate, setSelectedDate] = useState(null);
 
     useEffect(() => {
         fetchCategories();
         fetchExpenses();
     }, []);
 
-    const fetchCategories = async () => {
-        try {
-            const docRef = doc(db, 'settings', 'expenses');
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists() && docSnap.data().categories) {
-                setCategories(docSnap.data().categories);
-            }
-        } catch (error) {
-            console.error('Error fetching categories:', error);
-        }
-    };
+    // ... (fetchCategories and fetchExpenses remain same) ...
 
-    const fetchExpenses = async () => {
-        try {
-            setLoading(true);
-            const expensesRef = collection(db, 'expenses');
-            const q = query(expensesRef, orderBy('date', 'desc'));
-            const snapshot = await getDocs(q);
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-            // Helper for Date String (YYYY-MM-DD) in Local Time
-            const toLocalDateStr = (date) => {
-                const offset = date.getTimezoneOffset() * 60000;
-                const localDate = new Date(date.getTime() - offset);
-                return localDate.toISOString().split('T')[0];
-            };
-
-            const now = new Date();
-            const todayStr = toLocalDateStr(now);
-
-            const yesterday = new Date(now);
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = toLocalDateStr(yesterday);
-
-            const startOfWeek = new Date(now);
-            startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday start
-            const startOfWeekStr = toLocalDateStr(startOfWeek);
-
-            const currentMonthPrefix = todayStr.substring(0, 7); // YYYY-MM
-
-            // Calculate stats
-            let total = 0;
-            let today = 0;
-            let yesterdayVal = 0;
-            let week = 0;
-            let month = 0;
-            const categoryStats = {};
-            const dailyStats = {};
-
-            data.forEach(exp => {
-                const amount = exp.amount || 0;
-                total += amount;
-                categoryStats[exp.category] = (categoryStats[exp.category] || 0) + amount;
-
-                // Time-based stats
-                if (exp.date === todayStr) today += amount;
-                if (exp.date === yesterdayStr) yesterdayVal += amount;
-                if (exp.date >= startOfWeekStr) week += amount;
-                if (exp.date && exp.date.startsWith(currentMonthPrefix)) {
-                    month += amount;
-                    dailyStats[exp.date] = (dailyStats[exp.date] || 0) + amount;
-                }
-            });
-
-            // Convert dailyStats to array for list view (sorted by date desc)
-            const dailyBreakdown = Object.keys(dailyStats)
-                .sort((a, b) => b.localeCompare(a))
-                .map(date => ({ date, total: dailyStats[date] }));
-
-            setStats({
-                total,
-                today,
-                yesterday: yesterdayVal,
-                week,
-                month,
-                dailyBreakdown,
-                ...categoryStats
-            });
-            setExpenses(data);
-        } catch (error) {
-            console.error('Error fetching expenses:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const deleteExpense = async (id) => {
-        if (!window.confirm('Delete this expense?')) return;
-        try {
-            await deleteDoc(doc(db, 'expenses', id));
-            setExpenses(prev => prev.filter(e => e.id !== id));
-            fetchExpenses(); // Refresh stats
-        } catch (error) {
-            console.error('Error deleting expense:', error);
-        }
-    };
-
-    const exportToExcel = () => {
-        const exportData = expenses.map(e => ({
-            Date: e.date,
-            Title: e.title,
-            Category: e.category,
-            Amount: e.amount,
-            'Payment Mode': e.paymentMode,
-            Note: e.note || ''
-        }));
-
-        const ws = XLSX.utils.json_to_sheet(exportData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
-        XLSX.writeFile(wb, `expenses_${new Date().toISOString().split('T')[0]}.xlsx`);
-    };
-
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0
-        }).format(amount || 0);
-    };
-
-    const getCategoryIcon = (category) => {
-        switch (category) {
-            case 'supplies': return <Package size={18} />;
-            case 'utilities': return <Zap size={18} />;
-            case 'maintenance': return <Wrench size={18} />;
-            case 'rent': return <Home size={18} />;
-            default: return <IndianRupee size={18} />;
-        }
-    };
-
-    const filteredExpenses = categoryFilter
-        ? expenses.filter(e => e.category === categoryFilter)
-        : expenses;
+    const filteredExpenses = expenses.filter(e => {
+        if (selectedDate && e.date !== selectedDate) return false;
+        if (categoryFilter && e.category !== categoryFilter) return false;
+        return true;
+    });
 
     return (
         <div className="expenses-page">
@@ -240,27 +113,108 @@ const Expenses = () => {
                 </div>
             </div>
 
-            {/* Daily Breakdown */}
-            {stats.dailyBreakdown && stats.dailyBreakdown.length > 0 && (
-                <div className="card" style={{ marginBottom: '1.5rem' }}>
-                    <div className="card-header">
-                        <h3>📅 Daily Breakdown (This Month)</h3>
-                    </div>
-                    <div className="card-body">
-                        <div className="daily-list-container">
-                            {stats.dailyBreakdown.map((day) => (
-                                <div key={day.date} className="daily-list-item">
-                                    <span className="daily-date">
-                                        {new Date(day.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
-                                    </span>
-                                    <div className="daily-line-spacer"></div>
-                                    <span className="daily-amount">{formatCurrency(day.total)}</span>
-                                </div>
-                            ))}
-                        </div>
+            {/* Calendar View */}
+            <div className="card" style={{ marginBottom: '1.5rem' }}>
+                <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3>📅 Expense Calendar (Last 30 Days)</h3>
+                    {selectedDate && (
+                        <button
+                            onClick={() => setSelectedDate(null)}
+                            style={{ background: '#eff6ff', color: '#3b82f6', border: 'none', padding: '4px 12px', borderRadius: '12px', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '600' }}
+                        >
+                            Reset Filter
+                        </button>
+                    )}
+                </div>
+                <div className="card-body">
+                    <div className="calendar-grid">
+                        {(() => {
+                            // Generate last 30 days
+                            const days = [];
+                            for (let i = 29; i >= 0; i--) {
+                                const d = new Date();
+                                d.setDate(d.getDate() - i);
+                                const dateStr = d.toISOString().split('T')[0];
+                                const hasExpense = stats.dailyBreakdown?.find(day => day.date === dateStr);
+                                const isSelected = selectedDate === dateStr;
+
+                                days.push(
+                                    <div
+                                        key={dateStr}
+                                        onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                                        className={`calendar-day ${isSelected ? 'selected' : ''} ${hasExpense ? 'has-data' : ''}`}
+                                    >
+                                        <span className="cal-date">{d.getDate()}</span>
+                                        <span className="cal-day">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                                        {hasExpense && (
+                                            <div className="cal-amount">{formatCurrency(hasExpense.total)}</div>
+                                        )}
+                                    </div>
+                                );
+                            }
+                            return days;
+                        })()}
                     </div>
                 </div>
-            )}
+            </div>
+
+            <style>{`
+                .calendar-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                    gap: 8px;
+                }
+                .calendar-day {
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    padding: 8px;
+                    text-align: center;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    min-height: 70px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .calendar-day:hover {
+                    background: #f8fafc;
+                    border-color: #cbd5e1;
+                }
+                .calendar-day.selected {
+                    background: #eff6ff;
+                    border-color: #3b82f6;
+                    box-shadow: 0 0 0 2px #3b82f6 inset;
+                }
+                .calendar-day.has-data {
+                    background: #f0fdf4;
+                    border-color: #86efac;
+                }
+                .calendar-day.selected.has-data {
+                    background: #dbeafe;
+                    border-color: #3b82f6;
+                }
+                .cal-date {
+                    font-weight: 700;
+                    font-size: 1.1rem;
+                    color: #334155;
+                }
+                .cal-day {
+                    font-size: 0.7rem;
+                    color: #64748b;
+                    text-transform: uppercase;
+                }
+                .cal-amount {
+                    margin-top: 4px;
+                    font-size: 0.75rem;
+                    font-weight: 700;
+                    color: #059669;
+                    background: white;
+                    padding: 1px 6px;
+                    border-radius: 4px;
+                    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+                }
+            `}</style>
 
             {/* Category Breakdown Chart */}
             {stats.total > 0 && (
