@@ -80,7 +80,7 @@ export const PERMISSIONS = {
         attendance: true,
         materials: { view: true, create: true, edit: false, delete: false },
         crm: false,
-        amc: { view: true, create: false, edit: false, delete: false },
+        amc: { view: true, create: true, edit: false, delete: false },
         calendar: true,
         audit: false
     },
@@ -114,7 +114,8 @@ export function AuthProvider({ children }) {
     const hasPermission = (resource, action = null) => {
         if (!userProfile?.role) return false;
 
-        const normalizedRole = userProfile.role.toLowerCase();
+        // Normalize role name: lowercase and replace spaces/dashes with underscores
+        const normalizedRole = userProfile.role.toLowerCase().replace(/[\s-]/g, '_');
         const rolePermissions = PERMISSIONS[normalizedRole];
         const defaultPerms = rolePermissions ? rolePermissions[resource] : undefined;
 
@@ -132,21 +133,20 @@ export function AuthProvider({ children }) {
                     return customPerms[action] === true;
                 }
                 // If missing in custom permissions, fallback to role default
-                if (defaultPerms && typeof defaultPerms === 'object') {
+                if (defaultPerms !== undefined) {
+                    if (typeof defaultPerms === 'boolean') return defaultPerms;
                     return defaultPerms[action] === true;
                 }
                 return false;
             }
 
             // If no action but object, check if ANY action allowed (view usually)
-            // Or better: if they have the resource object, they probably have access.
-            // But let's check basic CRUD if defined.
             if (typeof customPerms === 'object') {
-                // If any known action is true in custom
                 if (customPerms.view || customPerms.create || customPerms.edit || customPerms.delete) return true;
 
                 // Fallback to default check if custom keys missing
-                if (defaultPerms && typeof defaultPerms === 'object') {
+                if (defaultPerms !== undefined) {
+                    if (typeof defaultPerms === 'boolean') return defaultPerms;
                     return defaultPerms.view || defaultPerms.create || defaultPerms.edit || defaultPerms.delete;
                 }
             }
@@ -155,7 +155,6 @@ export function AuthProvider({ children }) {
 
         // 2. Fallback to Role-based Permissions (No custom override found)
         if (!rolePermissions) {
-            // console.warn('No permissions found for role:', userProfile.role); // Optional logging
             return false;
         }
 

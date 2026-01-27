@@ -308,12 +308,14 @@ const AMCPlans = () => {
                                                 <Trash2 size={14} /> Delete
                                             </button>
                                         </div>
-                                        <button
-                                            className="btn btn-outline-primary w-100"
-                                            onClick={() => { setSelectedPlan(plan); setShowAssignModal(true); }}
-                                        >
-                                            Assign to Customer
-                                        </button>
+                                        {hasPermission('amc', 'create') && (
+                                            <button
+                                                className="btn btn-outline-primary w-100"
+                                                onClick={() => { setSelectedPlan(plan); setShowAssignModal(true); }}
+                                            >
+                                                Assign to Customer
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ))

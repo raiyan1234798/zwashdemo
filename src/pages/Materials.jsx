@@ -175,9 +175,11 @@ const Materials = () => {
                     <button className="btn btn-secondary" onClick={exportToExcel}>
                         <Download size={18} /> Export
                     </button>
-                    <button className="btn btn-primary" onClick={() => { setEditingMaterial(null); setShowModal(true); }}>
-                        <Plus size={18} /> Add Material
-                    </button>
+                    {hasPermission('materials', 'create') && (
+                        <button className="btn btn-primary" onClick={() => { setEditingMaterial(null); setShowModal(true); }}>
+                            <Plus size={18} /> Add Material
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -258,9 +260,11 @@ const Materials = () => {
                         <div className="empty-state">
                             <Package size={48} />
                             <p>No materials found</p>
-                            <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                                <Plus size={18} /> Add First Material
-                            </button>
+                            {hasPermission('materials', 'create') && (
+                                <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+                                    <Plus size={18} /> Add First Material
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <div className="materials-list">

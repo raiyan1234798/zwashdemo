@@ -89,7 +89,11 @@ service cloud.firestore {
       // Staff use materials (update stock), but maybe restriction needed? 
       // For now, allow update to subtract stock.
       allow update: if isAuthenticated(); 
-      allow create, delete: if isManager();
+      // Allow creation if Manager OR Senior Employee OR has explicit permission
+      allow create: if isManager() || 
+                    (isAuthenticated() && getUserData().role == 'senior_employee') ||
+                    (isAuthenticated() && getUserData().permissions.materials.create == true);
+      allow delete: if isManager() || (isAuthenticated() && getUserData().permissions.materials.delete == true);
     }
 
     match /materialUsage/{usageId} {
@@ -106,7 +110,9 @@ service cloud.firestore {
     // 9. CRM / Subscriptions
     match /customer_amc_subscriptions/{subId} {
       allow read: if isAuthenticated();
-      allow write: if isManager();
+      allow write: if isManager() || 
+                   (isAuthenticated() && getUserData().role == 'senior_employee') ||
+                   (isAuthenticated() && (getUserData().permissions.amc.create == true || getUserData().permissions.amc.edit == true));
     }
 
     // Default: Deny everything else unless Admin
