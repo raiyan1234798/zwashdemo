@@ -2,120 +2,228 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- Helper Functions ---
+    // ==================== HELPER FUNCTIONS ====================
 
     // Check if user is logged in
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // specific role checks (requires reading the user profile doc)
-    // Note: get() costs 1 read operation.
+    // Get user profile data (costs 1 read operation)
     function getUserData() {
       return get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data;
     }
 
+    // Check if user is admin
     function isAdmin() {
       return isAuthenticated() && getUserData().role == 'admin';
     }
 
+    // Check if user is manager or admin
     function isManager() {
-      // Managers can do most things, Admins can do everything
       return isAuthenticated() && (getUserData().role == 'manager' || getUserData().role == 'admin');
     }
 
-    // --- Collection Rules ---
-
-    // 1. Users / Employees Collection
-    // FIX: Allow ALL logged-in staff to read the employee list.
-    // This allows Managers to see the "Employees" page and Staff to see names in dropdowns.
-    match /adminUsers/{userId} {
-      allow read: if isAuthenticated();
-      // Only Admins can create/edit roles or delete users
-      allow write: if isAdmin();
-      // Users can update their own profile (e.g. password/name)
-      allow update: if isAuthenticated() && request.auth.uid == userId;
+    // Check if user is senior employee or higher
+    function isSenior() {
+      let role = getUserData().role;
+      return isAuthenticated() && (role == 'senior_employee' || role == 'manager' || role == 'admin');
     }
 
-    // 2. Settings / Theme (CRITICAL FIX FOR THEME ERROR)
-    // Users need to read settings to load the theme.
+    // SAFE permission check - handles missing permissions object gracefully
+    // Returns true if user has specific permission granted via custom permissions
+    function hasCustomPermission(resource, action) {
+      let userData = getUserData();
+      // Check if permissions object exists and has the resource
+      return userData.permissions != null && 
+             userData.permissions[resource] != null && 
+             userData.permissions[resource][action] == true;
+    }
+
+    // ==================== COLLECTION RULES ====================
+
+    // 1. Users / Employees Collection
+    match /adminUsers/{userId} {
+      // All authenticated users can read employee list (for dropdowns, assignments)
+      allow read: if isAuthenticated();
+      
+      // Admins can do everything
+      allow write: if isAdmin();
+      
+      // Managers can update non-admin/non-manager employees
+      allow update: if isManager() && 
+                    resource.data.role != 'admin' && 
+                    resource.data.role != 'manager';
+      
+      // Users can update their own profile
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      
+      // New users can create their own profile (during onboarding)
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 2. Employee Invites
+    match /employeeInvites/{inviteId} {
+      allow read: if isAuthenticated();
+      allow update: if isAuthenticated(); // Accept invite
+      allow create, delete: if isManager();
+    }
+
+    // 3. Settings
     match /settings/{docId} {
       allow read: if isAuthenticated();
-      // Only Admins (or the user themselves) can update settings
       allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == docId);
     }
 
-    // 3. Bookings
-    // All staff need to read/create/update bookings to do their job.
+    // 4. Bookings - Core business operation
     match /bookings/{bookingId} {
-      allow read, create, update: if isAuthenticated();
-      // Only Managers/Admins should delete bookings
-      allow delete: if isManager();
+      // All staff can read bookings
+      allow read: if isAuthenticated();
+      
+      // Staff can create bookings (walk-ins, appointments)
+      allow create: if isAuthenticated() && 
+                    (isSenior() || hasCustomPermission('bookings', 'create'));
+      
+      // Staff can update bookings (status changes, assignments)
+      allow update: if isAuthenticated();
+      
+      // Only managers can delete bookings
+      allow delete: if isManager() || hasCustomPermission('bookings', 'delete');
     }
-    
-    // Archive Bookings (Read-only for most, writable by system/manager)
-    match /archived_bookings/{bookingId} {
+
+    // 5. Archived Bookings
+    match /archivedBookings/{bookingId} {
       allow read: if isAuthenticated();
       allow write: if isManager();
     }
 
-    // 4. Customers
-    // Staff need to search/add customers.
+    // 6. Customers
     match /customers/{customerId} {
-      allow read, create, update: if isAuthenticated();
-      allow delete: if isAdmin(); // Strict delete for customer data
-    }
-
-    // 5. Invoices
-    // Staff generate invoices.
-    match /invoices/{invoiceId} {
-      allow read, create, update: if isAuthenticated();
-      allow delete: if isAdmin();
-    }
-
-    // 6. Attendance
-    match /attendance/{attendanceId} {
-      // Everyone can see attendance (or at least their own query)
       allow read: if isAuthenticated();
-      // Staff can mark their own attendance
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      // Managers can edit/fix attendance records
-      allow update, delete: if isManager();
+      
+      allow create: if isAuthenticated() && 
+                    (isSenior() || hasCustomPermission('customers', 'create'));
+      
+      allow update: if isAuthenticated() && 
+                    (isSenior() || hasCustomPermission('customers', 'edit'));
+      
+      // Delete is restricted
+      allow delete: if isAdmin() || hasCustomPermission('customers', 'delete');
     }
 
-    // 7. Inventory & Materials
+    // 7. Invoices
+    match /invoices/{invoiceId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isAuthenticated() && 
+                    (isSenior() || hasCustomPermission('invoices', 'create'));
+      
+      allow update: if isAuthenticated() && 
+                    (isSenior() || hasCustomPermission('invoices', 'edit'));
+      
+      allow delete: if isAdmin() || hasCustomPermission('invoices', 'delete');
+    }
+
+    // 8. Attendance
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      
+      // Staff can mark their own attendance
+      allow create: if isAuthenticated() && 
+                    (request.resource.data.userId == request.auth.uid || isSenior());
+      
+      // Seniors can edit/fix attendance
+      allow update, delete: if isSenior();
+    }
+
+    // 9. Expenses
+    match /expenses/{expenseId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isSenior() || hasCustomPermission('expenses', 'create');
+      
+      allow update: if isSenior() || hasCustomPermission('expenses', 'edit');
+      
+      allow delete: if isSenior() || hasCustomPermission('expenses', 'delete');
+    }
+
+    // 10. Materials / Inventory
     match /materials/{materialId} {
       allow read: if isAuthenticated();
-      // Staff use materials (update stock), but maybe restriction needed? 
-      // For now, allow update to subtract stock.
-      allow update: if isAuthenticated(); 
-      // Allow creation if Manager OR Senior Employee OR has explicit permission
-      allow create: if isManager() || 
-                    (isAuthenticated() && getUserData().role == 'senior_employee') ||
-                    (isAuthenticated() && getUserData().permissions.materials.create == true);
-      allow delete: if isManager() || (isAuthenticated() && getUserData().permissions.materials.delete == true);
+      
+      // Staff can update stock (usage deduction)
+      allow update: if isAuthenticated();
+      
+      allow create: if isSenior() || hasCustomPermission('materials', 'create');
+      
+      allow delete: if isManager() || hasCustomPermission('materials', 'delete');
     }
 
+    // 11. Material Usage Tracking
     match /materialUsage/{usageId} {
       allow read, write: if isAuthenticated();
     }
 
-    // 8. Services (Catalog)
+    // 12. Services Catalog
     match /services/{serviceId} {
       allow read: if isAuthenticated();
-      // Only Managers change prices/services
-      allow write: if isManager();
-    }
-    
-    // 9. CRM / Subscriptions
-    match /customer_amc_subscriptions/{subId} {
-      allow read: if isAuthenticated();
-      allow write: if isManager() || 
-                   (isAuthenticated() && getUserData().role == 'senior_employee') ||
-                   (isAuthenticated() && (getUserData().permissions.amc.create == true || getUserData().permissions.amc.edit == true));
+      
+      allow create: if isManager() || hasCustomPermission('services', 'create');
+      
+      allow update: if isManager() || hasCustomPermission('services', 'edit');
+      
+      allow delete: if isManager() || hasCustomPermission('services', 'delete');
     }
 
-    // Default: Deny everything else unless Admin
+    // 13. AMC Plans
+    match /amc_plans/{planId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isSenior() || hasCustomPermission('amc', 'create');
+      
+      allow update: if isSenior() || hasCustomPermission('amc', 'edit');
+      
+      allow delete: if isManager() || hasCustomPermission('amc', 'delete');
+    }
+
+    // 14. AMC Subscriptions
+    match /customer_amc_subscriptions/{subId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isSenior() || hasCustomPermission('amc', 'create');
+      
+      allow update: if isSenior() || hasCustomPermission('amc', 'edit');
+      
+      allow delete: if isManager() || hasCustomPermission('amc', 'delete');
+    }
+
+    // 15. Payroll (Admin/Manager only)
+    match /payroll/{payrollId} {
+      allow read: if isManager() || hasCustomPermission('payroll', 'view');
+      allow write: if isAdmin() || hasCustomPermission('payroll', 'edit');
+    }
+
+    // 16. Audit Log (Admin only, read-only for security)
+    match /auditLog/{logId} {
+      allow read: if isAdmin() || hasCustomPermission('audit', 'view');
+      allow create: if isAuthenticated(); // System can log actions
+      allow update, delete: if false; // Never allow modification of audit logs
+    }
+
+    // 17. CRM Data
+    match /crm_data/{docId} {
+      allow read: if isManager() || hasCustomPermission('crm', 'view');
+      allow write: if isManager() || hasCustomPermission('crm', 'edit');
+    }
+
+    // 18. Analytics Cache (Read by authorized, write by system/admin)
+    match /analytics/{docId} {
+      allow read: if isAdmin() || hasCustomPermission('analytics', 'view');
+      allow write: if isAdmin();
+    }
+
+    // ==================== DEFAULT RULE ====================
+    // Admin fallback for any unlisted collection
     match /{document=**} {
       allow read, write: if isAdmin();
     }

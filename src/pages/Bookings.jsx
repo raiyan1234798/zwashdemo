@@ -767,6 +767,9 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         startTime: ''
     });
 
+    // Advance Payment State
+    const [advancePayment, setAdvancePayment] = useState(0);
+
     useEffect(() => {
         fetchServices();
         fetchCustomers();
@@ -1050,6 +1053,16 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         const bookingRef = `DC-${dateStr}-${serviceCode}${counter.toString().padStart(2, '0')}`;
 
         try {
+            // Calculate payment status
+            const advanceAmt = Number(advancePayment) || 0;
+            const balanceAmt = totalPrice - advanceAmt;
+            let paymentStatus = 'unpaid';
+            if (advanceAmt >= totalPrice) {
+                paymentStatus = 'paid';
+            } else if (advanceAmt > 0) {
+                paymentStatus = 'partial';
+            }
+
             await addDoc(collection(db, 'bookings'), {
                 bookingReference: bookingRef,
                 createdBy: user?.uid || 'unknown',
@@ -1067,6 +1080,12 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                 serviceDuration: totalDuration,
                 extraTime: extraTime,
                 price: totalPrice,
+
+                // Payment Tracking
+                totalAmount: totalPrice,
+                advancePayment: advanceAmt,
+                balanceAmount: balanceAmt,
+                paymentStatus: paymentStatus,
 
                 vehicleType: vehicleType,
                 bookingDate: formData.bookingDate,
@@ -1620,13 +1639,79 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                             </div>
                         </div>
                     </div>
-                    <div className="full-page-form-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-                        <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Creating...' : 'Create Booking'}
-                        </button>
-                    </div>
-                </form >
+
+                    {/* Payment Section */}
+                    {selectedServices.length > 0 && (
+                        <div style={{
+                            background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+                            borderRadius: '12px',
+                            padding: '1rem',
+                            marginTop: '1rem',
+                            border: '1px solid #86efac'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                                <span style={{ fontWeight: '600', color: '#166534' }}>Total Amount:</span>
+                                <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#166534' }}>₹{totalPrice.toLocaleString()}</span>
+                            </div>
+
+                            <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+                                <label style={{ fontSize: '0.85rem', fontWeight: '500', color: '#166534' }}>Advance Payment (₹)</label>
+                                <input
+                                    type="number"
+                                    value={advancePayment}
+                                    onChange={(e) => setAdvancePayment(Math.max(0, Number(e.target.value)))}
+                                    min="0"
+                                    max={totalPrice}
+                                    placeholder="0"
+                                    style={{
+                                        fontSize: '1.1rem',
+                                        fontWeight: '600',
+                                        textAlign: 'right',
+                                        padding: '0.75rem'
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                paddingTop: '0.5rem',
+                                borderTop: '1px dashed #86efac',
+                                marginTop: '0.5rem'
+                            }}>
+                                <span style={{ fontWeight: '500', color: '#166534' }}>Balance Due:</span>
+                                <span style={{
+                                    fontWeight: '700',
+                                    fontSize: '1.1rem',
+                                    color: (totalPrice - Number(advancePayment || 0)) > 0 ? '#dc2626' : '#166534'
+                                }}>
+                                    ₹{(totalPrice - Number(advancePayment || 0)).toLocaleString()}
+                                </span>
+                            </div>
+
+                            {Number(advancePayment || 0) > 0 && Number(advancePayment) < totalPrice && (
+                                <div style={{
+                                    marginTop: '0.5rem',
+                                    padding: '0.5rem',
+                                    background: '#fef3c7',
+                                    borderRadius: '6px',
+                                    fontSize: '0.8rem',
+                                    color: '#92400e',
+                                    textAlign: 'center'
+                                }}>
+                                    ⚠️ Partial payment - Balance to be collected
+                                </div>
+                            )}
+                        </div>
+                    )}
+            </div>
+            <div className="full-page-form-footer">
+                <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                    {loading ? 'Creating...' : 'Create Booking'}
+                </button>
+            </div>
+        </form>
             </div >
         </div >
     );

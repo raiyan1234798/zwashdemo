@@ -31,7 +31,7 @@ export const ROLES = {
 
 export const PERMISSIONS = {
     [ROLES.ADMIN]: {
-        dashboard: true,
+        dashboard: { view: true, create: true, edit: true, delete: true },
         bookings: { view: true, create: true, edit: true, delete: true },
         services: { view: true, create: true, edit: true, delete: true },
         customers: { view: true, create: true, edit: true, delete: true },
@@ -39,17 +39,17 @@ export const PERMISSIONS = {
         expenses: { view: true, create: true, edit: true, delete: true },
         invoices: { view: true, create: true, edit: true, delete: true },
         payroll: { view: true, create: true, edit: true, delete: true },
-        analytics: true,
-        settings: true,
-        attendance: true,
-        audit: true,
+        analytics: { view: true, create: true, edit: true, delete: true },
+        settings: { view: true, create: true, edit: true, delete: true },
+        attendance: { view: true, create: true, edit: true, delete: true },
+        audit: { view: true, create: true, edit: true, delete: true },
         materials: { view: true, create: true, edit: true, delete: true },
-        crm: true,
+        crm: { view: true, create: true, edit: true, delete: true },
         amc: { view: true, create: true, edit: true, delete: true },
-        calendar: true
+        calendar: { view: true, create: true, edit: true, delete: true }
     },
     [ROLES.MANAGER]: {
-        dashboard: true,
+        dashboard: { view: true, create: true, edit: true, delete: true },
         bookings: { view: true, create: true, edit: true, delete: true },
         services: { view: true, create: true, edit: true, delete: true },
         customers: { view: true, create: true, edit: true, delete: true },
@@ -57,17 +57,17 @@ export const PERMISSIONS = {
         expenses: { view: true, create: true, edit: true, delete: true },
         invoices: { view: true, create: true, edit: true, delete: true },
         payroll: { view: false, create: false, edit: false, delete: false },
-        analytics: true,
-        settings: false,
-        attendance: true,
+        analytics: { view: false, create: false, edit: false, delete: false },
+        settings: { view: false, create: false, edit: false, delete: false },
+        attendance: { view: true, create: true, edit: true, delete: true },
         materials: { view: true, create: true, edit: true, delete: true },
-        crm: true,
+        crm: { view: true, create: true, edit: true, delete: true },
         amc: { view: true, create: true, edit: true, delete: false },
-        calendar: true,
-        audit: false
+        calendar: { view: true, create: true, edit: true, delete: true },
+        audit: { view: false, create: false, edit: false, delete: false }
     },
     [ROLES.SENIOR_EMPLOYEE]: {
-        dashboard: true,
+        dashboard: { view: true, create: false, edit: false, delete: false },
         bookings: { view: true, create: true, edit: true, delete: false },
         services: { view: true, create: false, edit: true, delete: false },
         customers: { view: true, create: true, edit: true, delete: false },
@@ -75,17 +75,17 @@ export const PERMISSIONS = {
         expenses: { view: true, create: true, edit: true, delete: true },
         invoices: { view: true, create: true, edit: false, delete: false },
         payroll: { view: false, create: false, edit: false, delete: false },
-        analytics: false,
-        settings: false,
-        attendance: true,
+        analytics: { view: false, create: false, edit: false, delete: false },
+        settings: { view: false, create: false, edit: false, delete: false },
+        attendance: { view: true, create: true, edit: true, delete: false },
         materials: { view: true, create: true, edit: false, delete: false },
-        crm: false,
+        crm: { view: false, create: false, edit: false, delete: false },
         amc: { view: true, create: true, edit: false, delete: false },
-        calendar: true,
-        audit: false
+        calendar: { view: true, create: false, edit: false, delete: false },
+        audit: { view: false, create: false, edit: false, delete: false }
     },
     [ROLES.EMPLOYEE]: {
-        dashboard: true,
+        dashboard: { view: true, create: false, edit: false, delete: false },
         bookings: { view: true, create: true, edit: false, delete: false },
         services: { view: true, create: false, edit: false, delete: false },
         customers: { view: false, create: false, edit: false, delete: false },
@@ -93,14 +93,14 @@ export const PERMISSIONS = {
         expenses: { view: false, create: false, edit: false, delete: false },
         invoices: { view: false, create: false, edit: false, delete: false },
         payroll: { view: false, create: false, edit: false, delete: false },
-        analytics: false,
-        settings: false,
-        attendance: true,
+        analytics: { view: false, create: false, edit: false, delete: false },
+        settings: { view: false, create: false, edit: false, delete: false },
+        attendance: { view: true, create: true, edit: false, delete: false },
         materials: { view: false, create: false, edit: false, delete: false },
-        crm: false,
-        amc: { view: false, create: false, edit: false, delete: false },
-        calendar: true,
-        audit: false
+        crm: { view: false, create: false, edit: false, delete: false },
+        amc: { view: true, create: true, edit: false, delete: false },
+        calendar: { view: true, create: false, edit: false, delete: false },
+        audit: { view: false, create: false, edit: false, delete: false }
     }
 };
 

@@ -186,7 +186,7 @@ const SERVICE_CATALOGUE = [
 const CATEGORIES = ['All', 'Detailed Wash', 'Paint Correction (Polish)', 'Ceramic', 'Mechanical'];
 
 const Services = () => {
-    const { hasPermission } = useAuth();
+    const { hasPermission, isAdmin } = useAuth();
     const [services, setServices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [seeding, setSeeding] = useState(false);
@@ -348,12 +348,16 @@ const Services = () => {
                             <Link to="/amc-plans" className="btn btn-secondary">
                                 <ShieldCheck size={18} /> Manage AMC Packages
                             </Link>
-                            <button className="btn btn-secondary" onClick={handleSeedCeramic} disabled={seeding}>
-                                <UploadCloud size={18} /> Seed Ceramic
-                            </button>
-                            <button className="btn btn-secondary" onClick={seedServices} disabled={seeding}>
-                                {seeding ? 'Syncing...' : 'Sync / Seed Services'}
-                            </button>
+                            {isAdmin && (
+                                <>
+                                    <button className="btn btn-secondary" onClick={handleSeedCeramic} disabled={seeding}>
+                                        <UploadCloud size={18} /> Seed Ceramic
+                                    </button>
+                                    <button className="btn btn-secondary" onClick={seedServices} disabled={seeding}>
+                                        {seeding ? 'Syncing...' : 'Sync / Seed Services'}
+                                    </button>
+                                </>
+                            )}
                             <button className="btn btn-primary" onClick={() => { setEditingService(null); setShowModal(true); }}>
                                 <Plus size={18} /> Add Service
                             </button>

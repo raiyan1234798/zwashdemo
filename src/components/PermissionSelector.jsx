@@ -31,27 +31,21 @@ const PermissionSelector = ({ currentPermissions, onChange, role }) => {
     const togglePermission = (resource, action, value) => {
         const next = { ...currentPermissions };
 
-        // Handle boolean resources (e.g., dashboard, analytics)
-        if (typeof availableResources[resource] === 'boolean') {
-            next[resource] = value;
+        // All resources now use object format with view/create/edit/delete
+        if (!next[resource] || typeof next[resource] !== 'object') {
+            next[resource] = { view: false, create: false, edit: false, delete: false };
         }
-        // Handle object resources (e.g., bookings, customers)
-        else {
-            if (!next[resource] || typeof next[resource] !== 'object') {
-                next[resource] = {};
-            }
 
-            if (action === 'all') {
-                // Toggle all actions for this resource
-                Object.keys(availableResources[resource]).forEach(key => {
-                    next[resource][key] = value;
-                });
-            } else {
-                next[resource] = {
-                    ...next[resource],
-                    [action]: value
-                };
-            }
+        if (action === 'all') {
+            // Toggle all actions for this resource
+            ['view', 'create', 'edit', 'delete'].forEach(key => {
+                next[resource][key] = value;
+            });
+        } else {
+            next[resource] = {
+                ...next[resource],
+                [action]: value
+            };
         }
 
         onChange(next);
@@ -71,9 +65,6 @@ const PermissionSelector = ({ currentPermissions, onChange, role }) => {
 
             <div className="permission-list">
                 {Object.keys(availableResources).map((resource) => {
-                    const template = availableResources[resource];
-                    const isBoolean = typeof template === 'boolean';
-
                     return (
                         <div key={resource} className="permission-row">
                             <div className="resource-name">
@@ -81,38 +72,19 @@ const PermissionSelector = ({ currentPermissions, onChange, role }) => {
                             </div>
 
                             <div className="resource-actions">
-                                {isBoolean ? (
-                                    // For boolean resources, we treat it as "View" access essentially, or just a single toggle
-                                    <div className="action-cell">
+                                {/* Always show all 4 action checkboxes for every resource */}
+                                {['view', 'create', 'edit', 'delete'].map(action => (
+                                    <div key={action} className="action-cell">
                                         <label className="checkbox-container">
                                             <input
                                                 type="checkbox"
-                                                checked={isEnabled(resource, 'view')} // Treat boolean as view for consistency in check
-                                                onChange={(e) => togglePermission(resource, null, e.target.checked)}
+                                                checked={isEnabled(resource, action)}
+                                                onChange={(e) => togglePermission(resource, action, e.target.checked)}
                                             />
                                             <span className="checkmark"></span>
                                         </label>
                                     </div>
-                                ) : (
-                                    // For complex resources, show checkboxes for available actions
-                                    ['view', 'create', 'edit', 'delete'].map(action => {
-                                        // Only show checkbox if the action is applicable for this resource (based on ADMIN template)
-                                        if (template[action] === undefined) return <div key={action} className="action-cell empty"></div>;
-
-                                        return (
-                                            <div key={action} className="action-cell">
-                                                <label className="checkbox-container">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={isEnabled(resource, action)}
-                                                        onChange={(e) => togglePermission(resource, action, e.target.checked)}
-                                                    />
-                                                    <span className="checkmark"></span>
-                                                </label>
-                                            </div>
-                                        );
-                                    })
-                                )}
+                                ))}
                             </div>
                         </div>
                     );

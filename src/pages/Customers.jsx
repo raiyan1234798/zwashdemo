@@ -274,7 +274,7 @@ const Customers = () => {
                                                                 <Edit size={16} />
                                                             </button>
                                                         )}
-                                                        {isAdmin && (
+                                                        {hasPermission('customers', 'delete') && (
                                                             <button
                                                                 className="btn-icon danger"
                                                                 onClick={() => setDeleteConfirm({ id: customer.id, name: customer.name || customer.phone })}

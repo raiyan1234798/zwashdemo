@@ -402,6 +402,22 @@
     color: #991b1b;
 }
 
+/* Payment Status Badges */
+.badge-paid {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    color: #065f46;
+}
+
+.badge-partial {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    color: #92400e;
+}
+
+.badge-unpaid {
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    color: #991b1b;
+}
+
 /* ==================== FORMS ==================== */
 .form-group {
     margin-bottom: 1.25rem;

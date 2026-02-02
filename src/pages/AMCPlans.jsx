@@ -232,7 +232,7 @@ const AMCPlans = () => {
                 <div className="plans-section">
                     <div className="section-header">
                         <h3>Available Packages</h3>
-                        {hasPermission('services', 'create') && (
+                        {hasPermission('amc', 'create') && (
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                                 <button className="btn btn-primary" onClick={() => setShowPlanModal(true)}>
                                     <Plus size={18} /> Create New Plan
@@ -293,20 +293,24 @@ const AMCPlans = () => {
                                     </div>
                                     <div className="plan-footer">
                                         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                            <button
-                                                className="btn btn-sm btn-secondary"
-                                                onClick={() => { setSelectedPlan(plan); setShowPlanModal(true); }}
-                                                style={{ flex: 1 }}
-                                            >
-                                                <Edit size={14} /> Edit
-                                            </button>
-                                            <button
-                                                className="btn btn-sm btn-danger"
-                                                onClick={() => handleDeletePlan(plan.id)}
-                                                style={{ flex: 1 }}
-                                            >
-                                                <Trash2 size={14} /> Delete
-                                            </button>
+                                            {hasPermission('amc', 'edit') && (
+                                                <button
+                                                    className="btn btn-sm btn-secondary"
+                                                    onClick={() => { setSelectedPlan(plan); setShowPlanModal(true); }}
+                                                    style={{ flex: 1 }}
+                                                >
+                                                    <Edit size={14} /> Edit
+                                                </button>
+                                            )}
+                                            {hasPermission('amc', 'delete') && (
+                                                <button
+                                                    className="btn btn-sm btn-danger"
+                                                    onClick={() => handleDeletePlan(plan.id)}
+                                                    style={{ flex: 1 }}
+                                                >
+                                                    <Trash2 size={14} /> Delete
+                                                </button>
+                                            )}
                                         </div>
                                         {hasPermission('amc', 'create') && (
                                             <button
@@ -408,7 +412,7 @@ const AMCPlans = () => {
                                                                         <Edit size={14} />
                                                                     </button>
                                                                 )}
-                                                                {isAdmin && (
+                                                                {hasPermission('amc', 'delete') && (
                                                                     <button
                                                                         className="btn btn-sm"
                                                                         style={{ background: '#ef4444', color: 'white' }}
@@ -911,6 +915,8 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [vehicleType, setVehicleType] = useState('hatchback');
     const [salePrice, setSalePrice] = useState(0);
+    const [startDateStr, setStartDateStr] = useState(new Date().toISOString().split('T')[0]); // Allow custom start date for past AMC
+    const [advancePayment, setAdvancePayment] = useState(0); // Advance payment amount
 
     // List of all customers for dropdown
     const [customerList, setCustomerList] = useState([]);
@@ -989,8 +995,9 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
                 if (!selectedCustomer) return;
             }
 
-            const startDate = new Date();
-            const expiryDate = new Date();
+            // Use the selected start date (allows adding past AMC customers)
+            const startDate = new Date(startDateStr);
+            const expiryDate = new Date(startDateStr);
             expiryDate.setMonth(startDate.getMonth() + plan.validityMonths);
 
             // Build service tracking structure
@@ -1010,6 +1017,17 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
                 });
             }
 
+            // Calculate payment status
+            const advanceAmt = Number(advancePayment) || 0;
+            const totalAmt = Number(salePrice) || 0;
+            const balanceAmt = totalAmt - advanceAmt;
+            let paymentStatus = 'unpaid';
+            if (advanceAmt >= totalAmt) {
+                paymentStatus = 'paid';
+            } else if (advanceAmt > 0) {
+                paymentStatus = 'partial';
+            }
+
             // Create Subscription
             const subscriptionData = {
                 customerId: customerId || 'unknown',
@@ -1019,7 +1037,12 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
                 vehicleType: vehicleType,
                 planId: plan.id,
                 planName: plan.name,
-                price: Number(salePrice) || 0,
+                price: totalAmt,
+                // Payment Tracking
+                totalAmount: totalAmt,
+                advancePayment: advanceAmt,
+                balanceAmount: balanceAmt,
+                paymentStatus: paymentStatus,
                 startDate: Timestamp.fromDate(startDate),
                 expiryDate: Timestamp.fromDate(expiryDate),
                 status: 'active',
@@ -1043,15 +1066,15 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
                     {
                         description: `AMC Plan: ${plan.name} (${vehicleType})`,
                         quantity: 1,
-                        price: Number(salePrice),
-                        total: Number(salePrice)
+                        price: totalAmt,
+                        total: totalAmt
                     }
                 ],
-                subtotal: Number(salePrice),
-                total: Number(salePrice),
-                amountPaid: Number(salePrice),
-                balance: 0,
-                status: 'paid',
+                subtotal: totalAmt,
+                total: totalAmt,
+                amountPaid: advanceAmt,
+                balance: balanceAmt,
+                status: paymentStatus,
                 date: serverTimestamp(),
                 createdAt: serverTimestamp()
             };
@@ -1127,6 +1150,97 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
                         <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', color: 'var(--navy-500)' }}>
                             Standard Price: ₹{getPrice().toLocaleString()}
                         </div>
+                    </div>
+
+                    {/* Start Date Selection - For past AMC customers */}
+                    <div className="form-group">
+                        <label>Start Date *</label>
+                        <input
+                            type="date"
+                            value={startDateStr}
+                            onChange={e => setStartDateStr(e.target.value)}
+                            style={{
+                                padding: '0.75rem',
+                                width: '100%',
+                                boxSizing: 'border-box',
+                                border: '1px solid var(--navy-200)',
+                                borderRadius: '8px'
+                            }}
+                        />
+                        <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', color: 'var(--navy-500)' }}>
+                            Select a past date to add existing AMC customers. Expiry: {(() => {
+                                const exp = new Date(startDateStr);
+                                exp.setMonth(exp.getMonth() + (plan.validityMonths || 12));
+                                return exp.toLocaleDateString();
+                            })()}
+                        </div>
+                    </div>
+
+                    {/* Advance Payment Section */}
+                    <div style={{
+                        background: 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+                        borderRadius: '12px',
+                        padding: '1rem',
+                        marginBottom: '1rem',
+                        border: '1px solid #86efac'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                            <span style={{ fontWeight: '600', color: '#166534' }}>Total Amount:</span>
+                            <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#166534' }}>₹{Number(salePrice || 0).toLocaleString()}</span>
+                        </div>
+
+                        <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+                            <label style={{ fontSize: '0.85rem', fontWeight: '500', color: '#166534' }}>Advance Payment (₹)</label>
+                            <input
+                                type="number"
+                                value={advancePayment}
+                                onChange={(e) => setAdvancePayment(Math.max(0, Number(e.target.value)))}
+                                min="0"
+                                max={salePrice}
+                                placeholder="0"
+                                style={{
+                                    fontSize: '1.1rem',
+                                    fontWeight: '600',
+                                    textAlign: 'right',
+                                    padding: '0.75rem',
+                                    width: '100%',
+                                    boxSizing: 'border-box',
+                                    border: '1px solid #86efac',
+                                    borderRadius: '8px'
+                                }}
+                            />
+                        </div>
+
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            paddingTop: '0.5rem',
+                            borderTop: '1px dashed #86efac',
+                            marginTop: '0.5rem'
+                        }}>
+                            <span style={{ fontWeight: '500', color: '#166534' }}>Balance Due:</span>
+                            <span style={{
+                                fontWeight: '700',
+                                fontSize: '1.1rem',
+                                color: (Number(salePrice || 0) - Number(advancePayment || 0)) > 0 ? '#dc2626' : '#166534'
+                            }}>
+                                ₹{(Number(salePrice || 0) - Number(advancePayment || 0)).toLocaleString()}
+                            </span>
+                        </div>
+
+                        {Number(advancePayment || 0) > 0 && Number(advancePayment) < salePrice && (
+                            <div style={{
+                                marginTop: '0.5rem',
+                                padding: '0.5rem',
+                                background: '#fef3c7',
+                                borderRadius: '6px',
+                                fontSize: '0.8rem',
+                                color: '#92400e',
+                                textAlign: 'center'
+                            }}>
+                                ⚠️ Partial payment - Balance to be collected
+                            </div>
+                        )}
                     </div>
 
                     {/* Customer Selection Tabs */}
