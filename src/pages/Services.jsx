@@ -348,16 +348,7 @@ const Services = () => {
                             <Link to="/amc-plans" className="btn btn-secondary">
                                 <ShieldCheck size={18} /> Manage AMC Packages
                             </Link>
-                            {isAdmin && (
-                                <>
-                                    <button className="btn btn-secondary" onClick={handleSeedCeramic} disabled={seeding}>
-                                        <UploadCloud size={18} /> Seed Ceramic
-                                    </button>
-                                    <button className="btn btn-secondary" onClick={seedServices} disabled={seeding}>
-                                        {seeding ? 'Syncing...' : 'Sync / Seed Services'}
-                                    </button>
-                                </>
-                            )}
+
                             <button className="btn btn-primary" onClick={() => { setEditingService(null); setShowModal(true); }}>
                                 <Plus size={18} /> Add Service
                             </button>
