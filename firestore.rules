@@ -128,12 +128,13 @@ service cloud.firestore {
     match /attendance/{attendanceId} {
       allow read: if isAuthenticated();
       
-      // Staff can mark their own attendance
+      // Managers and senior employees can mark attendance for anyone
+      // Regular employees can mark their own attendance
       allow create: if isAuthenticated() && 
-                    (request.resource.data.userId == request.auth.uid || isSenior());
+                    (isManager() || isSenior() || request.resource.data.userId == request.auth.uid);
       
-      // Seniors can edit/fix attendance
-      allow update, delete: if isSenior();
+      // Managers and senior employees can edit/fix/delete attendance
+      allow update, delete: if isAuthenticated() && (isManager() || isSenior());
     }
 
     // 9. Expenses
@@ -179,22 +180,28 @@ service cloud.firestore {
     match /amc_plans/{planId} {
       allow read: if isAuthenticated();
       
-      allow create: if isSenior() || hasCustomPermission('amc', 'create');
+      // Managers and senior employees can create AMC plans
+      allow create: if isAuthenticated() && (isManager() || isSenior());
       
-      allow update: if isSenior() || hasCustomPermission('amc', 'edit');
+      // Managers and senior employees can update AMC plans
+      allow update: if isAuthenticated() && (isManager() || isSenior());
       
-      allow delete: if isManager() || hasCustomPermission('amc', 'delete');
+      // Only managers can delete AMC plans
+      allow delete: if isManager();
     }
 
     // 14. AMC Subscriptions
     match /customer_amc_subscriptions/{subId} {
       allow read: if isAuthenticated();
       
-      allow create: if isSenior() || hasCustomPermission('amc', 'create');
+      // Managers and senior employees can create AMC subscriptions
+      allow create: if isAuthenticated() && (isManager() || isSenior());
       
-      allow update: if isSenior() || hasCustomPermission('amc', 'edit');
+      // Managers and senior employees can update AMC subscriptions
+      allow update: if isAuthenticated() && (isManager() || isSenior());
       
-      allow delete: if isManager() || hasCustomPermission('amc', 'delete');
+      // Only managers can delete AMC subscriptions
+      allow delete: if isManager();
     }
 
     // 15. Payroll (Admin/Manager only)

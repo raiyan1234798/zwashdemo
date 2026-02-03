@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 const Attendance = () => {
-    const { hasPermission, isEmployee, userProfile } = useAuth();
+    const { hasPermission, isEmployee, isSeniorEmployee, isManager, userProfile } = useAuth();
     const [employees, setEmployees] = useState([]);
     const [attendance, setAttendance] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -190,7 +190,7 @@ const Attendance = () => {
                     <p className="subtitle">{isEmployee ? 'View your attendance records' : 'Track employee attendance'}</p>
                 </div>
                 <div className="header-actions">
-                    {hasPermission('attendance') && (
+                    {(hasPermission('attendance', 'create') || hasPermission('attendance', 'edit')) && (
                         <button className="btn btn-primary" onClick={() => setShowMarkModal(true)}>
                             <UserCheck size={18} /> Mark Attendance
                         </button>
@@ -437,7 +437,7 @@ const Attendance = () => {
             {/* Mark Attendance Modal */}
             {showMarkModal && (
                 <MarkAttendanceModal
-                    employees={isEmployee ? filteredEmployees : employees}
+                    employees={(isManager || isSeniorEmployee) ? employees : (isEmployee ? filteredEmployees : employees)}
                     attendance={attendance}
                     onClose={() => setShowMarkModal(false)}
                     onMark={markAttendance}
@@ -612,6 +612,7 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
     // Base statuses (excluding standalone overtime)
     const baseStatuses = [
         { id: 'present', label: 'Present', color: '#10b981' },
+        { id: 'absent', label: 'Absent', color: '#ef4444' },
         { id: 'half-day', label: 'Half-day', color: '#f59e0b' },
         { id: 'paid_leave', label: 'Paid Leave', color: '#3b82f6' },
         { id: 'unpaid_leave', label: 'Unpaid Leave', color: '#fca5a5' }
