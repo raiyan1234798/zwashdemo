@@ -338,98 +338,188 @@ const AMCPlans = () => {
                                     <p>No active subscriptions</p>
                                 </div>
                             ) : (
-                                <div className="table-container">
-                                    <table className="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Customer</th>
-                                                <th>Plan</th>
-                                                <th>Vehicle</th>
-                                                <th>Start Date</th>
-                                                <th>Expiry</th>
-                                                <th>Services Used</th>
-                                                <th>Status</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {subscriptions.map(sub => {
-                                                const washUsage = getServiceUsageCount(sub, 'Commando Cleaning');
-                                                return (
-                                                    <tr key={sub.id}>
-                                                        <td>
-                                                            <strong>{sub.customerName}</strong>
-                                                            <br />
-                                                            <small>{sub.customerPhone}</small>
-                                                        </td>
-                                                        <td>
-                                                            <span className={`badge ${sub.planType === 'premium' ? 'badge-progress' : 'badge-confirmed'}`}>
-                                                                {sub.planType?.toUpperCase() || 'STANDARD'}
-                                                            </span>
-                                                            <br />
-                                                            <small>{sub.planName}</small>
-                                                        </td>
-                                                        <td>
-                                                            <strong>{sub.vehicleNumber}</strong>
-                                                            <br />
-                                                            <small style={{ textTransform: 'capitalize' }}>{sub.vehicleType}</small>
-                                                        </td>
-                                                        <td>{formatDate(sub.startDate)}</td>
-                                                        <td>{formatDate(sub.expiryDate)}</td>
-                                                        <td>
-                                                            <div className="usage-bar-wrapper">
-                                                                <div className="usage-text">
-                                                                    {washUsage.used} / {washUsage.total} washes
+                                <>
+                                    {/* Desktop Table View */}
+                                    <div className="table-container desktop-view">
+                                        <table className="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Customer</th>
+                                                    <th>Plan</th>
+                                                    <th>Vehicle</th>
+                                                    <th>Start Date</th>
+                                                    <th>Expiry</th>
+                                                    <th>Services Used</th>
+                                                    <th>Status</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {subscriptions.map(sub => {
+                                                    const washUsage = getServiceUsageCount(sub, 'Commando Cleaning');
+                                                    return (
+                                                        <tr key={sub.id}>
+                                                            <td>
+                                                                <strong>{sub.customerName}</strong>
+                                                                <br />
+                                                                <small>{sub.customerPhone}</small>
+                                                            </td>
+                                                            <td>
+                                                                <span className={`badge ${sub.planType === 'premium' ? 'badge-progress' : 'badge-confirmed'}`}>
+                                                                    {sub.planType?.toUpperCase() || 'STANDARD'}
+                                                                </span>
+                                                                <br />
+                                                                <small>{sub.planName}</small>
+                                                            </td>
+                                                            <td>
+                                                                <strong>{sub.vehicleNumber}</strong>
+                                                                <br />
+                                                                <small style={{ textTransform: 'capitalize' }}>{sub.vehicleType}</small>
+                                                            </td>
+                                                            <td>{formatDate(sub.startDate)}</td>
+                                                            <td>{formatDate(sub.expiryDate)}</td>
+                                                            <td>
+                                                                <div className="usage-bar-wrapper">
+                                                                    <div className="usage-text">
+                                                                        {washUsage.used} / {washUsage.total} washes
+                                                                    </div>
+                                                                    <div className="usage-progress">
+                                                                        <div
+                                                                            className="usage-fill"
+                                                                            style={{ width: `${washUsage.total ? (washUsage.used / washUsage.total) * 100 : 0}%` }}
+                                                                        ></div>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="usage-progress">
-                                                                    <div
-                                                                        className="usage-fill"
-                                                                        style={{ width: `${washUsage.total ? (washUsage.used / washUsage.total) * 100 : 0}%` }}
-                                                                    ></div>
+                                                            </td>
+                                                            <td>
+                                                                <span className={`badge ${sub.status === 'active' ? 'badge-confirmed' : 'badge-cancelled'}`}>
+                                                                    {sub.status}
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                                                    <button
+                                                                        className="btn btn-sm btn-primary"
+                                                                        onClick={() => { setSelectedSubscription(sub); setShowTrackingModal(true); }}
+                                                                        title="Track Services"
+                                                                    >
+                                                                        <Eye size={14} /> Track
+                                                                    </button>
+                                                                    {hasPermission('services', 'edit') && (
+                                                                        <button
+                                                                            className="btn btn-sm btn-secondary"
+                                                                            onClick={() => { setSelectedSubscription(sub); setShowEditSubModal(true); }}
+                                                                            title="Edit Subscription"
+                                                                        >
+                                                                            <Edit size={14} />
+                                                                        </button>
+                                                                    )}
+                                                                    {hasPermission('amc', 'delete') && (
+                                                                        <button
+                                                                            className="btn btn-sm"
+                                                                            style={{ background: '#ef4444', color: 'white' }}
+                                                                            onClick={() => setDeleteSubConfirm({ id: sub.id, name: sub.customerName })}
+                                                                            title="Delete"
+                                                                        >
+                                                                            <Trash2 size={14} />
+                                                                        </button>
+                                                                    )}
                                                                 </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Mobile Card View */}
+                                    <div className="mobile-view">
+                                        {subscriptions.map(sub => {
+                                            const washUsage = getServiceUsageCount(sub, 'Commando Cleaning');
+                                            return (
+                                                <div key={sub.id} className="mobile-subscription-card">
+                                                    <div className="mobile-card-header">
+                                                        <div>
+                                                            <div style={{ fontWeight: 600, fontSize: '1rem', color: 'var(--navy-900)' }}>{sub.customerName}</div>
+                                                            <div style={{ fontSize: '0.85rem', color: 'var(--navy-500)' }}>{sub.customerPhone}</div>
+                                                        </div>
+                                                        <span className={`badge ${sub.status === 'active' ? 'badge-confirmed' : 'badge-cancelled'}`}>
+                                                            {sub.status}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="detail-rows">
+                                                        <div className="mobile-card-detail-row">
+                                                            <span className="mobile-card-detail-label">Vehcile</span>
+                                                            <div style={{ textAlign: 'right' }}>
+                                                                <div style={{ fontWeight: 600 }}>{sub.vehicleNumber}</div>
+                                                                <div style={{ fontSize: '0.8rem', textTransform: 'capitalize' }}>{sub.vehicleType}</div>
                                                             </div>
-                                                        </td>
-                                                        <td>
-                                                            <span className={`badge ${sub.status === 'active' ? 'badge-confirmed' : 'badge-cancelled'}`}>
-                                                                {sub.status}
-                                                            </span>
-                                                        </td>
-                                                        <td>
-                                                            <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                                                <button
-                                                                    className="btn btn-sm btn-primary"
-                                                                    onClick={() => { setSelectedSubscription(sub); setShowTrackingModal(true); }}
-                                                                    title="Track Services"
-                                                                >
-                                                                    <Eye size={14} /> Track
-                                                                </button>
-                                                                {hasPermission('services', 'edit') && (
-                                                                    <button
-                                                                        className="btn btn-sm btn-secondary"
-                                                                        onClick={() => { setSelectedSubscription(sub); setShowEditSubModal(true); }}
-                                                                        title="Edit Subscription"
-                                                                    >
-                                                                        <Edit size={14} />
-                                                                    </button>
-                                                                )}
-                                                                {hasPermission('amc', 'delete') && (
-                                                                    <button
-                                                                        className="btn btn-sm"
-                                                                        style={{ background: '#ef4444', color: 'white' }}
-                                                                        onClick={() => setDeleteSubConfirm({ id: sub.id, name: sub.customerName })}
-                                                                        title="Delete"
-                                                                    >
-                                                                        <Trash2 size={14} />
-                                                                    </button>
-                                                                )}
+                                                        </div>
+
+                                                        <div className="mobile-card-detail-row">
+                                                            <span className="mobile-card-detail-label">Plan</span>
+                                                            <div style={{ textAlign: 'right' }}>
+                                                                <span className={`badge ${sub.planType === 'premium' ? 'badge-progress' : 'badge-confirmed'}`} style={{ fontSize: '0.7rem', padding: '2px 6px', marginRight: '4px' }}>
+                                                                    {sub.planType?.toUpperCase() || 'STANDARD'}
+                                                                </span>
+                                                                <div>{sub.planName}</div>
                                                             </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                        </div>
+
+                                                        <div className="mobile-card-detail-row">
+                                                            <span className="mobile-card-detail-label">Expiry</span>
+                                                            <span>{formatDate(sub.expiryDate)}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="usage-section" style={{ marginTop: '12px', padding: '10px', background: 'var(--navy-50)', borderRadius: '8px' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
+                                                            <span>Service Usage</span>
+                                                            <strong>{washUsage.used} / {washUsage.total} washes</strong>
+                                                        </div>
+                                                        <div className="usage-progress" style={{ height: '6px', background: 'var(--navy-100)', borderRadius: '3px' }}>
+                                                            <div className="usage-fill" style={{
+                                                                width: `${washUsage.total ? (washUsage.used / washUsage.total) * 100 : 0}%`,
+                                                                height: '100%',
+                                                                background: 'var(--success)',
+                                                                borderRadius: '3px'
+                                                            }}></div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="card-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px', borderTop: '1px solid var(--navy-50)', paddingTop: '12px' }}>
+                                                        <button
+                                                            className="btn btn-sm btn-primary"
+                                                            onClick={() => { setSelectedSubscription(sub); setShowTrackingModal(true); }}
+                                                            style={{ flex: 1, justifyContent: 'center' }}
+                                                        >
+                                                            <Eye size={14} /> Track
+                                                        </button>
+                                                        {hasPermission('services', 'edit') && (
+                                                            <button
+                                                                className="btn btn-sm btn-secondary"
+                                                                onClick={() => { setSelectedSubscription(sub); setShowEditSubModal(true); }}
+                                                            >
+                                                                <Edit size={14} />
+                                                            </button>
+                                                        )}
+                                                        {hasPermission('amc', 'delete') && (
+                                                            <button
+                                                                className="btn btn-sm"
+                                                                style={{ background: '#ef4444', color: 'white' }}
+                                                                onClick={() => setDeleteSubConfirm({ id: sub.id, name: sub.customerName })}
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </>
                             )}
                         </div>
                     </div>
@@ -674,6 +764,43 @@ const AMCPlans = () => {
                 @media (max-width: 768px) {
                     .section-header { flex-direction: column; gap: 1rem; align-items: stretch; }
                     .tab-btn span { display: none; }
+                    
+                    .desktop-view { display: none !important; }
+                    .mobile-view { display: block !important; }
+                }
+                
+                /* Mobile Card View Styles */
+                .mobile-view { display: none; }
+                
+                .mobile-subscription-card {
+                    background: white;
+                    border: 1px solid var(--navy-100);
+                    border-radius: 12px;
+                    padding: 16px;
+                    margin-bottom: 16px;
+                    box-shadow: var(--shadow-sm);
+                }
+                
+                .mobile-card-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    margin-bottom: 12px;
+                    padding-bottom: 12px;
+                    border-bottom: 1px solid var(--navy-50);
+                }
+                
+                .mobile-card-detail-row {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 0.9rem;
+                    margin-bottom: 8px;
+                    color: var(--navy-700);
+                }
+                
+                .mobile-card-detail-label {
+                    color: var(--navy-500);
+                    font-size: 0.85rem;
                 }
             `}</style>
         </div>

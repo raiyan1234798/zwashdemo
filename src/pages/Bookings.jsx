@@ -870,8 +870,47 @@ const WalkInModal = ({ onClose, onSuccess }) => {
 
     const fetchCustomers = async () => {
         try {
-            const snap = await getDocs(collection(db, 'customers'));
-            setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            // Fetch explicit customers
+            const customersQuery = query(collection(db, 'customers'), orderBy('createdAt', 'desc'));
+            const customersSnapshot = await getDocs(customersQuery);
+            const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'customers' }));
+
+            // Fetch implicit customers from bookings history
+            const bookingsQuery = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'));
+            const bookingsSnapshot = await getDocs(bookingsQuery);
+
+            // Create a map of unique customers by phone or license plate
+            const customerMap = new Map();
+
+            // Add explicit customers first (they take precedence)
+            customersData.forEach(c => {
+                const key = c.phone || c.licensePlate;
+                if (key) customerMap.set(key, c);
+            });
+
+            // Add customers from bookings if not already in map
+            bookingsSnapshot.docs.forEach(doc => {
+                const booking = doc.data();
+                const key = booking.contactPhone || booking.licensePlate;
+                if (key && !customerMap.has(key)) {
+                    customerMap.set(key, {
+                        id: `booking-${doc.id}`,
+                        name: booking.customerName || booking.contactName || 'Walk-in Customer',
+                        phone: booking.contactPhone || '',
+                        email: booking.contactEmail || '',
+                        carMake: booking.carMake || '',
+                        carModel: booking.carModel || '',
+                        licensePlate: booking.licensePlate || '',
+                        source: 'booking',
+                        createdAt: booking.createdAt,
+                        // Infer vehicle type if possible, or leave undefined
+                    });
+                }
+            });
+
+            // Convert map to array
+            const allCustomers = Array.from(customerMap.values());
+            setCustomers(allCustomers);
         } catch (error) {
             console.error('Error fetching customers:', error);
         }

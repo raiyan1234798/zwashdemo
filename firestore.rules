@@ -50,6 +50,9 @@ service cloud.firestore {
       // Admins can do everything
       allow write: if isAdmin();
       
+      // Managers can create worker accounts (non-login)
+      allow create: if isManager() && request.resource.data.role == 'worker';
+      
       // Managers can update non-admin/non-manager employees
       allow update: if isManager() && 
                     resource.data.role != 'admin' && 
