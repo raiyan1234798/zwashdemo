@@ -878,26 +878,55 @@ const WalkInModal = ({ onClose, onSuccess }) => {
     };
 
     // Filter customers by search term - searches by vehicle number, phone, and name
+    // Shows ALL customers when no search term, filters when typing
     const filteredCustomers = customers.filter(c => {
         const search = customerSearch.toLowerCase().trim();
-        if (!search) return true; // Show all (limited later) when search is empty to help discovery
+
+        // Show ALL customers when search is empty
+        if (!search) return true;
 
         // Normalize search and data for robust matching
         const searchClean = search.replace(/[^a-z0-9]/g, '');
+        const searchDigits = search.replace(/[^0-9]/g, '');
 
-        // Search by license plate (vehicle number)
+        // Search by license plate (vehicle number) - clean both for comparison
         const plate = (c.licensePlate || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const licensePlateMatch = plate.includes(searchClean);
+        const licensePlateMatch = searchClean.length > 0 && plate.includes(searchClean);
 
-        // Search by phone number
+        // Search by phone number - match any digits
         const phone = (c.phone || '').toString().replace(/[^0-9]/g, '');
-        const phoneMatch = phone.includes(searchClean);
+        const phoneMatch = searchDigits.length >= 2 && phone.includes(searchDigits);
 
-        // Search by customer name
+        // Search by customer name - partial match
         const nameMatch = (c.name || '').toLowerCase().includes(search);
 
-        return licensePlateMatch || phoneMatch || nameMatch;
+        // Search by car make/model
+        const carMakeMatch = (c.carMake || '').toLowerCase().includes(search);
+        const carModelMatch = (c.carModel || '').toLowerCase().includes(search);
+
+        return licensePlateMatch || phoneMatch || nameMatch || carMakeMatch || carModelMatch;
     });
+
+    // Group customers by vehicle type for display
+    const groupedCustomersByVehicle = filteredCustomers.reduce((groups, customer) => {
+        const type = customer.vehicleType || 'other';
+        if (!groups[type]) groups[type] = [];
+        groups[type].push(customer);
+        return groups;
+    }, {});
+
+    // Vehicle type display order and labels
+    const vehicleTypeOrder = ['hatchback', 'sedan', 'suv', 'luxury_suv', 'scooter', 'bike', 'superbike', 'other'];
+    const vehicleTypeLabels = {
+        hatchback: '🚗 Hatchback',
+        sedan: '🚙 Sedan',
+        suv: '🚐 SUV',
+        luxury_suv: '🏎️ Luxury SUV',
+        scooter: '🛵 Scooter',
+        bike: '🏍️ Bike',
+        superbike: '🏍️ Superbike',
+        other: '🚘 Other/Unknown'
+    };
 
     const selectCustomer = (customer) => {
         // Preserve existing bookingDate and startTime when selecting a customer
@@ -1121,6 +1150,52 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="full-page-form-body">
+                        {/* STEP 1: Customer Search - At the TOP for quick selection */}
+                        <div style={{ background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #86efac' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                <label style={{ marginBottom: 0, fontWeight: '700', fontSize: '1rem', color: '#166534' }}>🔍 Step 1: Select Existing Customer</label>
+                                <span style={{ fontSize: '0.75rem', color: '#166534', background: '#bbf7d0', padding: '2px 8px', borderRadius: '12px' }}>{customers.length} customers</span>
+                            </div>
+                            <div style={{ position: 'relative' }}>
+                                <input
+                                    type="text"
+                                    value={customerSearch}
+                                    onChange={(e) => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }}
+                                    onFocus={() => setShowCustomerDropdown(true)}
+                                    placeholder="🔎 Click here or type to search by name, phone, or vehicle plate..."
+                                    autoComplete="off"
+                                    style={{ background: 'white', border: '2px solid #22c55e', fontSize: '1rem', padding: '0.75rem' }}
+                                />
+                                {showCustomerDropdown && (
+                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--navy-200)', borderRadius: '8px', maxHeight: '350px', overflowY: 'auto', zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
+                                        <div style={{ padding: '8px 12px', fontSize: '0.8rem', color: 'var(--navy-600)', borderBottom: '1px solid #eee', background: 'var(--navy-50)', position: 'sticky', top: 0, zIndex: 1 }}>
+                                            📋 {filteredCustomers.length} of {customers.length} customers {customerSearch && `matching "${customerSearch}"`}
+                                        </div>
+                                        {filteredCustomers.length === 0 ? (
+                                            <div style={{ padding: '16px', color: 'var(--navy-400)', textAlign: 'center' }}>No customers found matching "{customerSearch}"</div>
+                                        ) : (
+                                            vehicleTypeOrder.filter(type => groupedCustomersByVehicle[type]?.length > 0).map(type => (
+                                                <div key={type}>
+                                                    <div style={{ padding: '6px 12px', background: '#f1f5f9', fontWeight: '600', fontSize: '0.8rem', color: '#475569', position: 'sticky', top: '36px' }}>{vehicleTypeLabels[type] || type} ({groupedCustomersByVehicle[type].length})</div>
+                                                    {groupedCustomersByVehicle[type].map(c => (
+                                                        <div key={c.id} onClick={() => { selectCustomer(c); setShowCustomerDropdown(false); }} style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onMouseOver={(e) => e.currentTarget.style.background = '#ecfdf5'} onMouseOut={(e) => e.currentTarget.style.background = 'white'}>
+                                                            <div><div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.9rem' }}>{c.name || 'Unnamed'}</div><div style={{ fontSize: '0.8rem', color: '#64748b' }}>📞 {c.phone}</div></div>
+                                                            <div style={{ textAlign: 'right' }}><div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#059669' }}>{c.licensePlate}</div><div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{c.carMake} {c.carModel}</div></div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            {formData.customerId && (
+                                <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: '#bbf7d0', borderRadius: '6px', fontSize: '0.85rem', color: '#166534' }}>
+                                    ✅ Selected: <strong>{formData.customerName}</strong> - {formData.licensePlate} ({formData.phone})
+                                </div>
+                            )}
+                        </div>
+
                         {/* Vehicle Type Selection */}
                         <div className="form-group">
                             <label>Vehicle Type *</label>
@@ -1476,118 +1551,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                             )}
                         </div>
 
-                        {/* Customer Search & Management */}
-                        <div className="form-group" style={{ position: 'relative' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                <label style={{ marginBottom: 0 }}>Search Existing Customer</label>
-                                <button
-                                    type="button"
-                                    className="btn btn-sm btn-secondary"
-                                    onClick={() => setShowAddCustomer(!showAddCustomer)}
-                                    style={{ fontSize: '0.75rem', padding: '2px 8px' }}
-                                >
-                                    {showAddCustomer ? 'Hide Options' : '+ Save to Database'}
-                                </button>
-                            </div>
-
-                            <input
-                                type="text"
-                                value={customerSearch}
-                                onChange={(e) => {
-                                    setCustomerSearch(e.target.value);
-                                    setShowCustomerDropdown(true);
-                                }}
-                                onFocus={() => setShowCustomerDropdown(true)}
-                                placeholder="Search by name, phone or vehicle plate..."
-                                autoComplete="off"
-                                id="customer-search-input"
-                            />
-                            {showCustomerDropdown && (
-                                <div style={{
-                                    position: 'absolute',
-                                    top: '100%',
-                                    left: 0,
-                                    right: 0,
-                                    background: 'white',
-                                    border: '1px solid var(--navy-200)',
-                                    borderRadius: '8px',
-                                    maxHeight: '300px',
-                                    overflowY: 'auto',
-                                    zIndex: 100,
-                                    boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
-                                }}>
-                                    {filteredCustomers.length === 0 ? (
-                                        <div style={{ padding: '16px', color: 'var(--navy-400)', textAlign: 'center' }}>
-                                            No customers found matching "{customerSearch}"
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {customerSearch === '' && (
-                                                <div style={{ padding: '8px 12px', fontSize: '0.75rem', color: 'var(--navy-400)', borderBottom: '1px solid #eee', background: 'var(--navy-50)' }}>
-                                                    Recently Added / All Customers
-                                                </div>
-                                            )}
-                                            {filteredCustomers.slice(0, 10).map(c => (
-                                                <div
-                                                    key={c.id}
-                                                    onClick={() => selectCustomer(c)}
-                                                    style={{
-                                                        padding: '12px',
-                                                        borderBottom: '1px solid #f0f0f0',
-                                                        cursor: 'pointer',
-                                                        transition: 'background 0.2s'
-                                                    }}
-                                                    onMouseOver={(e) => e.currentTarget.style.background = 'var(--primary-light)'}
-                                                    onMouseOut={(e) => e.currentTarget.style.background = 'white'}
-                                                >
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                        <div>
-                                                            <div style={{ fontWeight: '600', color: 'var(--navy-800)' }}>{c.name || 'Unnamed Customer'}</div>
-                                                            <div style={{ fontSize: '0.85rem', color: 'var(--navy-500)' }}>{c.phone}</div>
-                                                        </div>
-                                                        <div style={{ textAlign: 'right' }}>
-                                                            <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--primary)' }}>{c.licensePlate}</div>
-                                                            {c.carMake && <div style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{c.carMake} {c.carModel}</div>}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                            {filteredCustomers.length > 10 && (
-                                                <div style={{ padding: '8px', textAlign: 'center', fontSize: '0.75rem', color: 'var(--navy-400)', background: '#f9f9f9' }}>
-                                                    Keep typing to narrow down {filteredCustomers.length - 10} more results...
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {showAddCustomer && (
-                            <div style={{
-                                marginBottom: '1rem',
-                                padding: '0.75rem',
-                                background: '#f0fdf4',
-                                borderRadius: '6px',
-                                border: '1px solid #bbf7d0',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between'
-                            }}>
-                                <div style={{ fontSize: '0.85rem', color: '#166534' }}>
-                                    Fill the details below to add this customer to database
-                                </div>
-                                <button
-                                    type="button"
-                                    className="btn btn-sm"
-                                    onClick={saveNewCustomer}
-                                    style={{ background: '#166534', color: 'white', border: 'none' }}
-                                >
-                                    Save Customer
-                                </button>
-                            </div>
-                        )}
-
+                        {/* Customer Details - New Customer or Edit Selected */}
                         <div className="form-group">
                             <label>Customer Name</label>
                             <input

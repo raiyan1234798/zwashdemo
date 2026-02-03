@@ -29,7 +29,8 @@ import {
     Edit,
     Trash2,
     AlertTriangle,
-    Shield
+    Shield,
+    Users
 } from 'lucide-react';
 import PermissionSelector from '../components/PermissionSelector';
 
@@ -43,6 +44,7 @@ const Employees = () => {
     const [pendingUsers, setPendingUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showInviteModal, setShowInviteModal] = useState(false);
+    const [showAddWorkerModal, setShowAddWorkerModal] = useState(false);
     const [filter, setFilter] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -136,11 +138,16 @@ const Employees = () => {
                     <h1><UserCog size={28} /> Employees</h1>
                     <p className="subtitle">Manage team members and access</p>
                 </div>
-                <div className="header-actions">
+                <div className="header-actions" style={{ display: 'flex', gap: '0.5rem' }}>
                     {canCreate && (
-                        <button className="btn btn-primary" onClick={() => setShowInviteModal(true)}>
-                            <Plus size={18} /> Invite Employee
-                        </button>
+                        <>
+                            <button className="btn btn-secondary" onClick={() => setShowAddWorkerModal(true)} title="Add worker without login access">
+                                <Plus size={18} /> Add Worker
+                            </button>
+                            <button className="btn btn-primary" onClick={() => setShowInviteModal(true)}>
+                                <Plus size={18} /> Invite Employee
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
@@ -233,6 +240,15 @@ const Employees = () => {
                         <span className="stat-label">Pending</span>
                     </div>
                 </div>
+                <div className="quick-stat-card">
+                    <div className="stat-icon" style={{ background: '#fef9c3', color: '#ca8a04' }}>
+                        <Users size={20} />
+                    </div>
+                    <div className="stat-info">
+                        <span className="stat-value">{employees.filter(e => e.role === 'worker').length}</span>
+                        <span className="stat-label">Workers</span>
+                    </div>
+                </div>
             </div>
 
             {/* Filters */}
@@ -256,6 +272,7 @@ const Employees = () => {
                     <option value={ROLES.MANAGER}>Manager</option>
                     <option value={ROLES.SENIOR_EMPLOYEE}>Senior Employee</option>
                     <option value={ROLES.EMPLOYEE}>Employee</option>
+                    <option value="worker">Worker (No Login)</option>
                 </select>
             </div>
 
@@ -281,11 +298,20 @@ const Employees = () => {
                                         {employee.displayName?.charAt(0) || '?'}
                                     </div>
                                 )}
-                                <span className={`badge badge-${employee.role}`}>{employee.role}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                    <span className={`badge badge-${employee.role}`}>{employee.role === 'worker' ? 'Worker' : employee.role}</span>
+                                    {employee.hasLogin === false && (
+                                        <span style={{ fontSize: '0.65rem', color: '#92400e', background: '#fef3c7', padding: '2px 6px', borderRadius: '4px' }}>No Login</span>
+                                    )}
+                                </div>
                             </div>
                             <div className="employee-card-body">
                                 <h3>{employee.displayName}</h3>
-                                <p><Mail size={14} /> {employee.email}</p>
+                                {employee.email ? (
+                                    <p><Mail size={14} /> {employee.email}</p>
+                                ) : employee.hasLogin === false ? (
+                                    <p style={{ color: '#ca8a04' }}><Users size={14} /> Attendance Only</p>
+                                ) : null}
                                 {employee.phone && <p><Phone size={14} /> {employee.phone}</p>}
                             </div>
                             <div className="employee-card-footer">
@@ -294,7 +320,7 @@ const Employees = () => {
                                 </button>
                                 {canEdit && (
                                     <button className="btn btn-sm btn-primary" onClick={() => navigate(`/employees/${employee.id}`)}>
-                                        <Edit size={14} /> Edit Role
+                                        <Edit size={14} /> {employee.hasLogin === false ? 'Edit' : 'Edit Role'}
                                     </button>
                                 )}
                             </div>
@@ -306,6 +332,11 @@ const Employees = () => {
             {/* Invite Modal */}
             {showInviteModal && (
                 <InviteModal onClose={() => setShowInviteModal(false)} onSuccess={fetchEmployees} />
+            )}
+
+            {/* Add Worker Modal */}
+            {showAddWorkerModal && (
+                <AddWorkerModal onClose={() => setShowAddWorkerModal(false)} onSuccess={fetchEmployees} />
             )}
 
             <style>{`
@@ -353,6 +384,7 @@ const Employees = () => {
         .badge-manager { background: #dbeafe; color: #2563eb; }
         .badge-senior_employee { background: #fef3c7; color: #d97706; }
         .badge-employee { background: #d1fae5; color: #059669; }
+        .badge-worker { background: #fef9c3; color: #ca8a04; }
         
         .employee-card-body h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
         .employee-card-body p { 
@@ -608,6 +640,100 @@ const InviteModal = ({ onClose, onSuccess }) => {
                         <button type="submit" className="btn btn-primary" disabled={loading}>
                             {loading ? 'Sending...' : 'Send Invitation'}
                         </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+// Add Worker Modal - For workers without login access (appear in Attendance & Payroll only)
+const AddWorkerModal = ({ onClose, onSuccess }) => {
+    const { userProfile } = useAuth();
+    const [loading, setLoading] = useState(false);
+    const [formData, setFormData] = useState({
+        displayName: '',
+        phone: '',
+        address: '',
+        emergencyContact: '',
+        dateOfJoining: new Date().toISOString().split('T')[0],
+        baseSalary: ''
+    });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+
+        try {
+            await addDoc(collection(db, 'adminUsers'), {
+                displayName: formData.displayName,
+                phone: formData.phone,
+                address: formData.address,
+                emergencyContact: formData.emergencyContact,
+                dateOfJoining: formData.dateOfJoining,
+                baseSalary: Number(formData.baseSalary) || 0,
+                role: 'worker',
+                hasLogin: false,
+                status: 'approved',
+                email: null,
+                createdBy: userProfile?.email,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+
+            await logAction(userProfile, 'create', 'employees', `Added worker: ${formData.displayName}`, { name: formData.displayName, role: 'worker' });
+
+            alert(`Worker "${formData.displayName}" added successfully!`);
+            onSuccess();
+            onClose();
+        } catch (error) {
+            console.error('Error adding worker:', error);
+            alert('Error adding worker: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="modal">
+            <div className="modal-content">
+                <div className="modal-header">
+                    <h2><Users size={20} /> Add Worker (No Login)</h2>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+                <form onSubmit={handleSubmit}>
+                    <div className="modal-body">
+                        <div className="alert alert-info" style={{ marginBottom: '1rem', background: '#fef9c3', border: '1px solid #fcd34d', color: '#92400e' }}>
+                            ⚠️ Workers don't have login access. They will appear in Attendance and Payroll for tracking purposes only.
+                        </div>
+                        <div className="form-group">
+                            <label>Worker Name *</label>
+                            <input type="text" required placeholder="Full name" value={formData.displayName} onChange={(e) => setFormData({ ...formData, displayName: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                            <label>Phone Number</label>
+                            <input type="tel" placeholder="+91 98765 43210" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                            <label>Date of Joining</label>
+                            <input type="date" value={formData.dateOfJoining} onChange={(e) => setFormData({ ...formData, dateOfJoining: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                            <label>Base Salary (₹/month)</label>
+                            <input type="number" placeholder="15000" value={formData.baseSalary} onChange={(e) => setFormData({ ...formData, baseSalary: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                            <label>Address</label>
+                            <textarea placeholder="Home address" rows="2" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                            <label>Emergency Contact</label>
+                            <input type="text" placeholder="Name & Phone" value={formData.emergencyContact} onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })} />
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Adding...' : 'Add Worker'}</button>
                     </div>
                 </form>
             </div>
