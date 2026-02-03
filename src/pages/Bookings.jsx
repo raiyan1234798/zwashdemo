@@ -757,6 +757,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
     const [customerSearch, setCustomerSearch] = useState('');
     const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
     const [showAddCustomer, setShowAddCustomer] = useState(false); // Toggle for adding new customer
+    const [customerMode, setCustomerMode] = useState('existing'); // 'existing' | 'new'
     const [formData, setFormData] = useState({
         customerName: '',
         carMake: '',
@@ -1189,48 +1190,152 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="full-page-form-body">
-                        {/* STEP 1: Customer Search - At the TOP for quick selection */}
-                        <div style={{ background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #86efac' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                                <label style={{ marginBottom: 0, fontWeight: '700', fontSize: '1rem', color: '#166534' }}>🔍 Step 1: Select Existing Customer</label>
-                                <span style={{ fontSize: '0.75rem', color: '#166534', background: '#bbf7d0', padding: '2px 8px', borderRadius: '12px' }}>{customers.length} customers</span>
+
+                        {/* STEP 1: Customer Selection Tabs */}
+                        <div className="form-section">
+                            <label style={{ fontSize: '1rem', color: '#166534', marginBottom: '0.75rem', display: 'block' }}>🔍 Step 1: Customer Details</label>
+
+                            <div className="tabs" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                                <button
+                                    type="button"
+                                    className={`btn ${customerMode === 'existing' ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => setCustomerMode('existing')}
+                                    style={{ flex: 1, justifyContent: 'center' }}
+                                >
+                                    <Search size={16} /> Select Existing
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`btn ${customerMode === 'new' ? 'btn-primary' : 'btn-secondary'}`}
+                                    onClick={() => setCustomerMode('new')}
+                                    style={{ flex: 1, justifyContent: 'center' }}
+                                >
+                                    <Plus size={16} /> New Customer
+                                </button>
                             </div>
-                            <div style={{ position: 'relative' }}>
-                                <input
-                                    type="text"
-                                    value={customerSearch}
-                                    onChange={(e) => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }}
-                                    onFocus={() => setShowCustomerDropdown(true)}
-                                    placeholder="🔎 Click here or type to search by name, phone, or vehicle plate..."
-                                    autoComplete="off"
-                                    style={{ background: 'white', border: '2px solid #22c55e', fontSize: '1rem', padding: '0.75rem' }}
-                                />
-                                {showCustomerDropdown && (
-                                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--navy-200)', borderRadius: '8px', maxHeight: '350px', overflowY: 'auto', zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
-                                        <div style={{ padding: '8px 12px', fontSize: '0.8rem', color: 'var(--navy-600)', borderBottom: '1px solid #eee', background: 'var(--navy-50)', position: 'sticky', top: 0, zIndex: 1 }}>
-                                            📋 {filteredCustomers.length} of {customers.length} customers {customerSearch && `matching "${customerSearch}"`}
+
+                            {/* MODE: EXISTING CUSTOMER SEARCH */}
+                            {customerMode === 'existing' && (
+                                <div style={{ background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #86efac' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                        <label style={{ marginBottom: 0, fontWeight: '600', fontSize: '0.9rem', color: '#166534' }}>Search Database</label>
+                                        <span style={{ fontSize: '0.75rem', color: '#166534', background: '#bbf7d0', padding: '2px 8px', borderRadius: '12px' }}>{customers.length} customers</span>
+                                    </div>
+                                    <div style={{ position: 'relative' }}>
+                                        <div style={{ position: 'relative' }}>
+                                            <input
+                                                type="text"
+                                                value={customerSearch}
+                                                onChange={(e) => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }}
+                                                onFocus={() => setShowCustomerDropdown(true)}
+                                                placeholder="🔎 Search by name, phone, or plate..."
+                                                autoComplete="off"
+                                                style={{ background: 'white', border: '2px solid #22c55e', fontSize: '1rem', padding: '0.75rem', paddingRight: '40px', width: '100%', borderRadius: '8px' }}
+                                            />
+                                            {customerSearch && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setCustomerSearch(''); setShowCustomerDropdown(false); }}
+                                                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#166534', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5 }}
+                                                    title="Clear search"
+                                                >
+                                                    <X size={20} />
+                                                </button>
+                                            )}
                                         </div>
-                                        {filteredCustomers.length === 0 ? (
-                                            <div style={{ padding: '16px', color: 'var(--navy-400)', textAlign: 'center' }}>No customers found matching "{customerSearch}"</div>
-                                        ) : (
-                                            vehicleTypeOrder.filter(type => groupedCustomersByVehicle[type]?.length > 0).map(type => (
-                                                <div key={type}>
-                                                    <div style={{ padding: '6px 12px', background: '#f1f5f9', fontWeight: '600', fontSize: '0.8rem', color: '#475569', position: 'sticky', top: '36px' }}>{vehicleTypeLabels[type] || type} ({groupedCustomersByVehicle[type].length})</div>
-                                                    {groupedCustomersByVehicle[type].map(c => (
-                                                        <div key={c.id} onClick={() => { selectCustomer(c); setShowCustomerDropdown(false); }} style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onMouseOver={(e) => e.currentTarget.style.background = '#ecfdf5'} onMouseOut={(e) => e.currentTarget.style.background = 'white'}>
-                                                            <div><div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.9rem' }}>{c.name || 'Unnamed'}</div><div style={{ fontSize: '0.8rem', color: '#64748b' }}>📞 {c.phone}</div></div>
-                                                            <div style={{ textAlign: 'right' }}><div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#059669' }}>{c.licensePlate}</div><div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{c.carMake} {c.carModel}</div></div>
-                                                        </div>
-                                                    ))}
+                                        {showCustomerDropdown && (
+                                            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--navy-200)', borderRadius: '8px', maxHeight: '350px', overflowY: 'auto', zIndex: 100, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', marginTop: '4px' }}>
+                                                <div style={{ padding: '8px 12px', fontSize: '0.8rem', color: 'var(--navy-600)', borderBottom: '1px solid #eee', background: 'var(--navy-50)', position: 'sticky', top: 0, zIndex: 1 }}>
+                                                    📋 {filteredCustomers.length} of {customers.length} customers {customerSearch && `matching "${customerSearch}"`}
                                                 </div>
-                                            ))
+                                                {filteredCustomers.length === 0 ? (
+                                                    <div style={{ padding: '16px', color: 'var(--navy-400)', textAlign: 'center' }}>No customers found matching "{customerSearch}"</div>
+                                                ) : (
+                                                    vehicleTypeOrder.filter(type => groupedCustomersByVehicle[type]?.length > 0).map(type => (
+                                                        <div key={type}>
+                                                            <div style={{ padding: '6px 12px', background: '#f1f5f9', fontWeight: '600', fontSize: '0.8rem', color: '#475569', position: 'sticky', top: '36px' }}>{vehicleTypeLabels[type] || type} ({groupedCustomersByVehicle[type].length})</div>
+                                                            {groupedCustomersByVehicle[type].map(c => (
+                                                                <div key={c.id} onClick={() => { selectCustomer(c); setShowCustomerDropdown(false); }} style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onMouseOver={(e) => e.currentTarget.style.background = '#ecfdf5'} onMouseOut={(e) => e.currentTarget.style.background = 'white'}>
+                                                                    <div><div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.9rem' }}>{c.name || 'Unnamed'}</div><div style={{ fontSize: '0.8rem', color: '#64748b' }}>📞 {c.phone}</div></div>
+                                                                    <div style={{ textAlign: 'right' }}><div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#059669' }}>{c.licensePlate}</div><div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{c.carMake} {c.carModel}</div></div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
                                         )}
                                     </div>
-                                )}
-                            </div>
-                            {formData.customerId && (
-                                <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: '#bbf7d0', borderRadius: '6px', fontSize: '0.85rem', color: '#166534' }}>
-                                    ✅ Selected: <strong>{formData.customerName}</strong> - {formData.licensePlate} ({formData.phone})
+                                    {formData.customerId && (
+                                        <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'white', borderRadius: '8px', fontSize: '0.9rem', color: '#166534', border: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <div>
+                                                <div><strong>{formData.customerName}</strong></div>
+                                                <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>{formData.licensePlate} • {formData.phone}</div>
+                                            </div>
+                                            <button type="button" className="btn-sm btn-outline" onClick={() => setCustomerMode('new')} title="Edit Details">Edit</button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* MODE: NEW CUSTOMER / EDIT FORM */}
+                            {customerMode === 'new' && (
+                                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #e2e8f0' }}>
+                                    <div className="form-group">
+                                        <label>Customer Name *</label>
+                                        <input
+                                            value={formData.customerName}
+                                            onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                                            placeholder="Enter customer name"
+                                            required
+                                            style={{ background: 'white' }}
+                                        />
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label>Phone Number *</label>
+                                            <input
+                                                value={formData.phone}
+                                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                                type="tel"
+                                                required
+                                                placeholder="+91 98765 43210"
+                                                style={{ background: 'white' }}
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>License Plate *</label>
+                                            <input
+                                                value={formData.licensePlate}
+                                                onChange={(e) => setFormData({ ...formData, licensePlate: e.target.value })}
+                                                required
+                                                placeholder="TN-01-AB-1234"
+                                                style={{ textTransform: 'uppercase', background: 'white' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group">
+                                            <label>Car Make *</label>
+                                            <input
+                                                value={formData.carMake}
+                                                onChange={(e) => setFormData({ ...formData, carMake: e.target.value })}
+                                                required
+                                                placeholder="Toyota"
+                                                style={{ background: 'white' }}
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Car Model *</label>
+                                            <input
+                                                value={formData.carModel}
+                                                onChange={(e) => setFormData({ ...formData, carModel: e.target.value })}
+                                                required
+                                                placeholder="Camry"
+                                                style={{ background: 'white' }}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1590,57 +1695,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                             )}
                         </div>
 
-                        {/* Customer Details - New Customer or Edit Selected */}
-                        <div className="form-group">
-                            <label>Customer Name</label>
-                            <input
-                                value={formData.customerName}
-                                onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                                placeholder="Customer name (for invoice)"
-                            />
-                        </div>
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label>Car Make *</label>
-                                <input
-                                    value={formData.carMake}
-                                    onChange={(e) => setFormData({ ...formData, carMake: e.target.value })}
-                                    required
-                                    placeholder="Toyota"
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Car Model *</label>
-                                <input
-                                    value={formData.carModel}
-                                    onChange={(e) => setFormData({ ...formData, carModel: e.target.value })}
-                                    required
-                                    placeholder="Camry"
-                                />
-                            </div>
-                        </div>
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label>License Plate *</label>
-                                <input
-                                    value={formData.licensePlate}
-                                    onChange={(e) => setFormData({ ...formData, licensePlate: e.target.value })}
-                                    required
-                                    placeholder="TN-01-AB-1234"
-                                    style={{ textTransform: 'uppercase' }}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Phone *</label>
-                                <input
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    type="tel"
-                                    required
-                                    placeholder="+91 98765 43210"
-                                />
-                            </div>
-                        </div>
+
 
                         {/* Payment Section */}
                         {selectedServices.length > 0 && (
