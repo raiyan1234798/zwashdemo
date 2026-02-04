@@ -750,6 +750,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
     const [activeTab, setActiveTab] = useState('overview');
 
     // Additional employee details
+    const [phone, setPhone] = useState(employee.phone || '');
     const [address, setAddress] = useState(employee.address || '');
     const [emergencyContact, setEmergencyContact] = useState(employee.emergencyContact || '');
     const [dateOfJoining, setDateOfJoining] = useState(employee.dateOfJoining || '');
@@ -847,6 +848,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
             await updateDoc(doc(db, 'adminUsers', employee.id), {
                 role: role,
                 permissions: permissions,
+                phone: phone,
                 address: address,
                 emergencyContact: emergencyContact,
                 dateOfJoining: dateOfJoining,
@@ -970,6 +972,10 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                                     </div>
                                     <div style={{ padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px', marginTop: '1rem' }}>
                                         <h4 style={{ marginBottom: '0.75rem', fontSize: '0.9rem' }}>Additional Details</h4>
+                                        <div className="form-group" style={{ margin: '0 0 0.5rem' }}>
+                                            <label style={{ fontSize: '0.75rem' }}>Phone Number</label>
+                                            <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number..." />
+                                        </div>
                                         <div className="form-group" style={{ margin: '0 0 0.5rem' }}>
                                             <label style={{ fontSize: '0.75rem' }}>Address</label>
                                             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Employee address..." />

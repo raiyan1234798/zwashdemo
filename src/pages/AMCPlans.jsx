@@ -1649,6 +1649,8 @@ const ServiceTrackingModal = ({ subscription, onClose, onUpdate }) => {
 
         setSaving(true);
         const updated = [...serviceTracking];
+        const serviceType = serviceTracking[serviceIndex].serviceType;
+
         updated[serviceIndex].usages.push({
             date: usageDate,
             notes: usageNotes,
@@ -1656,10 +1658,42 @@ const ServiceTrackingModal = ({ subscription, onClose, onUpdate }) => {
         });
 
         try {
+            // Update Subscription
             await updateDoc(doc(db, 'customer_amc_subscriptions', subscription.id), {
                 serviceTracking: updated,
                 updatedAt: serverTimestamp()
             });
+
+            // Generate 0-value Invoice for Record
+            const invoiceData = {
+                invoiceNumber: `INV-AMC-USE-${Date.now()}`,
+                customerId: subscription.customerId,
+                customerName: subscription.customerName,
+                customerPhone: subscription.customerPhone || '',
+                vehicleNumber: subscription.vehicleNumber,
+                vehicleModel: subscription.vehicleModel || '',
+                date: usageDate,
+                items: [
+                    {
+                        description: `AMC Redemption: ${serviceType}`,
+                        quantity: 1,
+                        price: 0,
+                        total: 0
+                    }
+                ],
+                subtotal: 0,
+                tax: 0,
+                total: 0,
+                amountPaid: 0,
+                balance: 0,
+                status: 'Paid', // or 'AMC Usage'
+                paymentMethod: 'AMC',
+                notes: `AMC Usage: ${serviceType}. ${usageNotes}`,
+                createdAt: serverTimestamp()
+            };
+
+            await addDoc(collection(db, 'invoices'), invoiceData);
+
             setServiceTracking(updated);
             setShowAddUsage(false);
             setSelectedService(null);

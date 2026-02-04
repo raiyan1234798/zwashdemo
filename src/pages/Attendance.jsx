@@ -22,17 +22,22 @@ import {
     ChevronLeft,
     ChevronRight,
     UserCheck,
-    UserX
+    UserX,
+    CalendarOff, // Added icon
+    Plus, // Added for HolidayManagementModal
+    Trash2 // Added for HolidayManagementModal
 } from 'lucide-react';
 
 const Attendance = () => {
     const { hasPermission, isEmployee, isSeniorEmployee, isManager, userProfile } = useAuth();
     const [employees, setEmployees] = useState([]);
     const [attendance, setAttendance] = useState([]);
+    const [holidays, setHolidays] = useState([]); // Holiday state
     const [loading, setLoading] = useState(true);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedEmployee, setSelectedEmployee] = useState('all');
     const [showMarkModal, setShowMarkModal] = useState(false);
+    const [showHolidayModal, setShowHolidayModal] = useState(false); // Holiday modal
 
     useEffect(() => {
         fetchData();
@@ -63,6 +68,17 @@ const Attendance = () => {
             const attSnapshot = await getDocs(attQuery);
             const attList = attSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setAttendance(attList);
+
+            // Fetch Holidays
+            const holidayQuery = query(
+                collection(db, 'holidays'),
+                where('date', '>=', startDate),
+                where('date', '<=', endDate)
+            );
+            const holidaySnapshot = await getDocs(holidayQuery);
+            const holidayList = holidaySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setHolidays(holidayList);
+
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -98,6 +114,15 @@ const Attendance = () => {
         const day = String(date.getDate()).padStart(2, '0');
         const dateStr = `${year}-${month}-${day}`;
         return attendance.find(a => a.date === dateStr && a.userId === employeeId);
+    };
+
+    const isHoliday = (date) => {
+        if (!date) return null;
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+        return holidays.find(h => h.date === dateStr);
     };
 
     const markAttendance = async (employeeId, dateStr, status, extraData = {}) => {
@@ -191,9 +216,14 @@ const Attendance = () => {
                 </div>
                 <div className="header-actions">
                     {(hasPermission('attendance', 'create') || hasPermission('attendance', 'edit')) && (
-                        <button className="btn btn-primary" onClick={() => setShowMarkModal(true)}>
-                            <UserCheck size={18} /> Mark Attendance
-                        </button>
+                        <>
+                            <button className="btn btn-secondary" onClick={() => setShowHolidayModal(true)}>
+                                <CalendarOff size={18} /> Manage Holidays
+                            </button>
+                            <button className="btn btn-primary" onClick={() => setShowMarkModal(true)}>
+                                <UserCheck size={18} /> Mark Attendance
+                            </button>
+                        </>
                     )}
                 </div>
             </div>
@@ -302,34 +332,42 @@ const Attendance = () => {
                                 ))}
 
                                 {/* Calendar Days */}
-                                {monthDays.map((day, index) => (
-                                    <div
-                                        key={index}
-                                        className={`calendar-day ${!day ? 'empty' : ''} ${day?.toDateString() === new Date().toDateString() ? 'today' : ''}`}
-                                    >
-                                        {day && (
-                                            <>
-                                                <span className="day-number">{day.getDate()}</span>
-                                                <div className="day-attendance">
-                                                    {filteredEmployees.map(emp => {
-                                                        const att = getAttendanceForDate(day, emp.id);
-                                                        if (!att) return null;
-                                                        return (
-                                                            <div
-                                                                key={emp.id}
-                                                                className="attendance-dot"
-                                                                style={{ background: getStatusColor(att.status) }}
-                                                                title={`${emp.displayName}: ${att.status} ${att.overtimeHours ? `(${att.overtimeHours}h OT)` : ''}`}
-                                                            >
-                                                                {getStatusIcon(att.status)}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                ))}
+                                {monthDays.map((day, index) => {
+                                    const holiday = isHoliday(day);
+                                    return (
+                                        <div
+                                            key={index}
+                                            className={`calendar-day ${!day ? 'empty' : ''} ${day?.toDateString() === new Date().toDateString() ? 'today' : ''} ${holiday ? 'holiday' : ''}`}
+                                        >
+                                            {day && (
+                                                <>
+                                                    <span className="day-number">{day.getDate()}</span>
+                                                    {holiday && (
+                                                        <div className="holiday-badge" title={holiday.name}>
+                                                            <CalendarOff size={10} /> {holiday.name}
+                                                        </div>
+                                                    )}
+                                                    <div className="day-attendance">
+                                                        {filteredEmployees.map(emp => {
+                                                            const att = getAttendanceForDate(day, emp.id);
+                                                            if (!att) return null;
+                                                            return (
+                                                                <div
+                                                                    key={emp.id}
+                                                                    className="attendance-dot"
+                                                                    style={{ background: getStatusColor(att.status) }}
+                                                                    title={`${emp.displayName}: ${att.status} ${att.overtimeHours ? `(${att.overtimeHours}h OT)` : ''}`}
+                                                                >
+                                                                    {getStatusIcon(att.status)}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
 
                             {/* Legend */}
@@ -340,6 +378,7 @@ const Attendance = () => {
                                 <span><span className="legend-dot" style={{ background: '#3b82f6' }}></span> Paid Leave</span>
                                 <span><span className="legend-dot" style={{ background: '#fca5a5' }}></span> Unpaid Leave</span>
                                 <span><span className="legend-dot" style={{ background: '#8b5cf6' }}></span> Overtime</span>
+                                <span><span className="legend-dot" style={{ background: '#fee2e2', border: '1px dashed #ef4444' }}></span> Holiday</span>
                             </div>
                         </>
                     )}
@@ -444,6 +483,15 @@ const Attendance = () => {
                 />
             )}
 
+            {/* Holiday Modal */}
+            {showHolidayModal && (
+                <HolidayManagementModal
+                    holidays={holidays}
+                    onClose={() => setShowHolidayModal(false)}
+                    onUpdate={fetchData}
+                />
+            )}
+
             <style>{`
                 .calendar-header {
                     display: flex;
@@ -474,7 +522,7 @@ const Attendance = () => {
                 }
                 
                 .calendar-day {
-                    min-height: 70px;
+                    min-height: 80px;
                     padding: 0.5rem;
                     background: var(--navy-50);
                     border-radius: var(--radius-sm);
@@ -488,6 +536,24 @@ const Attendance = () => {
                 .calendar-day.today {
                     background: var(--primary-light);
                     border: 2px solid var(--primary);
+                }
+
+                .calendar-day.holiday {
+                    background: #fee2e2;
+                    border: 1px dashed #ef4444;
+                }
+
+                .holiday-badge {
+                    font-size: 0.65rem;
+                    display: flex;
+                    align-items: center;
+                    gap: 2px;
+                    color: #b91c1c;
+                    background: rgba(255,255,255,0.6);
+                    padding: 2px 4px;
+                    border-radius: 4px;
+                    margin-top: 2px;
+                    font-weight: 500;
                 }
                 
                 .day-number {
@@ -558,6 +624,116 @@ const Attendance = () => {
                     .mobile-cards { display: block; }
                 }
             `}</style>
+        </div>
+    );
+};
+
+// Holiday Management Modal
+const HolidayManagementModal = ({ holidays, onClose, onUpdate }) => {
+    const [date, setDate] = useState('');
+    const [name, setName] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleAddHoliday = async (e) => {
+        e.preventDefault();
+        if (!date || !name) return;
+
+        setLoading(true);
+        try {
+            await addDoc(collection(db, 'holidays'), {
+                date,
+                name,
+                createdAt: serverTimestamp()
+            });
+            setDate('');
+            setName('');
+            onUpdate();
+        } catch (error) {
+            console.error('Error adding holiday:', error);
+            alert('Error adding holiday');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDeleteHoliday = async (id) => {
+        if (!window.confirm('Delete this holiday?')) return;
+        try {
+            await deleteDoc(doc(db, 'holidays', id));
+            onUpdate();
+        } catch (error) {
+            console.error('Error deleting holiday:', error);
+        }
+    };
+
+    return (
+        <div className="modal">
+            <div className="modal-content">
+                <div className="modal-header">
+                    <h2>Manage Holidays</h2>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+                <div className="modal-body">
+                    <form onSubmit={handleAddHoliday} style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+                        <div style={{ flex: 1 }}>
+                            <input
+                                type="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                required
+                                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+                            />
+                        </div>
+                        <div style={{ flex: 2 }}>
+                            <input
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="Holiday Name (e.g. Sunday)"
+                                required
+                                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
+                            />
+                        </div>
+                        <button type="submit" className="btn btn-primary" disabled={loading}>
+                            <Plus size={16} /> Add
+                        </button>
+                    </form>
+
+                    <h4>Existing Holidays (This Month)</h4>
+                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                        {holidays.length === 0 ? (
+                            <p style={{ color: '#888', fontStyle: 'italic' }}>No holidays found for this month.</p>
+                        ) : (
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Name</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {holidays.map(h => (
+                                        <tr key={h.id}>
+                                            <td>{h.date}</td>
+                                            <td>{h.name}</td>
+                                            <td>
+                                                <button
+                                                    className="btn btn-sm btn-danger"
+                                                    onClick={() => handleDeleteHoliday(h.id)}
+                                                    style={{ padding: '4px 8px' }}
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };

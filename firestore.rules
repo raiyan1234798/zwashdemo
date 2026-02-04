@@ -50,11 +50,11 @@ service cloud.firestore {
       // Admins can do everything
       allow write: if isAdmin();
       
-      // Managers can create worker accounts (non-login)
-      allow create: if isManager() && request.resource.data.role == 'worker';
+      // Managers and Senior Employees can create worker accounts (non-login)
+      allow create: if isSenior() && request.resource.data.role == 'worker';
       
-      // Managers can update non-admin/non-manager employees
-      allow update: if isManager() && 
+      // Managers and Senior Employees can update non-admin/non-manager employees
+      allow update: if isSenior() && 
                     resource.data.role != 'admin' && 
                     resource.data.role != 'manager';
       
@@ -69,7 +69,7 @@ service cloud.firestore {
     match /employeeInvites/{inviteId} {
       allow read: if isAuthenticated();
       allow update: if isAuthenticated(); // Accept invite
-      allow create, delete: if isManager();
+      allow create, delete: if isSenior();
     }
 
     // 3. Settings
@@ -90,14 +90,14 @@ service cloud.firestore {
       // Staff can update bookings (status changes, assignments)
       allow update: if isAuthenticated();
       
-      // Only managers can delete bookings
-      allow delete: if isManager() || hasCustomPermission('bookings', 'delete');
+      // Managers and Senior Employees can delete bookings
+      allow delete: if isSenior() || hasCustomPermission('bookings', 'delete');
     }
 
     // 5. Archived Bookings
     match /archivedBookings/{bookingId} {
       allow read: if isAuthenticated();
-      allow write: if isManager();
+      allow write: if isSenior();
     }
 
     // 6. Customers
@@ -134,10 +134,10 @@ service cloud.firestore {
       // Managers and senior employees can mark attendance for anyone
       // Regular employees can mark their own attendance
       allow create: if isAuthenticated() && 
-                    (isManager() || isSenior() || request.resource.data.userId == request.auth.uid);
+                    (isSenior() || request.resource.data.userId == request.auth.uid);
       
       // Managers and senior employees can edit/fix/delete attendance
-      allow update, delete: if isAuthenticated() && (isManager() || isSenior());
+      allow update, delete: if isAuthenticated() && isSenior();
     }
 
     // 9. Expenses
@@ -160,7 +160,7 @@ service cloud.firestore {
       
       allow create: if isSenior() || hasCustomPermission('materials', 'create');
       
-      allow delete: if isManager() || hasCustomPermission('materials', 'delete');
+      allow delete: if isSenior() || hasCustomPermission('materials', 'delete');
     }
 
     // 11. Material Usage Tracking
@@ -172,11 +172,11 @@ service cloud.firestore {
     match /services/{serviceId} {
       allow read: if isAuthenticated();
       
-      allow create: if isManager() || hasCustomPermission('services', 'create');
+      allow create: if isSenior() || hasCustomPermission('services', 'create');
       
-      allow update: if isManager() || hasCustomPermission('services', 'edit');
+      allow update: if isSenior() || hasCustomPermission('services', 'edit');
       
-      allow delete: if isManager() || hasCustomPermission('services', 'delete');
+      allow delete: if isSenior() || hasCustomPermission('services', 'delete');
     }
 
     // 13. AMC Plans
@@ -184,13 +184,13 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       
       // Managers and senior employees can create AMC plans
-      allow create: if isAuthenticated() && (isManager() || isSenior());
+      allow create: if isAuthenticated() && isSenior();
       
       // Managers and senior employees can update AMC plans
-      allow update: if isAuthenticated() && (isManager() || isSenior());
+      allow update: if isAuthenticated() && isSenior();
       
-      // Only managers can delete AMC plans
-      allow delete: if isManager();
+      // Managers and senior employees can delete AMC plans
+      allow delete: if isSenior();
     }
 
     // 14. AMC Subscriptions
@@ -198,18 +198,18 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       
       // Managers and senior employees can create AMC subscriptions
-      allow create: if isAuthenticated() && (isManager() || isSenior());
+      allow create: if isAuthenticated() && isSenior();
       
       // Managers and senior employees can update AMC subscriptions
-      allow update: if isAuthenticated() && (isManager() || isSenior());
+      allow update: if isAuthenticated() && isSenior();
       
-      // Only managers can delete AMC subscriptions
-      allow delete: if isManager();
+      // Managers and senior employees can delete AMC subscriptions
+      allow delete: if isSenior();
     }
 
-    // 15. Payroll (Admin/Manager only)
+    // 15. Payroll (Admin/Manager/Senior only)
     match /payroll/{payrollId} {
-      allow read: if isManager() || hasCustomPermission('payroll', 'view');
+      allow read: if isSenior() || hasCustomPermission('payroll', 'view');
       allow write: if isAdmin() || hasCustomPermission('payroll', 'edit');
     }
 
@@ -222,8 +222,8 @@ service cloud.firestore {
 
     // 17. CRM Data
     match /crm_data/{docId} {
-      allow read: if isManager() || hasCustomPermission('crm', 'view');
-      allow write: if isManager() || hasCustomPermission('crm', 'edit');
+      allow read: if isSenior() || hasCustomPermission('crm', 'view');
+      allow write: if isSenior() || hasCustomPermission('crm', 'edit');
     }
 
     // 18. Analytics Cache (Read by authorized, write by system/admin)

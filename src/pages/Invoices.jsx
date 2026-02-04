@@ -148,6 +148,10 @@ const Invoices = () => {
     // Split Payment State
     const [paymentSplits, setPaymentSplits] = useState([{ mode: 'cash', amount: '' }]);
 
+    // Milestone / Partial Payment State
+    const [balanceNote, setBalanceNote] = useState('');
+    const [paymentDueDate, setPaymentDueDate] = useState('');
+
     const handleAddSplit = () => {
         setPaymentSplits([...paymentSplits, { mode: 'cash', amount: '' }]);
     };
@@ -191,23 +195,6 @@ const Invoices = () => {
 
             const docRef = doc(db, paymentInvoice.source === 'invoice' ? 'invoices' : 'bookings', paymentInvoice.id);
 
-            // We need to use arrayUnion, so import it or read-modify-write. 
-            // Since we are taking a snapshot anyway in real app, read-modify-write is safer for deeply nested data if simple union fails, 
-            // but here we can just update the list.
-            // Let's assume the document might not have 'paymentHistory' yet.
-            // We will do a full update with the new simple fields and append to history.
-
-            // First get the latest doc to ensure we don't overwrite other concurrent history (optional but good practice)
-            // For simplicity in this step, we just rely on previousPaid which came from UI state (which might be stale, but acceptable for this MVP).
-
-            // Wait, we need 'arrayUnion' from firestore. 
-            // Since I cannot change the imports easily in this replacing block without seeing the top, 
-            // I will use the existing read-modify-write pattern if I can't import arrayUnion.
-            // Actually I checked imports earlier, arrayUnion was NOT imported. 
-            // I'll stick to a simpler approach: just saving the LATEST payment info in separate fields is what the old code did.
-            // BUT the user wants split. 
-            // I will start storing `paymentHistory` in the doc.
-
             const docSnap = await getDoc(docRef);
             let currentHistory = [];
             if (docSnap.exists()) {
@@ -216,7 +203,8 @@ const Invoices = () => {
 
             const updatedHistory = [...currentHistory, paymentEntry];
 
-            await updateDoc(docRef, {
+            // Prepare update data
+            const updateData = {
                 price: newTotalPrice,
                 discount: Number(discount) || 0,
                 extraCharge: Number(extraCharge) || 0,
@@ -227,15 +215,25 @@ const Invoices = () => {
                 lastPaymentDate: new Date().toISOString().split('T')[0],
                 paymentHistory: updatedHistory,
                 updatedAt: serverTimestamp()
-            });
+            };
+
+            // If partial payment (balance remains), save note and due date
+            if (status === 'partial') {
+                updateData.balanceNote = balanceNote;
+                updateData.paymentDueDate = paymentDueDate;
+            } else if (status === 'paid') {
+                // Clear note and due date if fully paid
+                updateData.balanceNote = '';
+                updateData.paymentDueDate = '';
+            }
+
+            await updateDoc(docRef, updateData);
 
             setInvoices(prev => prev.map(inv =>
                 inv.id === paymentInvoice.id
                     ? {
                         ...inv,
-                        price: newTotalPrice,
-                        paidAmount: newPaidTotal,
-                        paymentStatus: status,
+                        ...updateData,
                         paymentHistory: updatedHistory
                     }
                     : inv
@@ -245,6 +243,8 @@ const Invoices = () => {
             setPaymentInvoice(null);
             setPaymentSplits([{ mode: 'cash', amount: '' }]);
             setPaymentPrice('');
+            setBalanceNote('');
+            setPaymentDueDate('');
             alert(`Payment recorded! New Balance: ₹${newTotalPrice - newPaidTotal}`);
         } catch (error) {
             console.error('Error updating payment:', error);
@@ -278,6 +278,16 @@ const Invoices = () => {
         const period = hours >= 12 ? 'PM' : 'AM';
         const hours12 = hours % 12 || 12;
         return `${hours12}:${String(minutes).padStart(2, '0')} ${period}`;
+    };
+
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+        });
     };
 
     // Generate PDF Invoice / GST Bill
@@ -767,7 +777,15 @@ const Invoices = () => {
                                                 <td>
                                                     <div>{formatCurrency(invoice.price)}</div>
                                                     {invoice.paidAmount > 0 && invoice.paidAmount < invoice.price && (
-                                                        <small style={{ color: '#10b981' }}>Paid: {formatCurrency(invoice.paidAmount)}</small>
+                                                        <>
+                                                            <small style={{ color: '#10b981', display: 'block' }}>Paid: {formatCurrency(invoice.paidAmount)}</small>
+                                                            {invoice.balanceNote && (
+                                                                <small style={{ color: '#f59e0b', display: 'block', fontStyle: 'italic' }}>
+                                                                    "{invoice.balanceNote}"
+                                                                    {invoice.paymentDueDate && ` (Due: ${formatDate(invoice.paymentDueDate)})`}
+                                                                </small>
+                                                            )}
+                                                        </>
                                                     )}
                                                 </td>
                                                 <td>
@@ -781,7 +799,7 @@ const Invoices = () => {
                                                 <td>{invoice.licensePlate}</td>
                                                 <td>
                                                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                                        {invoice.paymentStatus !== 'paid' && (
+                                                        {(invoice.paymentStatus !== 'paid' || (invoice.price || 0) > (invoice.paidAmount || 0)) && (
                                                             <button
                                                                 className="btn btn-sm btn-primary"
                                                                 onClick={() => {
@@ -792,6 +810,10 @@ const Invoices = () => {
                                                                     setDiscount(invoice.discount || '');
                                                                     setExtraCharge(invoice.extraCharge || '');
                                                                     setPaymentPrice(String(currentPrice));
+
+                                                                    // Load existing milestone info
+                                                                    setBalanceNote(invoice.balanceNote || '');
+                                                                    setPaymentDueDate(invoice.paymentDueDate || '');
 
                                                                     // Default payment amount is remaining balance
                                                                     const balance = currentPrice - currentPaid;
@@ -883,9 +905,17 @@ const Invoices = () => {
                                         {invoice.licensePlate} • {invoice.carMake} {invoice.carModel}
                                     </p>
                                     {invoice.paidAmount > 0 && invoice.paidAmount < invoice.price && (
-                                        <p style={{ fontSize: '0.8rem', color: '#10b981', marginTop: '4px' }}>
-                                            Paid: {formatCurrency(invoice.paidAmount)} (Bal: {formatCurrency(invoice.price - invoice.paidAmount)})
-                                        </p>
+                                        <div style={{ marginTop: '4px' }}>
+                                            <p style={{ fontSize: '0.8rem', color: '#10b981' }}>
+                                                Paid: {formatCurrency(invoice.paidAmount)} (Bal: {formatCurrency(invoice.price - invoice.paidAmount)})
+                                            </p>
+                                            {invoice.balanceNote && (
+                                                <p style={{ fontSize: '0.8rem', color: '#f59e0b', fontStyle: 'italic' }}>
+                                                    Note: {invoice.balanceNote}
+                                                    {invoice.paymentDueDate && ` (Due: ${formatDate(invoice.paymentDueDate)})`}
+                                                </p>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
 
@@ -893,7 +923,7 @@ const Invoices = () => {
                                 <div className="booking-card-footer" style={{ flexDirection: 'column', gap: '0.75rem' }}>
                                     {/* Primary Action Row: Pay & Edit */}
                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                        {invoice.paymentStatus !== 'paid' && (
+                                        {(invoice.paymentStatus !== 'paid' || (invoice.price || 0) > (invoice.paidAmount || 0)) && (
                                             <button
                                                 className="btn btn-sm btn-primary"
                                                 style={{ flex: 1 }}
@@ -902,6 +932,11 @@ const Invoices = () => {
                                                     setDiscount(invoice.discount || '');
                                                     setExtraCharge(invoice.extraCharge || '');
                                                     setPaymentPrice(String(invoice.price || 0));
+
+                                                    // Load existing milestone info
+                                                    setBalanceNote(invoice.balanceNote || '');
+                                                    setPaymentDueDate(invoice.paymentDueDate || '');
+
                                                     const balance = (invoice.price || 0) - (invoice.paidAmount || 0);
                                                     const safeBalance = Math.max(0, balance);
                                                     setPaymentSplits([{ mode: 'cash', amount: String(safeBalance) }]);
@@ -1192,9 +1227,18 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
         setLoading(true);
         try {
             const collectionName = invoice.source === 'invoice' ? 'invoices' : 'bookings';
+
+            // Recalculate status based on new price
+            const newPrice = Number(formData.price);
+            const paidAmount = invoice.paidAmount || 0;
+            let newStatus = 'unpaid';
+            if (paidAmount >= newPrice) newStatus = 'paid';
+            else if (paidAmount > 0) newStatus = 'partial';
+
             await updateDoc(doc(db, collectionName, invoice.id), {
                 ...formData,
-                price: Number(formData.price),
+                price: newPrice,
+                paymentStatus: newStatus,
                 updatedAt: serverTimestamp()
             });
             onSuccess();
