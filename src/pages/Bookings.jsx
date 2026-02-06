@@ -8,12 +8,14 @@ import {
     getDocs,
     addDoc,
     updateDoc,
+    deleteDoc,
     doc,
+    setDoc,
+    getDoc,
     orderBy,
     serverTimestamp,
     increment,
-    writeBatch,
-    deleteDoc
+    writeBatch
 } from 'firebase/firestore';
 import {
     generateAvailableStartTimes,
@@ -47,7 +49,10 @@ const Bookings = () => {
     const [showModal, setShowModal] = useState(false);
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [showCompletionModal, setShowCompletionModal] = useState(false);
+
     const [completingBooking, setCompletingBooking] = useState(null);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editingBooking, setEditingBooking] = useState(null);
 
     // Filter view: active vs archived
     const [viewMode, setViewMode] = useState('active'); // 'active' | 'archived'
@@ -141,6 +146,11 @@ const Bookings = () => {
     const handleCompleteClick = (booking) => {
         setCompletingBooking(booking);
         setShowCompletionModal(true);
+    };
+
+    const handleEditBooking = (booking) => {
+        setEditingBooking(booking);
+        setShowEditModal(true);
     };
 
     const handleDeleteBooking = async (booking) => {
@@ -413,6 +423,15 @@ const Bookings = () => {
                                                             >
                                                                 <Eye size={16} />
                                                             </button>
+                                                            {hasPermission('bookings', 'edit') && booking.status !== 'completed' && booking.status !== 'cancelled' && viewMode !== 'archived' && (
+                                                                <button
+                                                                    className="btn-icon"
+                                                                    title="Edit"
+                                                                    onClick={() => handleEditBooking(booking)}
+                                                                >
+                                                                    <Edit size={16} />
+                                                                </button>
+                                                            )}
                                                             {viewMode !== 'archived' && (
                                                                 <>
                                                                     {hasPermission('bookings', 'edit') && booking.status === 'pending_confirmation' && (
@@ -492,6 +511,15 @@ const Bookings = () => {
                                                 <button className="btn btn-sm btn-secondary" onClick={() => setSelectedBooking(booking)}>
                                                     View Details
                                                 </button>
+                                                {hasPermission('bookings', 'edit') && booking.status !== 'completed' && booking.status !== 'cancelled' && viewMode !== 'archived' && (
+                                                    <button
+                                                        className="btn btn-sm btn-secondary icon-only"
+                                                        onClick={() => handleEditBooking(booking)}
+                                                        title="Edit"
+                                                    >
+                                                        <Edit size={16} />
+                                                    </button>
+                                                )}
                                                 {viewMode !== 'archived' && hasPermission('bookings', 'edit') && booking.status !== 'completed' && booking.status !== 'cancelled' && (
                                                     <button
                                                         className="btn btn-sm btn-primary"
@@ -600,6 +628,15 @@ const Bookings = () => {
                         setCompletingBooking(null);
                         fetchBookings();
                     }}
+                />
+            )}
+
+            {/* Edit Booking Modal */}
+            {showEditModal && editingBooking && (
+                <BookingEditModal
+                    booking={editingBooking}
+                    onClose={() => { setShowEditModal(false); setEditingBooking(null); }}
+                    onSuccess={fetchBookings}
                 />
             )}
 
@@ -2236,6 +2273,225 @@ const CompletionModal = ({ booking, onClose, onComplete }) => {
                         <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
                         <button type="submit" className="btn btn-success" disabled={loading}>
                             {loading ? 'Completing...' : 'Complete Service'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+// Booking Edit Modal
+const BookingEditModal = ({ booking, onClose, onSuccess }) => {
+    const [loading, setLoading] = useState(false);
+    const [formData, setFormData] = useState({
+        customerName: booking.customerName || '',
+        phone: booking.contactPhone || '',
+        carMake: booking.carMake || '',
+        carModel: booking.carModel || '',
+        licensePlate: booking.licensePlate || '',
+        bookingDate: booking.bookingDate || '',
+        startTime: booking.startTime || '',
+        serviceCategory: booking.serviceCategory || ''
+    });
+
+    const [categories, setCategories] = useState(['Detailed Wash', 'Quick Wash', 'Interior Clean', 'Coating', 'Other']);
+    const [showNewCategory, setShowNewCategory] = useState(false);
+    const [newCategory, setNewCategory] = useState('');
+
+    useEffect(() => {
+        fetchCategories();
+    }, []);
+
+
+    const fetchCategories = async () => {
+        try {
+            const docRef = doc(db, 'settings', 'booking_categories');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists() && docSnap.data().categories) {
+                setCategories(docSnap.data().categories);
+            }
+        } catch (error) {
+            console.error('Error fetching categories:', error);
+        }
+    };
+
+    const handleSaveCategory = async () => {
+        if (!newCategory.trim()) return;
+        const cat = newCategory.trim();
+        const updatedCategories = [...categories];
+        if (!updatedCategories.includes(cat)) {
+            updatedCategories.push(cat);
+            try {
+                await setDoc(doc(db, 'settings', 'booking_categories'), {
+                    categories: updatedCategories
+                }, { merge: true });
+                setCategories(updatedCategories);
+                setFormData({ ...formData, serviceCategory: cat });
+                setShowNewCategory(false);
+                setNewCategory('');
+            } catch (error) {
+                console.error("Error saving category:", error);
+                alert("Failed to save category");
+            }
+        } else {
+            setFormData({ ...formData, serviceCategory: cat });
+            setShowNewCategory(false);
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await updateDoc(doc(db, 'bookings', booking.id), {
+                customerName: formData.customerName,
+                contactPhone: formData.phone,
+                carMake: formData.carMake,
+                carModel: formData.carModel,
+                licensePlate: formData.licensePlate.toUpperCase(),
+                bookingDate: formData.bookingDate,
+                startTime: formData.startTime,
+                serviceCategory: formData.serviceCategory,
+                updatedAt: serverTimestamp()
+            });
+            onSuccess();
+            onClose();
+        } catch (error) {
+            console.error("Error updating booking:", error);
+            alert("Failed to update booking");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="modal">
+            <div className="modal-content">
+                <div className="modal-header">
+                    <h2><Edit size={20} /> Edit Booking</h2>
+                    <button className="modal-close" onClick={onClose}>&times;</button>
+                </div>
+                <form onSubmit={handleSubmit}>
+                    <div className="modal-body">
+                        <div className="form-group">
+                            <label>Customer Name</label>
+                            <input
+                                value={formData.customerName}
+                                onChange={e => setFormData({ ...formData, customerName: e.target.value })}
+                                required
+                            />
+                        </div>
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label>Phone</label>
+                                <input
+                                    value={formData.phone}
+                                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>License Plate</label>
+                                <input
+                                    value={formData.licensePlate}
+                                    onChange={e => setFormData({ ...formData, licensePlate: e.target.value })}
+                                    style={{ textTransform: 'uppercase' }}
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label>Make</label>
+                                <input
+                                    value={formData.carMake}
+                                    onChange={e => setFormData({ ...formData, carMake: e.target.value })}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Model</label>
+                                <input
+                                    value={formData.carModel}
+                                    onChange={e => setFormData({ ...formData, carModel: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label>Date</label>
+                                <input
+                                    type="date"
+                                    value={formData.bookingDate}
+                                    onChange={e => setFormData({ ...formData, bookingDate: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Time</label>
+                                <input
+                                    type="time"
+                                    value={formData.startTime}
+                                    onChange={e => setFormData({ ...formData, startTime: e.target.value })}
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        {/* Service Category with Add Option */}
+                        <div className="form-group">
+                            <label>Service Category</label>
+                            {!showNewCategory ? (
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <select
+                                        value={formData.serviceCategory}
+                                        onChange={e => setFormData({ ...formData, serviceCategory: e.target.value })}
+                                        style={{ flex: 1 }}
+                                    >
+                                        <option value="">Select Category</option>
+                                        {categories.map(cat => (
+                                            <option key={cat} value={cat}>{cat}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary btn-sm"
+                                        onClick={() => setShowNewCategory(true)}
+                                        title="Add New Category"
+                                    >
+                                        <Plus size={16} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <input
+                                        placeholder="New Category Name"
+                                        value={newCategory}
+                                        onChange={e => setNewCategory(e.target.value)}
+                                        autoFocus
+                                        style={{ flex: 1 }}
+                                    />
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary btn-sm"
+                                        onClick={handleSaveCategory}
+                                    >
+                                        Save
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary btn-sm"
+                                        onClick={() => { setShowNewCategory(false); setNewCategory(''); }}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="submit" className="btn btn-primary" disabled={loading}>
+                            {loading ? 'Saving...' : 'Update Booking'}
                         </button>
                     </div>
                 </form>

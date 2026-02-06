@@ -68,7 +68,7 @@ export const PERMISSIONS = {
     },
     [ROLES.SENIOR_EMPLOYEE]: {
         dashboard: { view: true, create: false, edit: false, delete: false },
-        bookings: { view: true, create: true, edit: true, delete: false },
+        bookings: { view: true, create: true, edit: true, delete: true },
         services: { view: true, create: false, edit: true, delete: false },
         customers: { view: true, create: true, edit: true, delete: false },
         employees: { view: false, create: false, edit: false, delete: false },
