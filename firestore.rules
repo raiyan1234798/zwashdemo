@@ -75,7 +75,7 @@ service cloud.firestore {
     // 3. Settings
     match /settings/{docId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == docId);
+      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == docId) || (docId == 'expenses' && isSenior());
     }
 
     // 4. Bookings - Core business operation

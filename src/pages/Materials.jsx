@@ -309,7 +309,7 @@ const Materials = () => {
                                             >
                                                 <Eye size={16} />
                                             </button>
-                                            {hasPermission('expenses', 'edit') && (
+                                            {hasPermission('materials', 'edit') && (
                                                 <button
                                                     className="btn-icon"
                                                     onClick={() => { setEditingMaterial(material); setShowModal(true); }}
@@ -318,7 +318,7 @@ const Materials = () => {
                                                     <Edit size={16} />
                                                 </button>
                                             )}
-                                            {hasPermission('expenses', 'delete') && (
+                                            {hasPermission('materials', 'delete') && (
                                                 <button
                                                     className="btn-icon danger"
                                                     onClick={() => setDeleteConfirm({ id: material.id, name: material.name })}
@@ -414,7 +414,7 @@ const Materials = () => {
                             </div>
                         </div>
                         <div className="modal-footer">
-                            {hasPermission('expenses', 'edit') && (
+                            {hasPermission('materials', 'edit') && (
                                 <button
                                     className="btn btn-primary"
                                     onClick={() => { setEditingMaterial(viewingMaterial); setShowModal(true); setViewingMaterial(null); }}

@@ -1897,7 +1897,9 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
     };
 
     const sendWhatsAppReminder = () => {
-        const phone = booking.contactPhone?.replace(/\D/g, '') || '';
+        let phone = booking.contactPhone?.replace(/\D/g, '') || '';
+        // Add India country code if not present
+        if (phone.length === 10) phone = '91' + phone;
         const message = `Hi! This is a reminder for your car wash appointment:\n\n` +
             `📅 Date: ${booking.bookingDate}\n` +
             `⏰ Time: ${booking.startTime}\n` +

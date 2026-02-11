@@ -18,7 +18,10 @@ import {
     Settings,
     LogOut,
     X,
-    ChevronRight
+    ChevronRight,
+    ShieldCheck,
+    Activity,
+    Database
 } from 'lucide-react';
 
 const MobileNav = () => {
@@ -46,9 +49,12 @@ const MobileNav = () => {
         { path: '/invoices', icon: FileText, label: 'Invoices', permission: 'invoices' },
         { path: '/employees', icon: UserCog, label: 'Employees', permission: 'employees' },
         { path: '/payroll', icon: Receipt, label: 'Payroll', permission: 'payroll' },
-        { path: '/attendance', icon: CalendarCheck, label: 'Attendance', permission: 'payroll' },
+        { path: '/attendance', icon: CalendarCheck, label: 'Attendance', permission: 'attendance' },
         { path: '/expenses', icon: DollarSign, label: 'Expenses', permission: 'expenses' },
-        { path: '/materials', icon: Package, label: 'Materials', permission: 'expenses' },
+        { path: '/materials', icon: Package, label: 'Materials', permission: 'materials' },
+        { path: '/amc-plans', icon: ShieldCheck, label: 'AMC Plans', permission: 'amc' },
+        { path: '/crm-history', icon: Database, label: 'CRM History', permission: 'crm' },
+        { path: '/audit-log', icon: Activity, label: 'Audit Log', permission: 'audit' },
         { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' },
     ];
 

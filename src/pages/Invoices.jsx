@@ -569,7 +569,10 @@ const Invoices = () => {
             `View your invoice online: ${link}\n\n` +
             `Thank you for choosing us! 🙏`;
 
-        const whatsappUrl = `https://wa.me/${invoice.contactPhone?.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`;
+        let phone = invoice.contactPhone?.replace(/[^0-9]/g, '') || '';
+        // Add India country code if not present
+        if (phone.length === 10) phone = '91' + phone;
+        const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };
 
