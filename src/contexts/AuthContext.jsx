@@ -1,0 +1,418 @@
+import { createContext, useContext, useState, useEffect } from 'react';
+import {
+    signInWithPopup,
+    signOut,
+    onAuthStateChanged,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword
+} from 'firebase/auth';
+import {
+    doc,
+    getDoc,
+    setDoc,
+    collection,
+    query,
+    where,
+    getDocs,
+    serverTimestamp,
+    onSnapshot
+} from 'firebase/firestore';
+import { auth, db, googleProvider } from '../config/firebase';
+
+const AuthContext = createContext(null);
+
+// User roles with permissions
+export const ROLES = {
+    ADMIN: 'admin', // Shop Admin
+    MANAGER: 'manager',
+    SENIOR_EMPLOYEE: 'senior_employee',
+    EMPLOYEE: 'employee'
+};
+
+export const PERMISSIONS = {
+    [ROLES.ADMIN]: {
+        dashboard: { view: true, create: true, edit: true, delete: true },
+        bookings: { view: true, create: true, edit: true, delete: true },
+        services: { view: true, create: true, edit: true, delete: true },
+        customers: { view: true, create: true, edit: true, delete: true },
+        employees: { view: true, create: true, edit: true, delete: true },
+        expenses: { view: true, create: true, edit: true, delete: true },
+        invoices: { view: true, create: true, edit: true, delete: true },
+        payroll: { view: true, create: true, edit: true, delete: true },
+        analytics: { view: true, create: true, edit: true, delete: true },
+        finance: { view: true, create: true, edit: true, delete: true },
+        settings: { view: true, create: true, edit: true, delete: true },
+        attendance: { view: true, create: true, edit: true, delete: true },
+        audit: { view: true, create: true, edit: true, delete: true },
+        materials: { view: true, create: true, edit: true, delete: true },
+        crm: { view: true, create: true, edit: true, delete: true },
+        amc: { view: true, create: true, edit: true, delete: true },
+        calendar: { view: true, create: true, edit: true, delete: true }
+    },
+    [ROLES.MANAGER]: {
+        dashboard: { view: true, create: true, edit: true, delete: true },
+        bookings: { view: true, create: true, edit: true, delete: true },
+        services: { view: true, create: true, edit: true, delete: true },
+        customers: { view: true, create: true, edit: true, delete: true },
+        employees: { view: true, create: true, edit: true, delete: true },
+        expenses: { view: true, create: true, edit: true, delete: true },
+        invoices: { view: true, create: true, edit: true, delete: true },
+        payroll: { view: false, create: false, edit: false, delete: false },
+        analytics: { view: false, create: false, edit: false, delete: false },
+        finance: { view: true, create: false, edit: false, delete: false },
+        settings: { view: false, create: false, edit: false, delete: false },
+        attendance: { view: true, create: true, edit: true, delete: true },
+        materials: { view: true, create: true, edit: true, delete: true },
+        crm: { view: true, create: true, edit: true, delete: true },
+        amc: { view: true, create: true, edit: true, delete: false },
+        calendar: { view: true, create: true, edit: true, delete: true },
+        audit: { view: false, create: false, edit: false, delete: false }
+    },
+    [ROLES.SENIOR_EMPLOYEE]: {
+        dashboard: { view: true, create: false, edit: false, delete: false },
+        bookings: { view: true, create: true, edit: true, delete: true },
+        services: { view: true, create: false, edit: true, delete: false },
+        customers: { view: true, create: true, edit: true, delete: false },
+        employees: { view: false, create: false, edit: false, delete: false },
+        expenses: { view: true, create: true, edit: true, delete: true },
+        invoices: { view: true, create: true, edit: false, delete: false },
+        payroll: { view: false, create: false, edit: false, delete: false },
+        analytics: { view: false, create: false, edit: false, delete: false },
+        finance: { view: false, create: false, edit: false, delete: false },
+        settings: { view: false, create: false, edit: false, delete: false },
+        attendance: { view: true, create: true, edit: true, delete: false },
+        materials: { view: true, create: true, edit: false, delete: false },
+        crm: { view: false, create: false, edit: false, delete: false },
+        amc: { view: true, create: true, edit: false, delete: false },
+        calendar: { view: true, create: false, edit: false, delete: false },
+        audit: { view: false, create: false, edit: false, delete: false }
+    },
+    [ROLES.EMPLOYEE]: {
+        dashboard: { view: true, create: false, edit: false, delete: false },
+        bookings: { view: true, create: true, edit: false, delete: false },
+        services: { view: true, create: false, edit: false, delete: false },
+        customers: { view: false, create: false, edit: false, delete: false },
+        employees: { view: false, create: false, edit: false, delete: false },
+        expenses: { view: false, create: false, edit: false, delete: false },
+        invoices: { view: false, create: false, edit: false, delete: false },
+        payroll: { view: false, create: false, edit: false, delete: false },
+        analytics: { view: false, create: false, edit: false, delete: false },
+        finance: { view: false, create: false, edit: false, delete: false },
+        settings: { view: false, create: false, edit: false, delete: false },
+        attendance: { view: true, create: true, edit: false, delete: false },
+        materials: { view: false, create: false, edit: false, delete: false },
+        crm: { view: false, create: false, edit: false, delete: false },
+        amc: { view: true, create: true, edit: false, delete: false },
+        calendar: { view: true, create: false, edit: false, delete: false },
+        audit: { view: false, create: false, edit: false, delete: false }
+    }
+};
+
+export function AuthProvider({ children }) {
+    const [user, setUser] = useState(null);
+    const [userProfile, setUserProfile] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // Check if user has specific permission
+    const hasPermission = (resource, action = null) => {
+        if (!userProfile?.role) return false;
+
+        // Normalize role name: lowercase and replace spaces/dashes with underscores
+        const normalizedRole = userProfile.role.toLowerCase().replace(/[\s-]/g, '_');
+        const rolePermissions = PERMISSIONS[normalizedRole];
+        const defaultPerms = rolePermissions ? rolePermissions[resource] : undefined;
+
+        // 1. Check for Custom Permissions (Override)
+        if (userProfile.permissions && userProfile.permissions[resource] !== undefined) {
+            const customPerms = userProfile.permissions[resource];
+
+            // If boolean, return directly
+            if (typeof customPerms === 'boolean') return customPerms;
+
+            // If action specified, check action
+            if (action && typeof customPerms === 'object') {
+                // If explicitly set in custom permissions, use it
+                if (customPerms[action] !== undefined) {
+                    return customPerms[action] === true;
+                }
+                // If missing in custom permissions, fallback to role default
+                if (defaultPerms !== undefined) {
+                    if (typeof defaultPerms === 'boolean') return defaultPerms;
+                    return defaultPerms[action] === true;
+                }
+                return false;
+            }
+
+            // If no action but object, check if ANY action allowed (view usually)
+            if (typeof customPerms === 'object') {
+                if (customPerms.view || customPerms.create || customPerms.edit || customPerms.delete) return true;
+
+                // Fallback to default check if custom keys missing
+                if (defaultPerms !== undefined) {
+                    if (typeof defaultPerms === 'boolean') return defaultPerms;
+                    return defaultPerms.view || defaultPerms.create || defaultPerms.edit || defaultPerms.delete;
+                }
+            }
+            return false;
+        }
+
+        // 2. Fallback to Role-based Permissions (No custom override found)
+        if (!rolePermissions) {
+            return false;
+        }
+
+        if (defaultPerms === undefined) return false;
+
+        // If it's a boolean
+        if (typeof defaultPerms === 'boolean') return defaultPerms;
+
+        // If action is specified
+        if (action && typeof defaultPerms === 'object') {
+            return defaultPerms[action] === true;
+        }
+
+        // If no action specified
+        if (typeof defaultPerms === 'object') {
+            return defaultPerms.view === true ||
+                defaultPerms.create === true ||
+                defaultPerms.edit === true ||
+                defaultPerms.delete === true;
+        }
+
+        return false;
+    };
+
+    // Fetch or create user profile
+    const fetchUserProfile = async (firebaseUser) => {
+        try {
+            const userRef = doc(db, 'adminUsers', firebaseUser.uid);
+            const userDoc = await getDoc(userRef);
+
+            if (userDoc.exists()) {
+                const profile = { id: userDoc.id, ...userDoc.data() };
+
+                // Check if user is approved
+                if (profile.status === 'pending') {
+                    setError('Your account is pending approval. Please wait for admin approval.');
+                    await signOut(auth);
+                    return null;
+                }
+
+                if (profile.status === 'rejected') {
+                    setError('Your account access has been rejected.');
+                    await signOut(auth);
+                    return null;
+                }
+
+                setUserProfile(profile);
+                return profile;
+            } else {
+                // Check if this is the first admin user or check admin whitelist
+                const adminConfig = await getDoc(doc(db, 'settings', 'admin_config'));
+                const isFirstUser = !(adminConfig.exists() && adminConfig.data().initialized);
+
+                // Hardcoded Admin Check
+                const isAdminEmail = firebaseUser.email.toLowerCase() === 'zwash.office@gmail.com';
+
+                if (isAdminEmail || isFirstUser) {
+                    // First user or specific email becomes admin
+                    const role = ROLES.ADMIN;
+
+                    const newProfile = {
+                        uid: firebaseUser.uid,
+                        email: firebaseUser.email,
+                        displayName: firebaseUser.displayName || 'Admin',
+                        photoURL: firebaseUser.photoURL,
+                        role: role,
+                        status: 'approved',
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    };
+
+                    await setDoc(userRef, newProfile);
+                    await setDoc(doc(db, 'settings', 'admin_config'), {
+                        initialized: true,
+                        primaryAdminEmail: firebaseUser.email
+                    });
+
+                    setUserProfile({ id: firebaseUser.uid, ...newProfile });
+                    return { id: firebaseUser.uid, ...newProfile };
+                } else {
+                    // New user - check if invited
+                    const emailLower = firebaseUser.email.toLowerCase();
+                    const invitesQuery = query(
+                        collection(db, 'employeeInvites'),
+                        where('email', '==', emailLower),
+                        where('status', '==', 'pending')
+                    );
+                    const inviteSnapshot = await getDocs(invitesQuery);
+
+                    if (!inviteSnapshot.empty) {
+                        // User was invited - create APPROVED profile (since they were invited)
+                        const invite = inviteSnapshot.docs[0];
+                        const inviteData = invite.data();
+                        const newProfile = {
+                            uid: firebaseUser.uid,
+                            email: firebaseUser.email,
+                            displayName: firebaseUser.displayName || '',
+                            photoURL: firebaseUser.photoURL,
+                            role: inviteData.role || ROLES.EMPLOYEE,
+                            permissions: inviteData.permissions || null, // Inherit permissions from invite
+                            status: 'approved', // Auto-approve since they were invited
+                            invitedBy: inviteData.invitedBy,
+                            needsOnboarding: true,
+                            createdAt: serverTimestamp(),
+                            updatedAt: serverTimestamp()
+                        };
+
+                        await setDoc(userRef, newProfile);
+
+                        // Update the invite status to accepted
+                        const { updateDoc: updateDocument } = await import('firebase/firestore');
+                        await updateDocument(doc(db, 'employeeInvites', invite.id), {
+                            status: 'accepted',
+                            acceptedAt: serverTimestamp()
+                        });
+
+                        setUserProfile({ id: firebaseUser.uid, ...newProfile, needsOnboarding: true });
+                        return { id: firebaseUser.uid, ...newProfile, needsOnboarding: true };
+                    } else {
+                        // Not invited - deny access
+                        setError('Access denied. You need an invitation to access this system. Make sure you sign in with the same email that was invited.');
+                        await signOut(auth);
+                        return null;
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching user profile:', err);
+            setError('Failed to load user profile');
+            return null;
+        }
+    };
+
+    // Listen for auth state changes
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            setLoading(true);
+            setError(null);
+
+            if (firebaseUser) {
+                setUser(firebaseUser);
+                await fetchUserProfile(firebaseUser);
+            } else {
+                setUser(null);
+                setUserProfile(null);
+            }
+
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    // Real-time Profile Listener
+    useEffect(() => {
+        if (!user) return;
+
+        const unsubscribe = onSnapshot(doc(db, 'adminUsers', user.uid), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+
+                // Handle status changes in real-time
+                if (data.status === 'rejected') {
+                    setError('Your account access has been rejected.');
+                    signOut(auth);
+                    return;
+                }
+
+                setUserProfile({ id: docSnap.id, ...data });
+            }
+        }, (err) => {
+            console.error("Profile listener error:", err);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
+
+    // Sign in with Google
+    const signInWithGoogle = async () => {
+        try {
+            setError(null);
+            setLoading(true);
+            await signInWithPopup(auth, googleProvider);
+        } catch (err) {
+            console.error('Google sign in error:', err);
+            setError(err.message);
+            setLoading(false);
+        }
+    };
+
+    // Sign out
+    const logout = async () => {
+        try {
+            await signOut(auth);
+            setUser(null);
+            setUserProfile(null);
+        } catch (err) {
+            console.error('Logout error:', err);
+            setError(err.message);
+        }
+    };
+
+    // Update user profile (for onboarding)
+    const updateProfile = async (profileData) => {
+        if (!user) return;
+
+        try {
+            const userRef = doc(db, 'adminUsers', user.uid);
+            await setDoc(userRef, {
+                ...profileData,
+                needsOnboarding: false,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            setUserProfile(prev => ({
+                ...prev,
+                ...profileData,
+                needsOnboarding: false
+            }));
+        } catch (err) {
+            console.error('Error updating profile:', err);
+            throw err;
+        }
+    };
+
+    const value = {
+        user,
+        userProfile,
+        loading,
+        error,
+        signInWithGoogle,
+        logout,
+        updateProfile,
+        hasPermission,
+        isAdmin: userProfile?.role === ROLES.ADMIN,
+        isManager: userProfile?.role === ROLES.MANAGER,
+
+        isSeniorEmployee: userProfile?.role === ROLES.SENIOR_EMPLOYEE,
+        isEmployee: userProfile?.role === ROLES.EMPLOYEE
+    };
+
+    return (
+        <AuthContext.Provider value={value}>
+            {children}
+        </AuthContext.Provider>
+    );
+}
+
+export function useAuth() {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+}
+
+export default AuthContext;

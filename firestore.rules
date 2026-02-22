@@ -1,0 +1,241 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==================== HELPER FUNCTIONS ====================
+
+    // Check if user is logged in
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Get user profile data (costs 1 read operation)
+    function getUserData() {
+      return get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data;
+    }
+
+    // Check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+
+    // Check if user is manager or admin
+    function isManager() {
+      return isAuthenticated() && (getUserData().role == 'manager' || getUserData().role == 'admin');
+    }
+
+    // Check if user is senior employee or higher
+    function isSenior() {
+      let role = getUserData().role;
+      return isAuthenticated() && (role == 'senior_employee' || role == 'manager' || role == 'admin');
+    }
+
+    // SAFE permission check - handles missing permissions object gracefully
+    // Returns true if user has specific permission granted via custom permissions
+    function hasCustomPermission(resource, action) {
+      let userData = getUserData();
+      // Check if permissions object exists and has the resource
+      return userData.permissions != null && 
+             userData.permissions[resource] != null && 
+             userData.permissions[resource][action] == true;
+    }
+
+    // ==================== COLLECTION RULES ====================
+
+    // 1. Users / Employees Collection
+    match /adminUsers/{userId} {
+      // All authenticated users can read employee list (for dropdowns, assignments)
+      allow read: if isAuthenticated();
+      
+      // Admins can do everything
+      allow write: if isAdmin();
+      
+      // Managers and Senior Employees can create worker accounts (non-login)
+      allow create: if isSenior() && request.resource.data.role == 'worker';
+      
+      // Managers and Senior Employees can update non-admin/non-manager employees
+      allow update: if isSenior() && 
+                    resource.data.role != 'admin' && 
+                    resource.data.role != 'manager';
+      
+      // Users can update their own profile
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      
+      // New users can create their own profile (during onboarding)
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 2. Employee Invites
+    match /employeeInvites/{inviteId} {
+      allow read: if isAuthenticated();
+      allow update: if isAuthenticated(); // Accept invite
+      allow create, delete: if isSenior();
+    }
+
+    // 3. Settings
+    match /settings/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || (isAuthenticated() && request.auth.uid == docId) || (docId == 'expenses' && isSenior());
+    }
+
+    // 4. Bookings - Core business operation
+    match /bookings/{bookingId} {
+      // All staff can read bookings
+      allow read: if isAuthenticated();
+      
+      // Staff can create bookings (walk-ins, appointments)
+      allow create: if isAuthenticated() && 
+                    (isSenior() || hasCustomPermission('bookings', 'create'));
+      
+      // Staff can update bookings (status changes, assignments)
+      allow update: if isAuthenticated();
+      
+      // Managers and Senior Employees can delete bookings
+      allow delete: if isSenior() || hasCustomPermission('bookings', 'delete');
+    }
+
+    // 5. Archived Bookings
+    match /archivedBookings/{bookingId} {
+      allow read: if isAuthenticated();
+      allow write: if isSenior();
+    }
+
+    // 6. Customers
+    match /customers/{customerId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isAuthenticated() && 
+                    (isSenior() || hasCustomPermission('customers', 'create'));
+      
+      allow update: if isAuthenticated() && 
+                    (isSenior() || hasCustomPermission('customers', 'edit'));
+      
+      // Delete is restricted
+      allow delete: if isAdmin() || hasCustomPermission('customers', 'delete');
+    }
+
+    // 7. Invoices
+    match /invoices/{invoiceId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isAuthenticated() && 
+                    (isSenior() || hasCustomPermission('invoices', 'create'));
+      
+      allow update: if isAuthenticated() && 
+                    (isSenior() || hasCustomPermission('invoices', 'edit'));
+      
+      allow delete: if isAdmin() || hasCustomPermission('invoices', 'delete');
+    }
+
+    // 8. Attendance
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      
+      // Managers and senior employees can mark attendance for anyone
+      // Regular employees can mark their own attendance
+      allow create: if isAuthenticated() && 
+                    (isSenior() || request.resource.data.userId == request.auth.uid);
+      
+      // Managers and senior employees can edit/fix/delete attendance
+      allow update, delete: if isAuthenticated() && isSenior();
+    }
+
+    // 9. Expenses
+    match /expenses/{expenseId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isSenior() || hasCustomPermission('expenses', 'create');
+      
+      allow update: if isSenior() || hasCustomPermission('expenses', 'edit');
+      
+      allow delete: if isSenior() || hasCustomPermission('expenses', 'delete');
+    }
+
+    // 10. Materials / Inventory
+    match /materials/{materialId} {
+      allow read: if isAuthenticated();
+      
+      // Staff can update stock (usage deduction)
+      allow update: if isAuthenticated();
+      
+      allow create: if isSenior() || hasCustomPermission('materials', 'create');
+      
+      allow delete: if isSenior() || hasCustomPermission('materials', 'delete');
+    }
+
+    // 11. Material Usage Tracking
+    match /materialUsage/{usageId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 12. Services Catalog
+    match /services/{serviceId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isSenior() || hasCustomPermission('services', 'create');
+      
+      allow update: if isSenior() || hasCustomPermission('services', 'edit');
+      
+      allow delete: if isSenior() || hasCustomPermission('services', 'delete');
+    }
+
+    // 13. AMC Plans
+    match /amc_plans/{planId} {
+      allow read: if isAuthenticated();
+      
+      // Managers and senior employees can create AMC plans
+      allow create: if isAuthenticated() && isSenior();
+      
+      // Managers and senior employees can update AMC plans
+      allow update: if isAuthenticated() && isSenior();
+      
+      // Managers and senior employees can delete AMC plans
+      allow delete: if isSenior();
+    }
+
+    // 14. AMC Subscriptions
+    match /customer_amc_subscriptions/{subId} {
+      allow read: if isAuthenticated();
+      
+      // Managers and senior employees can create AMC subscriptions
+      allow create: if isAuthenticated() && isSenior();
+      
+      // Managers and senior employees can update AMC subscriptions
+      allow update: if isAuthenticated() && isSenior();
+      
+      // Managers and senior employees can delete AMC subscriptions
+      allow delete: if isSenior();
+    }
+
+    // 15. Payroll (Admin/Manager/Senior only)
+    match /payroll/{payrollId} {
+      allow read: if isSenior() || hasCustomPermission('payroll', 'view');
+      allow write: if isAdmin() || hasCustomPermission('payroll', 'edit');
+    }
+
+    // 16. Audit Log (Admin only, read-only for security)
+    match /auditLog/{logId} {
+      allow read: if isAdmin() || hasCustomPermission('audit', 'view');
+      allow create: if isAuthenticated(); // System can log actions
+      allow update, delete: if false; // Never allow modification of audit logs
+    }
+
+    // 17. CRM Data
+    match /crm_data/{docId} {
+      allow read: if isSenior() || hasCustomPermission('crm', 'view');
+      allow write: if isSenior() || hasCustomPermission('crm', 'edit');
+    }
+
+    // 18. Analytics Cache (Read by authorized, write by system/admin)
+    match /analytics/{docId} {
+      allow read: if isAdmin() || hasCustomPermission('analytics', 'view');
+      allow write: if isAdmin();
+    }
+
+    // ==================== DEFAULT RULE ====================
+    // Admin fallback for any unlisted collection
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
