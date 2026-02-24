@@ -18,7 +18,8 @@ import {
     Package,
     CalendarCheck,
     Database,
-    Shield
+    Shield,
+    ShieldCheck
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
@@ -39,6 +40,7 @@ const Sidebar = () => {
 
         { path: '/calendar', icon: CalendarDays, label: 'Calendar', permission: 'bookings' },
         { path: '/services', icon: Car, label: 'Services', permission: 'services' },
+        { path: '/amc-plans', icon: ShieldCheck, label: 'AMC Plans', permission: 'amc' },
         { path: '/customers', icon: Users, label: 'Customers', permission: 'customers' },
         { path: '/analytics', icon: BarChart3, label: 'Analytics', permission: 'analytics' },
         { path: '/invoices', icon: FileText, label: 'Invoices', permission: 'invoices' },

@@ -32,36 +32,6 @@ import {
     Trash2
 } from 'lucide-react';
 
-// Default AMC Plans with services
-const DEFAULT_AMC_PLANS = {
-    compact: {
-        name: 'Compact Package',
-        planType: 'compact',
-        validityMonths: 12,
-        prices: { suv: 19999, sedan: 16999, hatchback: 14999 },
-        services: [
-            { name: 'Commando Cleaning', quantity: 12, description: '12 Washes Included' },
-            { name: "Commander's Finish", quantity: 1, description: 'Multi Stage Polish' },
-            { name: 'Gear Guard Interior', quantity: 1, description: 'Deep Cleaning' },
-            { name: 'Salt Mark Stain Remover', quantity: 1, description: 'All Glasses' }
-        ]
-    },
-    premium: {
-        name: 'Premium Package',
-        planType: 'premium',
-        validityMonths: 12,
-        prices: { suv: 49999, sedan: 37999, hatchback: 29999 },
-        services: [
-            { name: 'Commando Cleaning', quantity: 48, description: 'Unlimited Wash' },
-            { name: "Commander's Finish", quantity: 1, description: 'Multi Stage Polish' },
-            { name: 'Underbody Armor', quantity: 1, description: 'Under Change Coating' },
-            { name: 'Silver Coating / Salt Mark', quantity: 2, description: 'Stain Remove All Glass' },
-            { name: 'Gear Guard Interior', quantity: 2, description: 'Deep Cleaning (2 Times)' },
-            { name: 'AC Gas Check', quantity: 1, description: 'Free', isFree: true }
-        ]
-    }
-};
-
 const AMCPlans = () => {
     const { hasPermission, userProfile, isAdmin } = useAuth();
     const [activeTab, setActiveTab] = useState('plans');
@@ -138,35 +108,6 @@ const AMCPlans = () => {
             used: service?.usages?.length || 0,
             total: service?.totalAllowed || 0
         };
-    };
-
-    const seedAMCPlans = async () => {
-        if (!window.confirm('This will add Compact and Premium AMC plans. Continue?')) return;
-
-        setSeeding(true);
-        try {
-            // Seed Compact Plan
-            await addDoc(collection(db, 'amc_plans'), {
-                ...DEFAULT_AMC_PLANS.compact,
-                isActive: true,
-                createdAt: serverTimestamp()
-            });
-
-            // Seed Premium Plan
-            await addDoc(collection(db, 'amc_plans'), {
-                ...DEFAULT_AMC_PLANS.premium,
-                isActive: true,
-                createdAt: serverTimestamp()
-            });
-
-            alert('AMC Plans seeded successfully!');
-            fetchPlans();
-        } catch (error) {
-            console.error('Error seeding plans:', error);
-            alert('Error: ' + error.message);
-        } finally {
-            setSeeding(false);
-        }
     };
 
     const handleDeletePlan = async (planId) => {
@@ -267,6 +208,7 @@ const AMCPlans = () => {
                                                 <div><small>Hatchback</small><strong>₹{plan.prices.hatchback?.toLocaleString()}</strong></div>
                                                 <div><small>Sedan</small><strong>₹{plan.prices.sedan?.toLocaleString()}</strong></div>
                                                 <div><small>SUV</small><strong>₹{plan.prices.suv?.toLocaleString()}</strong></div>
+                                                <div><small>Luxury SUV</small><strong>₹{plan.prices.luxurySuv?.toLocaleString()}</strong></div>
                                             </div>
                                         ) : (
                                             <span className="plan-price">₹{plan.price?.toLocaleString()}</span>
@@ -693,7 +635,7 @@ const AMCPlans = () => {
                 
                 .vehicle-prices {
                     display: grid;
-                    grid-template-columns: repeat(3, 1fr);
+                    grid-template-columns: repeat(4, 1fr);
                     gap: 10px;
                     text-align: center;
                 }
@@ -810,17 +752,19 @@ const AMCPlans = () => {
 const CreatePlanModal = ({ onClose, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [planType, setPlanType] = useState('compact');
-    const [vehiclePrices, setVehiclePrices] = useState({ hatchback: '', sedan: '', suv: '' });
+    const [vehiclePrices, setVehiclePrices] = useState({ hatchback: '', sedan: '', suv: '', luxurySuv: '' });
     const [services, setServices] = useState([
         { name: '', quantity: 1, description: '' }
     ]);
 
-    // Load default plan data when type changes
+    // Load default plan format when type changes
     useEffect(() => {
-        const defaults = DEFAULT_AMC_PLANS[planType];
-        if (defaults) {
-            setVehiclePrices(defaults.prices);
-            setServices(defaults.services);
+        if (planType === 'compact') {
+            setVehiclePrices({ hatchback: '', sedan: '', suv: '', luxurySuv: '' });
+            setServices([{ name: '', quantity: 1, description: '' }]);
+        } else if (planType === 'premium') {
+            setVehiclePrices({ hatchback: '', sedan: '', suv: '', luxurySuv: '' });
+            setServices([{ name: '', quantity: 1, description: '' }]);
         }
     }, [planType]);
 
@@ -850,7 +794,8 @@ const CreatePlanModal = ({ onClose, onSuccess }) => {
                 prices: {
                     hatchback: Number(vehiclePrices.hatchback),
                     sedan: Number(vehiclePrices.sedan),
-                    suv: Number(vehiclePrices.suv)
+                    suv: Number(vehiclePrices.suv),
+                    luxurySuv: Number(vehiclePrices.luxurySuv)
                 },
                 validityMonths: Number(formData.get('validity')),
                 services: services.filter(s => s.name.trim()),
@@ -909,7 +854,7 @@ const CreatePlanModal = ({ onClose, onSuccess }) => {
                                 <input
                                     name="name"
                                     required
-                                    defaultValue={DEFAULT_AMC_PLANS[planType]?.name}
+                                    defaultValue=""
                                     placeholder="e.g. Compact Package"
                                 />
                             </div>
@@ -954,6 +899,15 @@ const CreatePlanModal = ({ onClose, onSuccess }) => {
                                         type="number"
                                         value={vehiclePrices.suv}
                                         onChange={(e) => setVehiclePrices({ ...vehiclePrices, suv: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label style={{ fontSize: '0.85rem' }}>Luxury SUV</label>
+                                    <input
+                                        type="number"
+                                        value={vehiclePrices.luxurySuv}
+                                        onChange={(e) => setVehiclePrices({ ...vehiclePrices, luxurySuv: e.target.value })}
                                         required
                                     />
                                 </div>
@@ -1146,10 +1100,22 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
 
             // Calculate payment status
             const advanceAmt = Number(advancePayment) || 0;
-            const totalAmt = Number(salePrice) || 0;
-            const balanceAmt = totalAmt - advanceAmt;
+            const baseAmount = Number(salePrice) || 0; // Use salePrice as base for GST calculation
+            const includeGST = plan.includeGST; // Assuming plan has an includeGST boolean
+
+            // Fixed CGST and SGST at 9% each (total 18%)
+            const cgstPercentage = 9;
+            const sgstPercentage = 9;
+            const gstDivisor = 1 + (cgstPercentage + sgstPercentage) / 100;
+
+            const baseAmountForGst = includeGST ? Math.round(baseAmount / gstDivisor) : baseAmount;
+            const cgstAmount = includeGST ? Math.round((baseAmountForGst * cgstPercentage) / 100) : 0;
+            const sgstAmount = includeGST ? Math.round((baseAmountForGst * sgstPercentage) / 100) : 0;
+            const totalGst = cgstAmount + sgstAmount;
+            const totalAmount = includeGST ? (baseAmountForGst + totalGst) : baseAmount;
+            const balanceAmt = totalAmount - advanceAmt;
             let paymentStatus = 'unpaid';
-            if (advanceAmt >= totalAmt) {
+            if (advanceAmt >= totalAmount) {
                 paymentStatus = 'paid';
             } else if (advanceAmt > 0) {
                 paymentStatus = 'partial';
@@ -1164,9 +1130,9 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
                 vehicleType: vehicleType,
                 planId: plan.id,
                 planName: plan.name,
-                price: totalAmt,
+                price: totalAmount,
                 // Payment Tracking
-                totalAmount: totalAmt,
+                totalAmount: totalAmount,
                 advancePayment: advanceAmt,
                 balanceAmount: balanceAmt,
                 paymentStatus: paymentStatus,
@@ -1183,27 +1149,31 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
 
             // Create Invoice
             const invoiceData = {
-                invoiceNumber: `INV-AMC-${Date.now()}`,
+                bookingReference: `INV-AMC-${Date.now().toString().slice(-6)}`,
                 customerId: customerId,
                 customerName: custName || custPhone || 'Unknown',
-                customerPhone: custPhone || '',
-                vehicleNumber: (custVehicle || 'N/A').toUpperCase(),
-                type: 'AMC Subscription',
-                items: [
-                    {
-                        description: `AMC Plan: ${plan.name} (${vehicleType})`,
-                        quantity: 1,
-                        price: totalAmt,
-                        total: totalAmt
-                    }
-                ],
-                subtotal: totalAmt,
-                total: totalAmt,
-                amountPaid: advanceAmt,
-                balance: balanceAmt,
-                status: paymentStatus,
-                date: serverTimestamp(),
-                createdAt: serverTimestamp()
+                contactPhone: custPhone || '',
+                licensePlate: (custVehicle || 'N/A').toUpperCase(),
+                carMake: '',
+                carModel: '',
+                serviceName: `AMC Plan: ${plan.name} (${vehicleType})`,
+                price: totalAmount,
+                paidAmount: advanceAmt,
+                paymentStatus: paymentStatus,
+                paymentMode: advanceAmt > 0 ? 'cash' : 'none',
+                paymentHistory: advanceAmt > 0 ? [{
+                    date: new Date().toISOString(),
+                    amount: advanceAmt,
+                    splits: [{ mode: 'cash', amount: advanceAmt }],
+                    recordedBy: 'system',
+                    note: 'Initial payment for AMC Subscription'
+                }] : [],
+                status: 'completed',
+                invoiceDate: startDateStr,
+                createdAt: serverTimestamp(),
+                createdBy: 'system',
+                isManual: true,
+                source: 'invoice'
             };
 
             await addDoc(collection(db, 'invoices'), invoiceData);
@@ -1230,7 +1200,7 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
                     <div className="form-group">
                         <label>Vehicle Type *</label>
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            {['hatchback', 'sedan', 'suv'].map(type => (
+                            {['hatchback', 'sedan', 'suv', 'luxurySuv'].map(type => (
                                 <button
                                     key={type}
                                     type="button"
@@ -1246,7 +1216,7 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
                                         textTransform: 'capitalize'
                                     }}
                                 >
-                                    {type === 'suv' ? 'SUV' : type}
+                                    {type === 'suv' ? 'SUV' : type === 'luxurySuv' ? 'Luxury SUV' : type}
                                     <br />
                                     <small style={{ fontWeight: 'normal', color: 'var(--primary)' }}>
                                         ₹{plan.prices?.[type]?.toLocaleString() || plan.price}

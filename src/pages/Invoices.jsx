@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import { collection, query, getDocs, orderBy, doc, getDoc, updateDoc, addDoc, deleteDoc, where, serverTimestamp } from 'firebase/firestore';
-import { FileText, Download, Eye, Search, Printer, Receipt, MessageCircle, Copy, ExternalLink, Plus, Edit, Trash2, Archive, RotateCcw, X, Car, CheckCircle2 } from 'lucide-react';
+import { FileText, Download, Eye, Search, Printer, Receipt, MessageCircle, Copy, ExternalLink, Plus, Edit, Trash2, Archive, RotateCcw, X, Car, CheckCircle2, ShieldCheck } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import SplitPaymentSelector from '../components/SplitPaymentSelector';
 
@@ -1403,44 +1403,77 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
         licensePlate: '',
         serviceName: '',
         price: '',
-        invoiceDate: new Date().toISOString().split('T')[0]
+        invoiceDate: new Date().toISOString().split('T')[0],
+        vehicleType: 'hatchback'
     });
     const [loading, setLoading] = useState(false);
     const [isPaymentReceived, setIsPaymentReceived] = useState(false);
-    const [paymentSplits, setPaymentSplits] = useState([{ mode: 'cash', amount: '' }]);
-
-    // Services Fetching & Search Logic
     const [services, setServices] = useState([]);
+    const [amcPlans, setAmcPlans] = useState([]);
     const [showServiceDropdown, setShowServiceDropdown] = useState(false);
+    const [selectedAmcPlan, setSelectedAmcPlan] = useState(null);
 
     useEffect(() => {
-        const fetchServices = async () => {
+        const fetchServicesAndPlans = async () => {
             try {
-                const q = query(collection(db, 'services'), where('isActive', '==', true));
-                const snapshot = await getDocs(q);
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setServices(data);
+                // Fetch Services
+                const sQ = query(collection(db, 'services'), where('isActive', '==', true));
+                const sSnap = await getDocs(sQ);
+                const sData = sSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setServices(sData);
+
+                // Fetch AMC Plans
+                const pQ = query(collection(db, 'amc_plans'), where('isActive', '==', true));
+                const pSnap = await getDocs(pQ);
+                const pData = pSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setAmcPlans(pData);
             } catch (error) {
                 console.error("Error fetching services", error);
             }
         };
-        fetchServices();
+        fetchServicesAndPlans();
     }, []);
 
-    const filteredServices = services.filter(s =>
+    const combinedList = [
+        ...services.map(s => ({ ...s, isAmc: false })),
+        ...amcPlans.map(p => ({ ...p, isAmc: true }))
+    ];
+
+    const filteredServices = combinedList.filter(s =>
         s.name.toLowerCase().includes(formData.serviceName.toLowerCase())
     );
 
-    const handleServiceSelect = (service) => {
-        // Default to sedan price or base price, user can edit
-        const defaultPrice = service.prices?.sedan || service.price || 0;
-        setFormData({
-            ...formData,
-            serviceName: service.name,
-            price: String(defaultPrice)
-        });
+    const handleServiceSelect = (item) => {
+        if (item.isAmc) {
+            setSelectedAmcPlan(item);
+            const price = item.prices?.[formData.vehicleType] || item.price || 0;
+            setFormData({
+                ...formData,
+                serviceName: `AMC Plan: ${item.name}`,
+                price: String(price)
+            });
+        } else {
+            setSelectedAmcPlan(null);
+            const defaultPrice = item.prices?.sedan || item.price || 0;
+            setFormData({
+                ...formData,
+                serviceName: item.name,
+                price: String(defaultPrice)
+            });
+        }
         setShowServiceDropdown(false);
     };
+
+    // Update AMC price if vehicle type changes
+    useEffect(() => {
+        if (selectedAmcPlan) {
+            const price = selectedAmcPlan.prices?.[formData.vehicleType] || selectedAmcPlan.price || 0;
+            setFormData(prev => ({
+                ...prev,
+                price: String(price)
+            }));
+        }
+    }, [formData.vehicleType, selectedAmcPlan]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -1466,6 +1499,55 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                 note: 'Initial payment at invoice creation'
             }] : [];
 
+            const isAmc = selectedAmcPlan != null;
+
+            let customerId = 'unknown';
+
+            // If it's an AMC, we need a customer. Let's create or find one if possible.
+            // For simplicity, we just save the AMC subscription with the details provided in the modal.
+            if (isAmc) {
+                const startDate = new Date(formData.invoiceDate);
+                const expiryDate = new Date(formData.invoiceDate);
+                expiryDate.setMonth(startDate.getMonth() + selectedAmcPlan.validityMonths);
+
+                const serviceTracking = (selectedAmcPlan.services || []).map(service => ({
+                    serviceType: service.name,
+                    description: service.description,
+                    totalAllowed: service.quantity,
+                    usages: []
+                }));
+
+                if (serviceTracking.length === 0 && selectedAmcPlan.serviceCount) {
+                    serviceTracking.push({
+                        serviceType: 'Wash',
+                        totalAllowed: selectedAmcPlan.serviceCount,
+                        usages: []
+                    });
+                }
+
+                await addDoc(collection(db, 'customer_amc_subscriptions'), {
+                    customerId: customerId,
+                    customerName: formData.customerName,
+                    customerPhone: formData.contactPhone,
+                    vehicleNumber: formData.licensePlate.toUpperCase(),
+                    vehicleType: formData.vehicleType,
+                    planId: selectedAmcPlan.id,
+                    planName: selectedAmcPlan.name,
+                    price: totalPrice,
+                    totalAmount: totalPrice,
+                    advancePayment: paidAmount,
+                    balanceAmount: totalPrice - paidAmount,
+                    paymentStatus: paymentStatus,
+                    startDate: Timestamp.fromDate(startDate),
+                    expiryDate: Timestamp.fromDate(expiryDate),
+                    status: 'active',
+                    serviceTracking: serviceTracking,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                });
+            }
+
+            // Create standard invoice for both Service and AMC
             await addDoc(collection(db, 'invoices'), {
                 ...formData,
                 bookingReference: ref,
@@ -1477,7 +1559,8 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                 paymentMode: isPaymentReceived ? (paymentSplits[0]?.mode || 'cash') : 'none',
                 createdBy: user?.uid || 'unknown',
                 createdAt: serverTimestamp(),
-                isManual: true
+                isManual: true,
+                source: 'invoice'
             });
             onSuccess();
             onClose();
@@ -1519,7 +1602,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                         </div>
 
                         <div className="form-group">
-                            <label>Customer Name</label>
+                            <label>Customer Name *</label>
                             <input
                                 value={formData.customerName}
                                 onChange={e => setFormData({ ...formData, customerName: e.target.value })}
@@ -1527,6 +1610,32 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                                 placeholder="Enter customer name"
                             />
                         </div>
+
+                        <div className="form-group">
+                            <label>Vehicle Class *</label>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                {['hatchback', 'sedan', 'suv'].map(type => (
+                                    <button
+                                        key={type}
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, vehicleType: type })}
+                                        style={{
+                                            flex: 1,
+                                            padding: '0.75rem',
+                                            border: formData.vehicleType === type ? '2px solid var(--primary)' : '1px solid var(--navy-200)',
+                                            borderRadius: '8px',
+                                            background: formData.vehicleType === type ? 'var(--primary-light)' : 'white',
+                                            cursor: 'pointer',
+                                            fontWeight: formData.vehicleType === type ? '600' : 'normal',
+                                            textTransform: 'capitalize'
+                                        }}
+                                    >
+                                        {type === 'suv' ? 'SUV' : type}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         <div className="form-row">
                             <div className="form-group">
                                 <label>Make</label>
@@ -1584,24 +1693,33 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                                     overflowY: 'auto',
                                     boxShadow: 'var(--shadow-md)'
                                 }}>
-                                    {filteredServices.map(service => (
+                                    {filteredServices.map(item => (
                                         <div
-                                            key={service.id}
-                                            onClick={() => handleServiceSelect(service)}
+                                            key={item.id}
+                                            onClick={() => handleServiceSelect(item)}
                                             style={{
                                                 padding: '0.75rem 1rem',
                                                 cursor: 'pointer',
                                                 borderBottom: '1px solid #f1f5f9',
-                                                transition: 'background 0.2s'
+                                                transition: 'background 0.2s',
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center'
                                             }}
                                             className="dropdown-item"
                                             onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
                                             onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                                         >
-                                            <div style={{ fontWeight: '500', fontSize: '0.9rem' }}>{service.name}</div>
-                                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                                                {service.description ? service.description.slice(0, 50) + '...' : 'No description'}
+                                            <div>
+                                                <div style={{ fontWeight: '500', fontSize: '0.9rem', color: item.isAmc ? '#d4af37' : 'inherit' }}>
+                                                    {item.isAmc && <ShieldCheck size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} />}
+                                                    {item.name}
+                                                </div>
+                                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                                                    {item.description ? item.description.slice(0, 50) + '...' : (item.isAmc ? `${item.validityMonths} months validity` : 'No description')}
+                                                </div>
                                             </div>
+                                            {item.isAmc && <span className="badge badge-progress" style={{ fontSize: '0.65rem' }}>AMC</span>}
                                         </div>
                                     ))}
                                 </div>
