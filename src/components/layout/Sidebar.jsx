@@ -71,18 +71,22 @@ const Sidebar = () => {
                 >
                     {mobileOpen ? <X size={24} /> : <Menu size={24} />}
                 </button>
-                <div className="mobile-top-logo">
-                    <Car size={20} />
-                    <span>ZWash Admin</span>
+                <div className="mobile-top-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ background: 'white', padding: '2px 4px', borderRadius: '4px', display: 'flex' }}>
+                        <img src="/detail.svg" alt="Detailing Commando Logo" style={{ height: '20px', width: 'auto' }} />
+                    </div>
+                    <span style={{ fontSize: '1.05rem', fontWeight: '600' }}>Detailing Commando</span>
                 </div>
                 <div className="mobile-top-spacer" />
             </header>
 
             {/* Desktop Sidebar */}
             <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
-                <div className="sidebar-header">
-                    <Car size={24} />
-                    <h2>ZWash Admin</h2>
+                <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ background: 'white', padding: '4px', borderRadius: '6px', display: 'flex' }}>
+                        <img src="/detail.svg" alt="Detailing Commando Logo" style={{ height: '24px', width: 'auto' }} />
+                    </div>
+                    <h2 style={{ fontSize: '1.1rem', margin: 0 }}>Detailing Commando</h2>
                 </div>
 
                 <nav className="sidebar-nav">

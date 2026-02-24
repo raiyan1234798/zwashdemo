@@ -192,7 +192,7 @@ const Attendance = () => {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const todayAttendance = attendance.filter(a => a.date === today);
-    const presentToday = todayAttendance.filter(a => a.status === 'present' || a.status === 'overtime').length;
+    const presentToday = todayAttendance.filter(a => a.status === 'present' || a.status === 'permission' || a.status === 'overtime').length;
     const absentToday = todayAttendance.filter(a => a.status === 'absent' || a.status === 'unpaid_leave').length;
 
     const monthDays = getMonthDays();
@@ -236,8 +236,8 @@ const Attendance = () => {
                             <UserCheck size={20} />
                         </div>
                         <div className="stat-info">
-                            <span className="stat-value">{attendance.filter(a => a.userId === userProfile?.uid && a.status === 'present').length}</span>
-                            <span className="stat-label">Days Present</span>
+                            <span className="stat-value">{attendance.filter(a => a.userId === userProfile?.uid && (a.status === 'present' || a.status === 'permission')).reduce((sum, a) => sum + (Number(a.presentHours) || 8), 0)}h</span>
+                            <span className="stat-label">Hours Present</span>
                         </div>
                     </div>
                     <div className="quick-stat-card">
@@ -373,6 +373,7 @@ const Attendance = () => {
                             {/* Legend */}
                             <div className="attendance-legend">
                                 <span><span className="legend-dot" style={{ background: '#10b981' }}></span> Present</span>
+                                <span><span className="legend-dot" style={{ background: '#0ea5e9' }}></span> Permission</span>
                                 <span><span className="legend-dot" style={{ background: '#ef4444' }}></span> Absent</span>
                                 <span><span className="legend-dot" style={{ background: '#f59e0b' }}></span> Half-day</span>
                                 <span><span className="legend-dot" style={{ background: '#3b82f6' }}></span> Paid Leave</span>
@@ -396,7 +397,7 @@ const Attendance = () => {
                             <thead>
                                 <tr>
                                     {!isEmployee && <th>Employee</th>}
-                                    <th>Present</th>
+                                    <th>Present (Hrs)</th>
                                     <th>Absent</th>
                                     <th>Half-day</th>
                                     <th>Paid Leave</th>
@@ -412,7 +413,7 @@ const Attendance = () => {
                                     return (
                                         <tr key={emp.id}>
                                             {!isEmployee && <td><strong>{emp.displayName}</strong></td>}
-                                            <td style={{ color: '#10b981' }}>{empAtt.filter(a => a.status === 'present').length}</td>
+                                            <td style={{ color: '#10b981' }}>{empAtt.filter(a => a.status === 'present' || a.status === 'permission').reduce((sum, a) => sum + (Number(a.presentHours) || 8), 0)}h</td>
                                             <td style={{ color: '#ef4444' }}>{empAtt.filter(a => a.status === 'absent').length}</td>
                                             <td style={{ color: '#f59e0b' }}>{empAtt.filter(a => a.status === 'half-day').length}</td>
                                             <td style={{ color: '#3b82f6' }}>{empAtt.filter(a => a.status === 'paid_leave').length}</td>
@@ -442,7 +443,7 @@ const Attendance = () => {
                                     {!isEmployee && <div style={{ fontWeight: '600', marginBottom: '0.75rem', fontSize: '1rem' }}>{emp.displayName}</div>}
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
                                         <div style={{ textAlign: 'center', background: '#dcfce7', padding: '0.5rem', borderRadius: '6px' }}>
-                                            <div style={{ color: '#10b981', fontWeight: 'bold', fontSize: '1.1rem' }}>{empAtt.filter(a => a.status === 'present').length}</div>
+                                            <div style={{ color: '#10b981', fontWeight: 'bold', fontSize: '1.1rem' }}>{empAtt.filter(a => a.status === 'present' || a.status === 'permission').reduce((sum, a) => sum + (Number(a.presentHours) || 8), 0)}h</div>
                                             <div style={{ fontSize: '0.7rem', color: '#166534' }}>Present</div>
                                         </div>
                                         <div style={{ textAlign: 'center', background: '#fee2e2', padding: '0.5rem', borderRadius: '6px' }}>
@@ -744,26 +745,58 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
     const [statuses, setStatuses] = useState({});
     const [overtimeEnabled, setOvertimeEnabled] = useState({}); // Separate toggle for overtime
     const [overtimeHours, setOvertimeHours] = useState({});
+    const [presentHours, setPresentHours] = useState({}); // Track hours for present status
+    const [permissionHours, setPermissionHours] = useState({}); // Track hours separately for permission status
 
     useEffect(() => {
         // Pre-fill with existing attendance
         const existing = {};
         const existingOt = {};
         const existingOtEnabled = {};
+        const existingPresent = {};
+        const existingPermission = {};
         attendance.filter(a => a.date === selectedDate).forEach(a => {
             existing[a.userId] = a.status;
             if (a.overtimeHours) {
                 existingOt[a.userId] = a.overtimeHours;
                 existingOtEnabled[a.userId] = true;
             }
+            if (a.presentHours) {
+                existingPresent[a.userId] = a.presentHours;
+            } else if (a.status === 'present') {
+                existingPresent[a.userId] = 8; // Default 8 if present but no hours recorded
+            }
+
+            if (a.permissionHours) {
+                existingPermission[a.userId] = a.permissionHours;
+            } else if (a.status === 'permission') {
+                existingPermission[a.userId] = 2; // Default 2 hours if permission
+                existingPresent[a.userId] = 8; // Assume full day presence minus permission
+            }
         });
         setStatuses(existing);
         setOvertimeHours(existingOt);
         setOvertimeEnabled(existingOtEnabled);
+        setPresentHours(existingPresent);
+        setPermissionHours(existingPermission);
     }, [selectedDate, attendance]);
+
+    const handlePresentHoursChange = (empId, hours) => {
+        setPresentHours({ ...presentHours, [empId]: hours });
+    };
+
+    const handlePermissionHoursChange = (empId, hours) => {
+        setPermissionHours({ ...permissionHours, [empId]: hours });
+    };
 
     const handleStatusChange = (empId, status) => {
         setStatuses({ ...statuses, [empId]: status });
+        if (status === 'present' && !presentHours[empId]) {
+            setPresentHours({ ...presentHours, [empId]: 8 }); // Set default 8 hours
+        } else if (status === 'permission') {
+            if (!presentHours[empId]) setPresentHours({ ...presentHours, [empId]: 8 });
+            if (!permissionHours[empId]) setPermissionHours({ ...permissionHours, [empId]: 2 });
+        }
     };
 
     const handleOvertimeToggle = (empId) => {
@@ -779,6 +812,13 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
             if (status) {
                 // Include overtime data if overtime is enabled for this employee
                 const extraData = overtimeEnabled[empId] ? { overtimeHours: overtimeHours[empId] || 0 } : { overtimeHours: 0 };
+                // Include present hours if status is present
+                if (status === 'present') {
+                    extraData.presentHours = presentHours[empId] || 8;
+                } else if (status === 'permission') {
+                    extraData.presentHours = presentHours[empId] || 8;
+                    extraData.permissionHours = permissionHours[empId] || 2;
+                }
                 await onMark(empId, selectedDate, status, extraData);
             }
         }
@@ -788,6 +828,7 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
     // Base statuses (excluding standalone overtime)
     const baseStatuses = [
         { id: 'present', label: 'Present', color: '#10b981' },
+        { id: 'permission', label: 'Permission', color: '#0ea5e9' },
         { id: 'absent', label: 'Absent', color: '#ef4444' },
         { id: 'half-day', label: 'Half-day', color: '#f59e0b' },
         { id: 'paid_leave', label: 'Paid Leave', color: '#3b82f6' },
@@ -846,8 +887,91 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                                     ))}
                                 </div>
 
+                                {/* Hours Input for Present Status */}
+                                {statuses[emp.id] === 'present' && (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.75rem',
+                                        padding: '0.75rem',
+                                        background: 'rgba(16, 185, 129, 0.1)',
+                                        borderRadius: 'var(--radius-sm)',
+                                        border: '1px solid #10b981',
+                                        marginBottom: '0.5rem'
+                                    }}>
+                                        <span style={{ fontWeight: '500', color: '#10b981', flex: 1 }}>Hours Worked:</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.5"
+                                                value={presentHours[emp.id] !== undefined ? presentHours[emp.id] : 8}
+                                                onChange={(e) => handlePresentHoursChange(emp.id, e.target.value)}
+                                                placeholder="8"
+                                                style={{ width: '70px', padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #10b981' }}
+                                            />
+                                            <span style={{ fontSize: '0.875rem', color: 'var(--navy-500)' }}>hours</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Hours Input for Permission Status */}
+                                {statuses[emp.id] === 'permission' && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        {/* Working Hours Base */}
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.75rem',
+                                            padding: '0.75rem',
+                                            background: 'rgba(16, 185, 129, 0.1)',
+                                            borderRadius: 'var(--radius-sm)',
+                                            border: '1px solid #10b981'
+                                        }}>
+                                            <span style={{ fontWeight: '500', color: '#10b981', flex: 1 }}>Hours Worked:</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={presentHours[emp.id] !== undefined ? presentHours[emp.id] : 8}
+                                                    onChange={(e) => handlePresentHoursChange(emp.id, e.target.value)}
+                                                    placeholder="8"
+                                                    style={{ width: '70px', padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #10b981' }}
+                                                />
+                                                <span style={{ fontSize: '0.875rem', color: 'var(--navy-500)' }}>hours</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Permission Hours */}
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.75rem',
+                                            padding: '0.75rem',
+                                            background: 'rgba(14, 165, 233, 0.1)',
+                                            borderRadius: 'var(--radius-sm)',
+                                            border: '1px solid #0ea5e9'
+                                        }}>
+                                            <span style={{ fontWeight: '500', color: '#0ea5e9', flex: 1 }}>Permission Hours:</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.5"
+                                                    value={permissionHours[emp.id] !== undefined ? permissionHours[emp.id] : 2}
+                                                    onChange={(e) => handlePermissionHoursChange(emp.id, e.target.value)}
+                                                    placeholder="2"
+                                                    style={{ width: '70px', padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #0ea5e9' }}
+                                                />
+                                                <span style={{ fontSize: '0.875rem', color: 'var(--navy-500)' }}>hours</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Overtime Add-on (can be combined with Present) */}
-                                {(statuses[emp.id] === 'present' || statuses[emp.id] === 'half-day') && (
+                                {(statuses[emp.id] === 'present' || statuses[emp.id] === 'permission' || statuses[emp.id] === 'half-day') && (
                                     <div style={{
                                         display: 'flex',
                                         alignItems: 'center',
@@ -899,6 +1023,7 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
 const getStatusColor = (status) => {
     switch (status) {
         case 'present': return '#10b981';
+        case 'permission': return '#0ea5e9';
         case 'absent': return '#ef4444';
         case 'half-day': return '#f59e0b';
         case 'paid_leave': return '#3b82f6';

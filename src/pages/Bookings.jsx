@@ -408,7 +408,29 @@ const Bookings = () => {
                                                     <td>{booking.bookingDate}<br />{booking.startTime}</td>
                                                     <td>{formatCurrency(booking.price)}</td>
                                                     <td>
-                                                        <span className={`badge ${badge.class}`}>{badge.label}</span>
+                                                        {hasPermission('bookings', 'edit') && viewMode !== 'archived' ? (
+                                                            <select
+                                                                className={`badge ${badge.class}`}
+                                                                value={booking.status}
+                                                                onChange={(e) => {
+                                                                    const newStatus = e.target.value;
+                                                                    if (newStatus === 'completed') {
+                                                                        handleCompleteClick(booking);
+                                                                    } else {
+                                                                        updateBookingStatus(booking.id, newStatus);
+                                                                    }
+                                                                }}
+                                                                style={{ cursor: 'pointer', border: 'none', outline: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23000%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right .7rem top 50%', backgroundSize: '.65rem auto' }}
+                                                            >
+                                                                <option value="pending_confirmation">Pending</option>
+                                                                <option value="confirmed">Confirmed</option>
+                                                                <option value="in_progress">In Progress</option>
+                                                                <option value="completed">Completed</option>
+                                                                <option value="cancelled">Cancelled</option>
+                                                            </select>
+                                                        ) : (
+                                                            <span className={`badge ${badge.class}`}>{badge.label}</span>
+                                                        )}
                                                         {booking.completedByName && booking.status === 'completed' && (
                                                             <div style={{ fontSize: '0.7rem', color: 'var(--success)', marginTop: '4px', whiteSpace: 'nowrap' }}>
                                                                 Done: {booking.completedByName.split(' ')[0]}
@@ -500,7 +522,29 @@ const Bookings = () => {
                                                         {booking.createdByName ? `By: ${booking.createdByName.split(' ')[0]}` : ''}
                                                     </div>
                                                 </div>
-                                                <span className={`badge ${badge.class}`}>{badge.label}</span>
+                                                {hasPermission('bookings', 'edit') && viewMode !== 'archived' ? (
+                                                    <select
+                                                        className={`badge ${badge.class}`}
+                                                        value={booking.status}
+                                                        onChange={(e) => {
+                                                            const newStatus = e.target.value;
+                                                            if (newStatus === 'completed') {
+                                                                handleCompleteClick(booking);
+                                                            } else {
+                                                                updateBookingStatus(booking.id, newStatus);
+                                                            }
+                                                        }}
+                                                        style={{ cursor: 'pointer', border: 'none', outline: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23000%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right .5rem top 50%', backgroundSize: '.5rem auto' }}
+                                                    >
+                                                        <option value="pending_confirmation">Pending</option>
+                                                        <option value="confirmed">Confirmed</option>
+                                                        <option value="in_progress">In Progress</option>
+                                                        <option value="completed">Completed</option>
+                                                        <option value="cancelled">Cancelled</option>
+                                                    </select>
+                                                ) : (
+                                                    <span className={`badge ${badge.class}`}>{badge.label}</span>
+                                                )}
                                             </div>
                                             <div className="booking-card-body">
                                                 <p><CarIcon size={14} /> {booking.serviceName}</p>

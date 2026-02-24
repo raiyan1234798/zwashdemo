@@ -56,12 +56,12 @@ const Login = () => {
                     <div className="branding-content">
                         <div className="brand-logo-container">
                             <div className="brand-logo-glow"></div>
-                            <div className="brand-logo">
-                                <Car size={48} />
+                            <div className="brand-logo" style={{ background: 'white', padding: '8px', borderRadius: '12px', display: 'flex' }}>
+                                <img src="/detail.svg" alt="Detailing Commando Logo" style={{ height: '48px', width: 'auto' }} />
                             </div>
                         </div>
-                        <h1 className="brand-title">ZWash</h1>
-                        <p className="brand-subtitle">Car Wash Management System</p>
+                        <h1 className="brand-title">Detailing Commando</h1>
+                        <p className="brand-subtitle">Detailing & Wash Management System</p>
 
                         <div className="brand-features">
                             <div className="brand-feature">
@@ -155,12 +155,12 @@ const Login = () => {
                             </div>
                             <div className="info-content">
                                 <p className="info-title">Authorized Access Only</p>
-                                <p className="info-text">This portal is restricted to ZWash administrators. Contact your system admin for access permissions.</p>
+                                <p className="info-text">This portal is restricted to administrators. Contact your system admin for access permissions.</p>
                             </div>
                         </div>
 
                         <div className="login-footer">
-                            <p>© 2024 ZWash. All rights reserved.</p>
+                            <p>© 2024 Detailing Commando. All rights reserved.</p>
                         </div>
                     </div>
                 </div>
@@ -213,8 +213,8 @@ const OnboardingForm = () => {
                     <div className="login-card-header">
                         <div className="brand-logo-container small">
                             <div className="brand-logo-glow"></div>
-                            <div className="brand-logo">
-                                <Car size={32} />
+                            <div className="brand-logo" style={{ background: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                                <img src="/detail.svg" alt="Detailing Commando Logo" style={{ height: '32px', width: 'auto' }} />
                             </div>
                         </div>
                         <h2>Complete Your Profile</h2>

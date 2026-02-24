@@ -21,6 +21,7 @@ const Invoices = () => {
     const [archivedInvoices, setArchivedInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [exportPaymentFilter, setExportPaymentFilter] = useState('all');
     const [settings, setSettings] = useState(null);
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -119,17 +120,53 @@ const Invoices = () => {
     };
 
     const exportToExcel = () => {
-        const exportData = invoices.map(inv => ({
-            'Invoice #': inv.bookingReference || inv.id.slice(0, 8),
-            Date: inv.bookingDate,
-            Service: inv.serviceName,
-            Amount: inv.price,
-            'Paid Amount': inv.paidAmount || 0,
-            'Payment Status': inv.paymentStatus || 'unpaid',
-            'License Plate': inv.licensePlate,
-            'Customer Name': inv.customerName,
-            'Customer Phone': inv.contactPhone
-        }));
+        const exportData = invoices.map(inv => {
+            // Calculate payment methods from history
+            const methodTotals = {};
+            if (inv.paymentHistory && Array.isArray(inv.paymentHistory)) {
+                inv.paymentHistory.forEach(historyEntry => {
+                    if (historyEntry.splits && Array.isArray(historyEntry.splits)) {
+                        historyEntry.splits.forEach(split => {
+                            const mode = split.mode || 'unknown';
+                            methodTotals[mode] = (methodTotals[mode] || 0) + (Number(split.amount) || 0);
+                        });
+                    }
+                });
+            } else if (inv.paymentMode && inv.paymentMode !== 'none') {
+                // Fallback for older invoices without detailed history
+                methodTotals[inv.paymentMode] = inv.paidAmount || 0;
+            }
+
+            // Format as a string: "CASH (₹500), UPI (₹200)"
+            const paymentMethodsStr = Object.entries(methodTotals)
+                .filter(([_, amount]) => amount > 0)
+                .map(([mode, amount]) => `${mode.toUpperCase()} (₹${amount})`)
+                .join(', ') || 'None';
+
+            const hasFilteredMethod = exportPaymentFilter === 'all' ||
+                (Object.keys(methodTotals).length === 0 && exportPaymentFilter === 'unpaid') ||
+                methodTotals[exportPaymentFilter] > 0;
+
+            if (!hasFilteredMethod) return null;
+
+            return {
+                'Invoice #': inv.bookingReference || inv.id.slice(0, 8),
+                Date: inv.bookingDate || inv.invoiceDate,
+                Service: inv.serviceName,
+                Amount: inv.price,
+                'Paid Amount': inv.paidAmount || 0,
+                'Payment Status': inv.paymentStatus || 'unpaid',
+                'Payment Method': paymentMethodsStr,
+                'License Plate': inv.licensePlate,
+                'Customer Name': inv.customerName,
+                'Customer Phone': inv.contactPhone
+            };
+        }).filter(Boolean); // Remove nulls from the filter
+
+        if (exportData.length === 0) {
+            alert(`No invoices found for the selected payment method: ${exportPaymentFilter}`);
+            return;
+        }
 
         const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
@@ -452,9 +489,9 @@ const Invoices = () => {
     <div class="invoice-container">
         <div class="invoice-header">
             <div class="company-info">
-                <img src="/detail.svg" class="company-logo" alt="ZWash Logo" />
+                <img src="/detail.svg" class="company-logo" alt="Detailing Commando Logo" />
                 <div class="company-details">
-                    <h1>${settings?.businessName || 'ZWash Car Wash'}</h1>
+                    <h1>${settings?.businessName || 'Detailing Commando'}</h1>
                     <p>Suchindram Byp, near Ragavendra Temple</p>
                     <p>Nagercoil, Tamil Nadu 629704</p>
                     <p class="contact">📞 +91 9363911500 | ✉️ detailingcommando@gmail.com</p>
@@ -579,7 +616,7 @@ const Invoices = () => {
     // Share invoice via WhatsApp
     const shareViaWhatsApp = (invoice) => {
         const link = getInvoiceLink(invoice);
-        const message = `Hi! Here's your invoice from ${settings?.businessName || 'ZWash Car Wash'}\n\n` +
+        const message = `Hi! Here's your invoice from ${settings?.businessName || 'Detailing Commando'}\n\n` +
             `📋 Invoice: #${invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}\n` +
             `🚗 Service: ${invoice.serviceName}\n` +
             `💰 Amount: ${formatCurrency(invoice.price)}\n` +
@@ -751,12 +788,41 @@ const Invoices = () => {
                 </div>
 
                 <div className="header-actions">
-                    <button className="btn btn-secondary" onClick={exportToExcel}>
-                        <Download size={18} /> Export
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', border: '1px solid var(--navy-200)', borderRadius: '8px', padding: '0 0.5rem' }}>
+                        <select
+                            value={exportPaymentFilter}
+                            onChange={(e) => setExportPaymentFilter(e.target.value)}
+                            style={{
+                                border: 'none',
+                                outline: 'none',
+                                background: 'transparent',
+                                padding: '0.625rem 0',
+                                cursor: 'pointer',
+                                color: 'var(--navy-700)',
+                                fontSize: '0.875rem',
+                                fontWeight: '500'
+                            }}
+                            title="Filter Excel Export by Payment Method"
+                        >
+                            <option value="all">All Methods</option>
+                            <option value="cash">Cash</option>
+                            <option value="upi">UPI</option>
+                            <option value="card">Card</option>
+                            <option value="bank_transfer">Bank Transfer</option>
+                            <option value="unpaid">Unpaid Only</option>
+                        </select>
+                        <div style={{ width: '1px', height: '24px', background: 'var(--navy-200)' }}></div>
+                        <button className="btn btn-secondary" onClick={exportToExcel} style={{ border: 'none', background: 'transparent', paddingLeft: '0.5rem' }}>
+                            <Download size={20} /> Export
+                        </button>
+                    </div>
+
                     {hasPermission('bookings', 'create') && (
-                        <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-                            <Plus size={18} /> Create Invoice
+                        <button
+                            className="btn btn-primary"
+                            onClick={() => setShowCreateModal(true)}
+                        >
+                            <Plus size={20} /> Create Invoice
                         </button>
                     )}
                 </div>
