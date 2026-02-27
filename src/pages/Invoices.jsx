@@ -616,14 +616,15 @@ const Invoices = () => {
     // Share invoice via WhatsApp
     const shareViaWhatsApp = (invoice) => {
         const link = getInvoiceLink(invoice);
-        const message = `Hi! Here's your invoice from ${settings?.businessName || 'Detailing Commando'}\n\n` +
-            `📋 Invoice: #${invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}\n` +
-            `🚗 Service: ${invoice.serviceName}\n` +
-            `💰 Amount: ${formatCurrency(invoice.price)}\n` +
-            `📅 Date: ${invoice.bookingDate || invoice.invoiceDate}\n\n` +
+        const message =
+            `Hi! Here's your invoice from *${(settings?.businessName || 'Detailing Commando').trim()}*\n\n` +
+            `*Invoice:* #${invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}\n` +
+            `*Service:* ${invoice.serviceName}\n` +
+            `*Amount:* ${formatCurrency(invoice.price)}\n` +
+            `*Date:* ${invoice.bookingDate || invoice.invoiceDate}\n\n` +
             `View your invoice online: ${link}\n\n` +
-            `Thank you for choosing us! 🙏`;
-
+            `Thank you for choosing *Detailing Commando*!\n\n` +
+            `_Powered by Z3Connect_`;
         let phone = invoice.contactPhone?.replace(/[^0-9]/g, '') || '';
         // Add India country code if not present
         if (phone.length === 10) phone = '91' + phone;
@@ -1740,7 +1741,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                                     setShowServiceDropdown(true);
                                 }}
                                 onFocus={() => setShowServiceDropdown(true)}
-                                onBlur={() => setTimeout(() => setShowServiceDropdown(false), 200)}
+                                onBlur={() => setTimeout(() => setShowServiceDropdown(false), 300)}
                                 required
                                 placeholder="Search or type service name..."
                                 autoComplete="off"
@@ -1762,7 +1763,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                                     {filteredServices.map(item => (
                                         <div
                                             key={item.id}
-                                            onClick={() => handleServiceSelect(item)}
+                                            onMouseDown={() => handleServiceSelect(item)}
                                             style={{
                                                 padding: '0.75rem 1rem',
                                                 cursor: 'pointer',
