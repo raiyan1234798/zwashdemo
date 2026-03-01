@@ -29,8 +29,10 @@ import {
     Circle,
     Car,
     Edit,
-    Trash2
+    Trash2,
+    FileText
 } from 'lucide-react';
+import SplitPaymentSelector from '../components/SplitPaymentSelector';
 
 const AMCPlans = () => {
     const { hasPermission, userProfile, isAdmin } = useAuth();
@@ -46,6 +48,8 @@ const AMCPlans = () => {
     const [selectedSubscription, setSelectedSubscription] = useState(null);
     const [subscriptions, setSubscriptions] = useState([]);
     const [seeding, setSeeding] = useState(false);
+    const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+    const [invoiceSubscription, setInvoiceSubscription] = useState(null);
 
     useEffect(() => {
         if (activeTab === 'plans') {
@@ -347,6 +351,16 @@ const AMCPlans = () => {
                                                                     >
                                                                         <Eye size={14} /> Track
                                                                     </button>
+                                                                    {hasPermission('bookings', 'create') && (
+                                                                        <button
+                                                                            className="btn btn-sm"
+                                                                            style={{ background: '#10b981', color: 'white' }}
+                                                                            onClick={() => { setInvoiceSubscription(sub); setShowInvoiceModal(true); }}
+                                                                            title="Create Invoice"
+                                                                        >
+                                                                            <FileText size={14} /> Invoice
+                                                                        </button>
+                                                                    )}
                                                                     {hasPermission('services', 'edit') && (
                                                                         <button
                                                                             className="btn btn-sm btn-secondary"
@@ -439,6 +453,15 @@ const AMCPlans = () => {
                                                         >
                                                             <Eye size={14} /> Track
                                                         </button>
+                                                        {hasPermission('bookings', 'create') && (
+                                                            <button
+                                                                className="btn btn-sm"
+                                                                style={{ background: '#10b981', color: 'white', flex: 1, justifyContent: 'center' }}
+                                                                onClick={() => { setInvoiceSubscription(sub); setShowInvoiceModal(true); }}
+                                                            >
+                                                                <FileText size={14} /> Invoice
+                                                            </button>
+                                                        )}
                                                         {hasPermission('services', 'edit') && (
                                                             <button
                                                                 className="btn btn-sm btn-secondary"
@@ -497,6 +520,15 @@ const AMCPlans = () => {
                     subscription={selectedSubscription}
                     onClose={() => { setShowEditSubModal(false); setSelectedSubscription(null); }}
                     onSuccess={fetchSubscriptions}
+                />
+            )}
+
+            {showInvoiceModal && invoiceSubscription && (
+                <SubscriptionInvoiceModal
+                    subscription={invoiceSubscription}
+                    onClose={() => { setShowInvoiceModal(false); setInvoiceSubscription(null); }}
+                    onSuccess={fetchSubscriptions}
+                    userProfile={userProfile}
                 />
             )}
 
@@ -1147,6 +1179,7 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
 
             await addDoc(collection(db, 'customer_amc_subscriptions'), subscriptionData);
 
+            /* 
             // Create Invoice
             const invoiceData = {
                 bookingReference: `INV-AMC-${Date.now().toString().slice(-6)}`,
@@ -1177,8 +1210,9 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
             };
 
             await addDoc(collection(db, 'invoices'), invoiceData);
+            */
 
-            alert('Plan assigned and invoice generated successfully!');
+            alert('Plan assigned successfully!');
             if (onSuccess) onSuccess();
             onClose();
         } catch (error) {
@@ -1634,6 +1668,7 @@ const ServiceTrackingModal = ({ subscription, onClose, onUpdate }) => {
                 updatedAt: serverTimestamp()
             });
 
+            /*
             // Generate 0-value Invoice for Record
             const invoiceData = {
                 invoiceNumber: `INV-AMC-USE-${Date.now()}`,
@@ -1663,6 +1698,7 @@ const ServiceTrackingModal = ({ subscription, onClose, onUpdate }) => {
             };
 
             await addDoc(collection(db, 'invoices'), invoiceData);
+            */
 
             setServiceTracking(updated);
             setShowAddUsage(false);
@@ -1907,6 +1943,127 @@ const ServiceTrackingModal = ({ subscription, onClose, onUpdate }) => {
                 </div>
                 <div className="modal-footer">
                     <button className="btn btn-secondary" onClick={onClose}>Close</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const SubscriptionInvoiceModal = ({ subscription, onClose, onSuccess, userProfile }) => {
+    const [paymentSplits, setPaymentSplits] = useState([{ mode: 'cash', amount: '' }]);
+    const [price, setPrice] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const ref = `INV-AMC-${Date.now().toString().slice(-6)}`;
+
+            const totalPrice = Number(price) || 0;
+            const paidAmount = paymentSplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
+
+            let paymentStatus = 'unpaid';
+            if (paidAmount >= totalPrice && totalPrice > 0) paymentStatus = 'paid';
+            else if (paidAmount > 0) paymentStatus = 'partial';
+
+            const paymentHistory = paidAmount > 0 ? [{
+                date: new Date().toISOString(),
+                amount: paidAmount,
+                splits: paymentSplits.filter(s => Number(s.amount) > 0).map(s => ({ mode: s.mode, amount: Number(s.amount) })),
+                recordedBy: userProfile?.uid || 'system',
+                note: 'AMC Milestone Payment'
+            }] : [];
+
+            const invoiceData = {
+                bookingReference: ref,
+                customerId: subscription.customerId || 'unknown',
+                customerName: subscription.customerName || 'Unknown',
+                contactPhone: subscription.customerPhone || '',
+                licensePlate: subscription.vehicleNumber || '',
+                carMake: '',
+                carModel: '',
+                serviceName: `AMC Payment: ${subscription.planName}`,
+                price: totalPrice,
+                paidAmount: paidAmount,
+                paymentStatus: paymentStatus,
+                paymentMode: paidAmount > 0 ? (paymentSplits[0]?.mode || 'cash') : 'none',
+                paymentHistory: paymentHistory,
+                status: 'completed',
+                invoiceDate: new Date().toISOString().split('T')[0],
+                createdAt: serverTimestamp(),
+                createdBy: userProfile?.uid || 'system',
+                isManual: true,
+                source: 'invoice'
+            };
+
+            await addDoc(collection(db, 'invoices'), invoiceData);
+
+            alert('Invoice created successfully!');
+            onSuccess();
+            onClose();
+        } catch (error) {
+            console.error('Error creating invoice:', error);
+            alert('Failed to create invoice');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="modal">
+            <div className="modal-content">
+                <div className="modal-header">
+                    <h2><FileText size={20} /> Create AMC Invoice</h2>
+                    <button className="modal-close" onClick={onClose}><X size={20} /></button>
+                </div>
+                <div className="modal-body" style={{ padding: '20px' }}>
+                    <form onSubmit={handleSubmit}>
+                        <div className="form-group" style={{ marginBottom: '15px' }}>
+                            <label style={{ display: 'block', marginBottom: '5px' }}>Customer</label>
+                            <input type="text" className="form-control" value={`${subscription.customerName} (${subscription.vehicleNumber})`} disabled style={{ width: '100%', padding: '8px' }} />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: '15px' }}>
+                            <label style={{ display: 'block', marginBottom: '5px' }}>Plan</label>
+                            <input type="text" className="form-control" value={subscription.planName} disabled style={{ width: '100%', padding: '8px' }} />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: '15px' }}>
+                            <label style={{ display: 'block', marginBottom: '5px' }}>Invoice Amount (₹) *</label>
+                            <input
+                                type="number"
+                                className="form-control"
+                                value={price}
+                                onChange={(e) => setPrice(e.target.value)}
+                                min="0"
+                                required
+                                placeholder="Enter amount to invoice"
+                                style={{ width: '100%', padding: '8px' }}
+                            />
+                        </div>
+
+                        <SplitPaymentSelector
+                            splits={paymentSplits}
+                            onAddSplit={() => setPaymentSplits([...paymentSplits, { mode: 'cash', amount: '' }])}
+                            onRemoveSplit={(index) => {
+                                if (paymentSplits.length > 1) {
+                                    setPaymentSplits(paymentSplits.filter((_, i) => i !== index));
+                                }
+                            }}
+                            onSplitChange={(index, field, value) => {
+                                const newSplits = [...paymentSplits];
+                                newSplits[index][field] = value;
+                                setPaymentSplits(newSplits);
+                            }}
+                            totalAmount={Number(price) || 0}
+                        />
+
+                        <div className="modal-footer" style={{ marginTop: '1.5rem', display: 'flex', gap: '10px' }}>
+                            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                            <button type="submit" className="btn btn-primary" disabled={loading}>
+                                {loading ? 'Creating...' : 'Create Invoice'}
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

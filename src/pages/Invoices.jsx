@@ -120,32 +120,40 @@ const Invoices = () => {
     };
 
     const exportToExcel = () => {
-        const exportData = invoices.map(inv => {
+        const exportData = filteredInvoices.map(inv => {
             // Calculate payment methods from history
             const methodTotals = {};
             if (inv.paymentHistory && Array.isArray(inv.paymentHistory)) {
                 inv.paymentHistory.forEach(historyEntry => {
                     if (historyEntry.splits && Array.isArray(historyEntry.splits)) {
                         historyEntry.splits.forEach(split => {
-                            const mode = split.mode || 'unknown';
+                            const mode = (split.mode || 'unknown').toLowerCase().trim();
                             methodTotals[mode] = (methodTotals[mode] || 0) + (Number(split.amount) || 0);
                         });
                     }
                 });
-            } else if (inv.paymentMode && inv.paymentMode !== 'none') {
-                // Fallback for older invoices without detailed history
-                methodTotals[inv.paymentMode] = inv.paidAmount || 0;
             }
 
-            // Format as a string: "CASH (₹500), UPI (₹200)"
-            const paymentMethodsStr = Object.entries(methodTotals)
+            // Fallback for older invoices or if history had no splits
+            if (Object.keys(methodTotals).length === 0 && inv.paymentMode && inv.paymentMode !== 'none') {
+                methodTotals[inv.paymentMode.toLowerCase().trim()] = inv.paidAmount || 0;
+            }
+
+            // If a specific method is filtered, only show that method in the column
+            // Otherwise, show all methods used for this invoice
+            const methodsToShow = (exportPaymentFilter !== 'all' && exportPaymentFilter !== 'unpaid')
+                ? { [exportPaymentFilter.toLowerCase()]: methodTotals[exportPaymentFilter.toLowerCase()] || 0 }
+                : methodTotals;
+
+            // Format as a string: "CASH (₹500), UPI (₹200)" or just "UPI (₹200)" depending on filter
+            const paymentMethodsStr = Object.entries(methodsToShow)
                 .filter(([_, amount]) => amount > 0)
                 .map(([mode, amount]) => `${mode.toUpperCase()} (₹${amount})`)
                 .join(', ') || 'None';
 
             const hasFilteredMethod = exportPaymentFilter === 'all' ||
                 (Object.keys(methodTotals).length === 0 && exportPaymentFilter === 'unpaid') ||
-                methodTotals[exportPaymentFilter] > 0;
+                methodTotals[exportPaymentFilter.toLowerCase()] > 0;
 
             if (!hasFilteredMethod) return null;
 
@@ -153,8 +161,8 @@ const Invoices = () => {
                 'Invoice #': inv.bookingReference || inv.id.slice(0, 8),
                 Date: inv.bookingDate || inv.invoiceDate,
                 Service: inv.serviceName,
-                Amount: inv.price,
-                'Paid Amount': inv.paidAmount || 0,
+                'Total Amount': inv.price,
+                'Paid Amount': exportPaymentFilter === 'all' ? (inv.paidAmount || 0) : (methodTotals[exportPaymentFilter.toLowerCase()] || 0),
                 'Payment Status': inv.paymentStatus || 'unpaid',
                 'Payment Method': paymentMethodsStr,
                 'License Plate': inv.licensePlate,
@@ -823,7 +831,7 @@ const Invoices = () => {
                             className="btn btn-primary"
                             onClick={() => setShowCreateModal(true)}
                         >
-                            <Plus size={20} /> Create Invoice
+                            <Plus size={20} /> Create Manual Invoice
                         </button>
                     )}
                 </div>
@@ -1461,6 +1469,7 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
 };
 
 const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
+    const [paymentSplits, setPaymentSplits] = useState([{ mode: 'cash', amount: '' }]);
     const [formData, setFormData] = useState({
         customerName: '',
         contactPhone: '',

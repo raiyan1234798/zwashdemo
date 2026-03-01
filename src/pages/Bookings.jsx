@@ -190,6 +190,9 @@ const Bookings = () => {
     };
 
     const filteredBookings = bookings.filter(booking => {
+        // Status Filter Fallback (Client-side)
+        if (filter !== 'all' && booking.status !== filter) return false;
+
         // Date Range Filter
         if (dateFilter.start && booking.bookingDate < dateFilter.start) return false;
         if (dateFilter.end && booking.bookingDate > dateFilter.end) return false;
