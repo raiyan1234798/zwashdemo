@@ -201,7 +201,7 @@ const Settings = () => {
                             <div className="form-row">
                                 <div className="form-group">
                                     <label>Primary Brand Color</label>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <div className="form-group-color-input" style={{ display: 'flex', gap: '0.5rem' }}>
                                         <input
                                             type="color"
                                             value={theme?.primaryColor || '#047857'}
@@ -218,7 +218,7 @@ const Settings = () => {
                                 </div>
                                 <div className="form-group">
                                     <label>Secondary / Accent Color</label>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <div className="form-group-color-input" style={{ display: 'flex', gap: '0.5rem' }}>
                                         <input
                                             type="color"
                                             value={theme?.secondaryColor || '#d97706'}
@@ -235,7 +235,7 @@ const Settings = () => {
                                 </div>
                                 <div className="form-group">
                                     <label>Sidebar Background</label>
-                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                    <div className="form-group-color-input" style={{ display: 'flex', gap: '0.5rem' }}>
                                         <input
                                             type="color"
                                             value={theme?.sidebarColor || '#1e293b'}
@@ -480,9 +480,11 @@ const Settings = () => {
         }
         
         .settings-grid .card {
+          background: white;
           border-radius: var(--radius-lg);
           box-shadow: var(--shadow-sm);
           overflow: hidden;
+          border: 1px solid var(--navy-100);
         }
         
         .settings-grid .card-header {
@@ -504,6 +506,17 @@ const Settings = () => {
         .settings-grid .card-body {
           padding: 1.25rem;
         }
+
+        .form-row {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+            margin-bottom: 0;
+        }
         
         .gst-toggle {
           background: var(--navy-100);
@@ -519,12 +532,24 @@ const Settings = () => {
           transition: all 0.2s ease;
         }
         
-        .gst-toggle.enabled {
-          background: var(--primary);
-          color: white;
-        }
-        
         @media (max-width: 768px) {
+          .page-header {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 1rem;
+          }
+
+          .header-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
+          }
+
+          .header-actions .btn {
+            width: 100%;
+            justify-content: center;
+          }
+
           .settings-grid {
             gap: 1rem;
           }
@@ -533,16 +558,22 @@ const Settings = () => {
             padding: 0.875rem 1rem;
           }
           
-          .settings-grid .card-header h3 {
-            font-size: 0.9rem;
-          }
-          
           .settings-grid .card-body {
             padding: 1rem;
           }
           
           .form-row {
             flex-direction: column;
+            gap: 1rem;
+          }
+
+          .form-group-color-input {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+
+          .form-group-color-input input[type="text"] {
+            width: 100% !important;
           }
           
           .settings-grid textarea {

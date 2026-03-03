@@ -271,19 +271,19 @@ const Calendar = () => {
 
                   // Check if this slot overlaps with any existing booking
                   const overlappingBooking = selectedBookings.find(b => {
-                      const bStart = timeToMinutes(b.startTime);
-                      const bDuration = Number(b.durationMinutes || b.serviceDuration || b.duration || 30);
-                      const bEnd = bStart + bDuration;
-                      
-                      // Check for overlap: StartA < EndB && StartB < EndA
-                      return slotStartMin < bEnd && bStart < slotEndMin;
+                    const bStart = timeToMinutes(b.startTime);
+                    const bDuration = Number(b.durationMinutes || b.serviceDuration || b.duration || 30);
+                    const bEnd = bStart + bDuration;
+
+                    // Check for overlap: StartA < EndB && StartB < EndA
+                    return slotStartMin < bEnd && bStart < slotEndMin;
                   });
 
                   // Determine status
                   // Priority: Booked > Past Unbooked > Available
                   const now = new Date();
                   const slotDateTime = new Date(`${selectedDate}T${slot.time}`);
-                  
+
                   // Use a margin for "current time" to not gray out current slot immediately
                   const isPast = slotDateTime.getTime() < now.getTime() - (5 * 60000); // 5 min buffer
 
@@ -294,23 +294,23 @@ const Calendar = () => {
                   let isBooked = false;
 
                   if (overlappingBooking) {
-                      isBooked = true;
-                      statusColor = '#ef4444'; // Red
-                      bgColor = '#fef2f2';
-                      borderColor = '#fca5a5';
-                      label = 'Booked';
+                    isBooked = true;
+                    statusColor = '#ef4444'; // Red
+                    bgColor = '#fef2f2';
+                    borderColor = '#fca5a5';
+                    label = 'Booked';
                   } else if (isPast) {
-                      statusColor = '#94a3b8'; // Gray
-                      bgColor = '#f8fafc';
-                      borderColor = '#e2e8f0';
-                      label = 'Passed';
+                    statusColor = '#94a3b8'; // Gray
+                    bgColor = '#f8fafc';
+                    borderColor = '#e2e8f0';
+                    label = 'Passed';
                   } else if (!slot.available) {
-                      // Blocked by something else (e.g. break) but not a booking in our list?
-                      // Or just use the engine's reason
-                      statusColor = '#f59e0b'; // Amber
-                      bgColor = '#fffbeb';
-                      borderColor = '#fcd34d';
-                      label = 'Unavailable';
+                    // Blocked by something else (e.g. break) but not a booking in our list?
+                    // Or just use the engine's reason
+                    statusColor = '#f59e0b'; // Amber
+                    bgColor = '#fffbeb';
+                    borderColor = '#fcd34d';
+                    label = 'Unavailable';
                   }
 
                   return (
@@ -349,9 +349,9 @@ const Calendar = () => {
                             {overlappingBooking.customerName?.split(' ')[0] || 'Customer'}
                           </div>
                           {overlappingBooking.serviceName && (
-                              <div style={{ fontSize: '0.6rem', color: 'var(--navy-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {overlappingBooking.serviceName}
-                              </div>
+                            <div style={{ fontSize: '0.6rem', color: 'var(--navy-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {overlappingBooking.serviceName}
+                            </div>
                           )}
                         </div>
                       ) : (
@@ -546,6 +546,12 @@ const Calendar = () => {
         }
 
         @media (max-width: 768px) {
+          .calendar-page .page-header {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 1rem;
+          }
+
           .calendar-page .page-header h1 {
             font-size: 1.25rem;
             display: flex;
@@ -607,6 +613,16 @@ const Calendar = () => {
           
           .selected-day-bookings {
             margin-bottom: 1rem;
+          }
+
+          .timeline-grid {
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+            gap: 0.35rem;
+          }
+
+          .timeline-slot {
+            min-height: 50px;
+            padding: 0.35rem;
           }
         }
         

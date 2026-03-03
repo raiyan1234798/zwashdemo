@@ -510,6 +510,18 @@ const Attendance = () => {
             )}
 
             <style>{`
+                .page-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 2rem;
+                }
+
+                .header-actions {
+                    display: flex;
+                    gap: 1rem;
+                }
+
                 .calendar-header {
                     display: flex;
                     align-items: center;
@@ -541,7 +553,7 @@ const Attendance = () => {
                 .calendar-day {
                     min-height: 80px;
                     padding: 0.5rem;
-                    background: var(--navy-50);
+                    background: var(--navy-100);
                     border-radius: var(--radius-sm);
                     position: relative;
                 }
@@ -551,7 +563,7 @@ const Attendance = () => {
                 }
                 
                 .calendar-day.today {
-                    background: var(--primary-light);
+                    background: white;
                     border: 2px solid var(--primary);
                 }
 
@@ -597,11 +609,12 @@ const Attendance = () => {
                 
                 .attendance-legend {
                     display: flex;
-                    gap: 1.5rem;
+                    gap: 1rem;
                     justify-content: center;
                     margin-top: 1.5rem;
                     padding-top: 1rem;
                     border-top: 1px solid var(--navy-100);
+                    flex-wrap: wrap;
                 }
                 
                 .legend-dot {
@@ -618,30 +631,75 @@ const Attendance = () => {
                 .mobile-cards { display: none; }
                 
                 @media (max-width: 768px) {
+                    .page-header {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 1rem;
+                    }
+
+                    .header-actions {
+                        width: 100%;
+                        flex-direction: column;
+                        gap: 0.5rem;
+                    }
+
+                    .header-actions .btn {
+                        width: 100%;
+                        justify-content: center;
+                    }
+
+                    .quick-stats-row {
+                        grid-template-columns: 1fr;
+                        gap: 0.75rem;
+                    }
+
                     .calendar-day {
                         min-height: 50px;
-                        padding: 0.25rem;
+                        padding: 0.15rem;
                     }
                     
                     .day-number {
-                        font-size: 0.75rem;
+                        font-size: 0.7rem;
+                    }
+
+                    .holiday-badge {
+                        font-size: 0.5rem;
+                        padding: 1px 2px;
                     }
                     
                     .attendance-dot {
-                        width: 16px;
-                        height: 16px;
+                        width: 14px;
+                        height: 14px;
+                    }
+
+                    .attendance-dot svg {
+                        width: 10px;
+                        height: 10px;
                     }
                     
                     .attendance-legend {
-                        flex-wrap: wrap;
-                        gap: 0.75rem;
+                        font-size: 0.75rem;
+                        gap: 0.5rem;
                     }
 
                     .desktop-table { display: none; }
                     .mobile-cards { display: block; }
+
+                    .search-filter-bar {
+                        padding: 0;
+                    }
+
+                    .filter-select {
+                        width: 100%;
+                    }
+
+                    .calendar-header h2 {
+                        font-size: 1.1rem;
+                        min-width: 120px;
+                    }
                 }
             `}</style>
-        </div>
+        </div >
     );
 };
 

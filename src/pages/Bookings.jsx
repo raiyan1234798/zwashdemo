@@ -22,6 +22,7 @@ import {
     getSettings,
     formatTime12Hour as formatTimeEngine
 } from '../utils/schedulingEngine';
+import { getNextInvoiceNumber } from '../utils/invoiceUtils';
 import {
     ClipboardList,
     Plus,
@@ -632,6 +633,8 @@ const Bookings = () => {
 
                         // 2. Generate Invoice
                         try {
+                            const sequentialInv = await getNextInvoiceNumber(db, data.paymentSplits || []);
+
                             const materialItems = (data.materialsUsed || []).map(m => ({
                                 description: `Material: ${m.name}`,
                                 quantity: m.quantity,
@@ -651,8 +654,16 @@ const Bookings = () => {
 
                             const finalTotal = Number(completingBooking.price || 0) + (data.totalMaterialCost || 0);
 
+                            const paymentHistory = [{
+                                date: new Date().toISOString(),
+                                amount: finalTotal,
+                                splits: (data.paymentSplits || []).map(s => ({ mode: s.mode, amount: Number(s.amount) || 0 })),
+                                recordedBy: user?.uid || 'unknown',
+                                note: 'Initial payment at completion'
+                            }];
+
                             await addDoc(collection(db, 'invoices'), {
-                                invoiceNumber: `INV-${Date.now()}`,
+                                invoiceNumber: sequentialInv,
                                 bookingId: completingBooking.id,
                                 customerId: completingBooking.customerId || 'walk-in',
                                 customerName: completingBooking.customerName || 'Guest',
@@ -662,9 +673,11 @@ const Bookings = () => {
                                 items: invoiceItems,
                                 subtotal: finalTotal,
                                 total: finalTotal,
-                                amountPaid: finalTotal, // Assuming settled on completion
+                                amountPaid: finalTotal,
                                 balance: 0,
                                 status: 'paid',
+                                paymentHistory: paymentHistory,
+                                paymentMode: (data.paymentSplits && data.paymentSplits[0]?.mode) || 'cash',
                                 date: serverTimestamp(),
                                 createdAt: serverTimestamp()
                             });
@@ -689,8 +702,74 @@ const Bookings = () => {
             )}
 
             <style>{`
-{/* Styles for booking card specific overrides if needed */}
-        
+        @media (min-width: 769px) {
+          .mobile-cards { display: none; }
+          .desktop-table { display: block; }
+        }
+
+        @media (max-width: 768px) {
+          .desktop-table { display: none; }
+          .mobile-cards { display: block; }
+          
+          .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+          }
+          
+          .header-actions {
+            width: 100%;
+          }
+          
+          .header-actions .btn {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .search-filter-bar {
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 0.75rem !important;
+            padding: 1rem;
+          }
+
+          .search-box {
+            width: 100% !important;
+          }
+
+          .filter-select {
+            width: 100%;
+          }
+
+          .quick-stats-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            padding: 0 1rem;
+          }
+
+          .quick-stat-card {
+            margin-bottom: 0;
+            padding: 0.75rem;
+          }
+
+          .stat-value {
+            font-size: 1.25rem;
+          }
+
+          .booking-card {
+            margin: 0 1rem 0.75rem 1rem;
+          }
+
+          .full-page-form {
+            padding: 1rem;
+          }
+          .full-page-form-header h2 {
+            font-size: 1.25rem;
+          }
+        }
+
         .booking-card {
           background: white;
           border: 1px solid var(--navy-100);
@@ -703,7 +782,7 @@ const Bookings = () => {
         .booking-card-header {
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          align-items: flex-start;
           margin-bottom: 0.75rem;
           padding-bottom: 0.75rem;
           border-bottom: 1px solid var(--navy-100);
@@ -712,6 +791,7 @@ const Bookings = () => {
         .booking-card-header strong {
           font-size: 1rem;
           color: var(--navy-800);
+          display: block;
         }
         
         .booking-card-body {
@@ -740,11 +820,19 @@ const Bookings = () => {
           margin-top: 1rem;
           padding-top: 0.75rem;
           border-top: 1px solid var(--navy-100);
+          flex-wrap: wrap;
         }
         
         .booking-card-footer .btn {
           flex: 1;
           justify-content: center;
+          min-width: fit-content;
+          white-space: nowrap;
+        }
+
+        .booking-card-footer .icon-only {
+          flex: 0 0 auto;
+          width: 40px;
         }
 
         .full-page-form {
@@ -799,20 +887,11 @@ const Bookings = () => {
           justify-content: flex-end;
           gap: 1rem;
           margin-top: 2rem;
-          padding-top: 1.5rem;
+          padding-top: 1rem;
           border-top: 1px solid var(--navy-100);
         }
-
-        @media (max-width: 768px) {
-          .full-page-form {
-            padding: 1rem;
-          }
-          .full-page-form-header h2 {
-            font-size: 1.25rem;
-          }
-        }
-      `}</style>
-        </div>
+    `}</style>
+        </div >
     );
 };
 
@@ -2123,6 +2202,7 @@ const CompletionModal = ({ booking, onClose, onComplete }) => {
     const [selectedMaterials, setSelectedMaterials] = useState([]);
     const [loading, setLoading] = useState(false);
     const [fetchingMaterials, setFetchingMaterials] = useState(true);
+    const [paymentSplits, setPaymentSplits] = useState([{ mode: 'cash', amount: String(booking.price || 0) }]);
 
     useEffect(() => {
         fetchMaterials();
@@ -2227,6 +2307,7 @@ const CompletionModal = ({ booking, onClose, onComplete }) => {
                 materialsUsed: materialsUsed,
                 totalMaterialCost: totalMaterialCost,
                 completionNotes: notes,
+                paymentSplits: paymentSplits,
                 completedAt: serverTimestamp()
             });
 
@@ -2320,6 +2401,20 @@ const CompletionModal = ({ booking, onClose, onComplete }) => {
                                 onChange={(e) => setNotes(e.target.value)}
                                 rows="2"
                                 placeholder="Any notes about the service..."
+                            />
+                        </div>
+
+                        <div style={{ marginTop: '1.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
+                            <SplitPaymentSelector
+                                splits={paymentSplits}
+                                onAddSplit={() => setPaymentSplits([...paymentSplits, { mode: 'cash', amount: '' }])}
+                                onRemoveSplit={(idx) => setPaymentSplits(paymentSplits.filter((_, i) => i !== idx))}
+                                onSplitChange={(idx, field, val) => {
+                                    const newSplits = [...paymentSplits];
+                                    newSplits[idx][field] = val;
+                                    setPaymentSplits(newSplits);
+                                }}
+                                totalAmount={Number(booking.price || 0) + totalMaterialCost}
                             />
                         </div>
                     </div>

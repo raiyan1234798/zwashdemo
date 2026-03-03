@@ -33,6 +33,7 @@ import {
     FileText
 } from 'lucide-react';
 import SplitPaymentSelector from '../components/SplitPaymentSelector';
+import { getNextInvoiceNumber } from '../utils/invoiceUtils';
 
 const AMCPlans = () => {
     const { hasPermission, userProfile, isAdmin } = useAuth();
@@ -178,9 +179,9 @@ const AMCPlans = () => {
                     <div className="section-header">
                         <h3>Available Packages</h3>
                         {hasPermission('amc', 'create') && (
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <div className="section-actions">
                                 <button className="btn btn-primary" onClick={() => setShowPlanModal(true)}>
-                                    <Plus size={18} /> Create New Plan
+                                    <Plus size={18} /> <span>Create New Plan</span>
                                 </button>
                             </div>
                         )}
@@ -435,12 +436,12 @@ const AMCPlans = () => {
                                                             <span>Service Usage</span>
                                                             <strong>{washUsage.used} / {washUsage.total} washes</strong>
                                                         </div>
-                                                        <div className="usage-progress" style={{ height: '6px', background: 'var(--navy-100)', borderRadius: '3px' }}>
+                                                        <div className="usage-progress" style={{ height: '6px', background: 'var(--navy-100)', borderRadius: '8px' }}>
                                                             <div className="usage-fill" style={{
                                                                 width: `${washUsage.total ? (washUsage.used / washUsage.total) * 100 : 0}%`,
                                                                 height: '100%',
                                                                 background: 'var(--success)',
-                                                                borderRadius: '3px'
+                                                                borderRadius: '8px'
                                                             }}></div>
                                                         </div>
                                                     </div>
@@ -597,6 +598,11 @@ const AMCPlans = () => {
                     align-items: center;
                     margin-bottom: 20px;
                 }
+
+                .section-actions {
+                    display: flex;
+                    gap: 0.5rem;
+                }
                 
                 .plans-grid {
                     display: grid;
@@ -736,11 +742,53 @@ const AMCPlans = () => {
                 }
                 
                 @media (max-width: 768px) {
-                    .section-header { flex-direction: column; gap: 1rem; align-items: stretch; }
-                    .tab-btn span { display: none; }
+                    .page-header {
+                        flex-direction: column;
+                        align-items: stretch;
+                        gap: 1rem;
+                    }
+
+                    .section-header { 
+                        flex-direction: column; 
+                        gap: 1rem; 
+                        align-items: stretch; 
+                    }
+
+                    .section-actions .btn {
+                        width: 100%;
+                        justify-content: center;
+                    }
+
+                    .tab-group {
+                        width: 100%;
+                    }
+
+                    .tab-btn {
+                        flex: 1;
+                        justify-content: center;
+                        padding: 8px 12px;
+                        font-size: 0.85rem;
+                    }
+
+                    .tab-btn span { display: inline; }
+
+                    .plans-grid {
+                        grid-template-columns: 1fr;
+                        gap: 16px;
+                    }
+
+                    .vehicle-prices {
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 15px;
+                    }
                     
                     .desktop-view { display: none !important; }
                     .mobile-view { display: block !important; }
+
+                    .modal-content {
+                        width: 95% !important;
+                        padding-bottom: 1.5rem;
+                    }
                 }
                 
                 /* Mobile Card View Styles */
@@ -1028,7 +1076,6 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [vehicleType, setVehicleType] = useState('hatchback');
     const [salePrice, setSalePrice] = useState(0);
-    const [startDateStr, setStartDateStr] = useState(new Date().toISOString().split('T')[0]); // Allow custom start date for past AMC
     const [advancePayment, setAdvancePayment] = useState(0); // Advance payment amount
 
     // List of all customers for dropdown
@@ -1958,7 +2005,9 @@ const SubscriptionInvoiceModal = ({ subscription, onClose, onSuccess, userProfil
         e.preventDefault();
         setLoading(true);
         try {
-            const ref = `INV-AMC-${Date.now().toString().slice(-6)}`;
+            // Generate sequential ID using the utility
+            const sequentialInv = await getNextInvoiceNumber(db, paymentSplits);
+            const ref = sequentialInv;
 
             const totalPrice = Number(price) || 0;
             const paidAmount = paymentSplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
@@ -1976,6 +2025,7 @@ const SubscriptionInvoiceModal = ({ subscription, onClose, onSuccess, userProfil
             }] : [];
 
             const invoiceData = {
+                invoiceNumber: sequentialInv,
                 bookingReference: ref,
                 customerId: subscription.customerId || 'unknown',
                 customerName: subscription.customerName || 'Unknown',

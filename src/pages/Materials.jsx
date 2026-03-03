@@ -570,15 +570,45 @@ const Materials = () => {
                     font-style: italic;
                 }
 
-                @media (max-width: 640px) {
-                    .material-item {
-                        flex-wrap: wrap;
-                        padding-bottom: 3.5rem; /* Make space for actions at bottom if absolute, OR we change strategy completely */
-                        /* Better strategy: Flex flow column-ish for actions at bottom */
-                        padding: 1rem;
+                @media (max-width: 768px) {
+                    .page-header {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 1rem;
                     }
 
-                    /* Let's revamp the mobile layout to be cleaner */
+                    .header-actions {
+                        width: 100%;
+                        flex-direction: column;
+                    }
+
+                    .header-actions .btn, 
+                    .header-actions a.btn {
+                        width: 100%;
+                        justify-content: center;
+                    }
+
+                    .quick-stats-row {
+                        display: grid;
+                        grid-template-columns: repeat(2, 1fr);
+                        gap: 0.75rem;
+                    }
+
+                    .quick-stat-card {
+                        padding: 0.75rem;
+                        margin-bottom: 0;
+                    }
+
+                    .search-filter-bar {
+                        flex-direction: column;
+                        gap: 0.75rem;
+                    }
+
+                    .search-box, .filter-select {
+                        width: 100%;
+                    }
+
+                    /* Material Item Mobile Revamp */
                     .material-item {
                         display: grid;
                         grid-template-columns: auto 1fr;
@@ -588,6 +618,7 @@ const Materials = () => {
                             "actions actions";
                         gap: 0.75rem;
                         align-items: start;
+                        padding: 1rem;
                     }
 
                     .material-icon {
@@ -608,6 +639,7 @@ const Materials = () => {
                         background: rgba(255,255,255,0.5);
                         margin: 0;
                         justify-content: space-between;
+                        padding: 0.5rem 0.75rem;
                     }
                     
                     .material-stock .stock-value {
@@ -626,16 +658,13 @@ const Materials = () => {
 
                     .material-actions {
                         grid-area: actions;
-                        position: static; /* Remove absolute */
                         width: 100%;
                         justify-content: flex-end;
                         border-top: 1px solid rgba(0,0,0,0.05);
                         padding-top: 0.75rem;
-                        margin-top: 0;
-                        gap: 1rem;
+                        gap: 0.75rem;
                     }
                     
-                    /* Make buttons bigger/easier to tap on mobile */
                     .material-actions .btn-icon {
                         width: auto;
                         height: 32px;
@@ -646,10 +675,27 @@ const Materials = () => {
                         display: flex;
                         gap: 0.5rem;
                         font-size: 0.8rem;
+                        align-items: center;
                     }
                     
                     .material-actions .btn-icon::after {
-                        content: attr(title); /* Show label on mobile */
+                        content: attr(title);
+                    }
+
+                    .modal-content {
+                        width: 95% !important;
+                        margin: 10px auto !important;
+                        padding: 1.25rem;
+                    }
+
+                    .modal-grid, 
+                    div[style*="display: grid"][style*="grid-template-columns: repeat(2"] {
+                        grid-template-columns: 1fr !important;
+                    }
+
+                    .form-row {
+                        flex-direction: column;
+                        gap: 0;
                     }
                 }
             `}</style>

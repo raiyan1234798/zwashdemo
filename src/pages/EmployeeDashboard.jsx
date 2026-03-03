@@ -215,9 +215,58 @@ const EmployeeDashboard = () => {
             </div>
 
             <style>{`
-                /* Reusing dashboard styles from parent context or duplicated if scoped */
                 .dashboard-header h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
                 .subtitle { color: var(--navy-500); }
+
+                @media (max-width: 768px) {
+                    .dashboard-header h1 {
+                        font-size: 1.25rem;
+                    }
+
+                    .stats-grid-compact {
+                        grid-template-columns: repeat(2, 1fr) !important;
+                        gap: 0.75rem !important;
+                    }
+
+                    .dashboard-grid {
+                        grid-template-columns: 1fr !important;
+                        gap: 1rem !important;
+                        margin-top: 1rem !important;
+                    }
+
+                    .schedule-item {
+                        padding: 0.75rem !important;
+                        flex-wrap: wrap;
+                        gap: 0.5rem;
+                    }
+
+                    .schedule-info {
+                        flex: 1 1 100%;
+                        order: 2;
+                    }
+
+                    .schedule-time {
+                        order: 1;
+                    }
+
+                    .schedule-item > div:last-child {
+                        order: 3;
+                        width: 100%;
+                        display: flex !important;
+                        justify-content: space-between !important;
+                        align-items: center !important;
+                        border-top: 1px solid var(--navy-50);
+                        padding-top: 0.5rem;
+                        margin-top: 0.25rem;
+                        text-align: left !important;
+                    }
+                }
+
+                @media (max-width: 480px) {
+                    .stats-grid-compact {
+                        grid-template-columns: 1fr !important;
+                    }
+                }
             `}</style>
         </div>
     );

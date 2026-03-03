@@ -234,9 +234,56 @@ const ManagerDashboard = () => {
             </div>
 
             <style>{`
-                /* Reusing dashboard styles + specific tweaks */
                 .text-success { color: var(--success); }
                 .text-danger { color: var(--danger); }
+
+                @media (max-width: 768px) {
+                    .dashboard-header {
+                        flex-direction: column;
+                        align-items: stretch;
+                        gap: 1rem;
+                    }
+
+                    .dashboard-header h1 {
+                        font-size: 1.25rem;
+                    }
+
+                    .action-buttons {
+                        width: 100%;
+                    }
+
+                    .action-buttons .btn {
+                        width: 100%;
+                        justify-content: center;
+                    }
+
+                    .stats-grid-compact {
+                        grid-template-columns: repeat(2, 1fr) !important;
+                        gap: 0.75rem !important;
+                    }
+
+                    .dashboard-grid {
+                        grid-template-columns: 1fr !important;
+                        gap: 1rem !important;
+                        margin-top: 1rem !important;
+                    }
+
+                    .schedule-item {
+                        padding: 0.75rem !important;
+                        flex-wrap: wrap;
+                        gap: 0.5rem;
+                    }
+
+                    .schedule-info {
+                        flex: 1 1 100%;
+                    }
+                }
+
+                @media (max-width: 480px) {
+                    .stats-grid-compact {
+                        grid-template-columns: 1fr !important;
+                    }
+                }
             `}</style>
         </div>
     );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../config/firebase';
 import {
     collection,
@@ -62,12 +62,12 @@ const AuditLog = () => {
                 // but "where + orderBy" usually works if indexed.
                 // Let's rely on client side filtering for flexible partial text search and combination.
                 // Revert query to just basic sort for now to ensure data loads.
-                q = query(logsRef, orderBy('timestamp', 'desc'), limit(200)); 
+                q = query(logsRef, orderBy('timestamp', 'desc'), limit(200));
             }
 
             // Note: For a production app with millions of logs, you'd want server-side fitlering with Indexes.
             // For now, fetching latest 200-500 is usually enough for an admin dashboard.
-            
+
             const snapshot = await getDocs(q);
             let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -142,8 +142,8 @@ const AuditLog = () => {
                     </button>
                     <div className="limit-selector" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <span style={{ fontSize: '0.9rem', color: 'var(--navy-600)' }}>Show:</span>
-                        <select 
-                            value={limitCount} 
+                        <select
+                            value={limitCount}
                             onChange={(e) => setLimitCount(Number(e.target.value))}
                             style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--navy-200)' }}
                         >
@@ -169,7 +169,7 @@ const AuditLog = () => {
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
-                        
+
                         <div className="filter-group" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                             <User size={16} className="text-gray-400" />
                             <select
@@ -244,42 +244,58 @@ const AuditLog = () => {
                                     </tr>
                                 ) : (
                                     filteredLogs.map(log => (
-                                        <tr key={log.id}>
-                                            <td style={{ whiteSpace: 'nowrap', color: 'var(--navy-600)', fontSize: '0.85rem' }}>
-                                                {formatTime(log.timestamp)}
-                                            </td>
-                                            <td>
-                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                    <span style={{ fontWeight: 500 }}>{log.userName}</span>
-                                                    <span style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{log.userRole}</span>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span 
-                                                    style={{ 
-                                                        padding: '0.25rem 0.5rem', 
-                                                        borderRadius: '4px', 
-                                                        fontSize: '0.75rem', 
-                                                        fontWeight: 600,
-                                                        textTransform: 'uppercase'
-                                                    }}
-                                                    className={getActionColor(log.action)}
-                                                >
-                                                    {log.action}
-                                                </span>
-                                            </td>
-                                            <td style={{ textTransform: 'capitalize' }}>
-                                                {log.resource}
-                                            </td>
-                                            <td style={{ color: 'var(--navy-700)' }}>
-                                                {log.details}
-                                                {log.metadata && log.metadata.name && (
-                                                    <span style={{ color: 'var(--navy-500)', fontSize: '0.85rem', marginLeft: '0.5rem' }}>
-                                                        ({log.metadata.name})
+                                        <React.Fragment key={log.id}>
+                                            <tr className="desktop-view-row">
+                                                <td style={{ whiteSpace: 'nowrap', color: 'var(--navy-600)', fontSize: '0.85rem' }}>
+                                                    {formatTime(log.timestamp)}
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                        <span style={{ fontWeight: 500 }}>{log.userName}</span>
+                                                        <span style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{log.userRole}</span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span
+                                                        style={{
+                                                            padding: '0.25rem 0.5rem',
+                                                            borderRadius: '4px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: 600,
+                                                            textTransform: 'uppercase'
+                                                        }}
+                                                        className={getActionColor(log.action)}
+                                                    >
+                                                        {log.action}
                                                     </span>
-                                                )}
-                                            </td>
-                                        </tr>
+                                                </td>
+                                                <td style={{ textTransform: 'capitalize' }}>
+                                                    {log.resource}
+                                                </td>
+                                                <td style={{ color: 'var(--navy-700)' }}>
+                                                    {log.details}
+                                                    {log.metadata && log.metadata.name && (
+                                                        <span style={{ color: 'var(--navy-500)', fontSize: '0.85rem', marginLeft: '0.5rem' }}>
+                                                            ({log.metadata.name})
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                            <div className="mobile-log-card">
+                                                <div className="log-card-header">
+                                                    <div className="log-card-user">{log.userName}</div>
+                                                    <span className={`log-card-action-badge ${getActionColor(log.action)}`}>
+                                                        {log.action}
+                                                    </span>
+                                                </div>
+                                                <div className="log-card-time">{formatTime(log.timestamp)}</div>
+                                                <div className="log-card-resource">{log.resource}</div>
+                                                <div className="log-card-details">
+                                                    {log.details}
+                                                    {log.metadata && log.metadata.name && ` (${log.metadata.name})`}
+                                                </div>
+                                            </div>
+                                        </React.Fragment>
                                     ))
                                 )}
                             </tbody>
@@ -299,6 +315,97 @@ const AuditLog = () => {
                 .bg-purple-50 { background-color: #f5f3ff; }
                 .text-gray-600 { color: #4b5563; }
                 .bg-gray-50 { background-color: #f9fafb; }
+
+                .mobile-log-card {
+                    display: none;
+                    padding: 1rem;
+                    border-bottom: 1px solid var(--navy-50);
+                }
+
+                .log-card-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: flex-start;
+                    margin-bottom: 0.5rem;
+                }
+
+                .log-card-time {
+                    font-size: 0.75rem;
+                    color: var(--navy-400);
+                }
+
+                .log-card-user {
+                    font-weight: 600;
+                    font-size: 0.9rem;
+                    color: var(--navy-800);
+                }
+
+                .log-card-action-badge {
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    font-size: 0.7rem;
+                    font-weight: 700;
+                    text-transform: uppercase;
+                }
+
+                .log-card-details {
+                    font-size: 0.85rem;
+                    color: var(--navy-600);
+                    margin-top: 0.5rem;
+                    line-height: 1.4;
+                }
+
+                .log-card-resource {
+                    font-size: 0.75rem;
+                    color: var(--primary);
+                    font-weight: 600;
+                    text-transform: capitalize;
+                    margin-top: 0.25rem;
+                }
+
+                @media (max-width: 768px) {
+                    .page-header {
+                        flex-direction: column;
+                        align-items: stretch;
+                        gap: 1rem;
+                    }
+
+                    .header-actions {
+                        display: grid;
+                        grid-template-columns: 1fr;
+                        gap: 0.75rem;
+                    }
+
+                    .header-actions .btn {
+                        width: 100%;
+                        justify-content: center;
+                    }
+
+                    .limit-selector {
+                        justify-content: space-between;
+                        width: 100%;
+                    }
+
+                    .search-filter-bar {
+                        grid-template-columns: 1fr !important;
+                    }
+
+                    .data-table thead {
+                        display: none;
+                    }
+
+                    .data-table tbody tr {
+                        display: none;
+                    }
+
+                    .mobile-log-card {
+                        display: block;
+                    }
+                    
+                    .card-body {
+                        padding: 0 !important;
+                    }
+                }
             `}</style>
         </div>
     );

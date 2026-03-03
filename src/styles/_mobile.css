@@ -22,6 +22,12 @@
     transition: var(--transition-fast);
 }
 
+.app-layout {
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
+}
+
 .mobile-menu-btn:hover {
     transform: scale(1.1);
 }
@@ -81,10 +87,12 @@
 
     /* Remove sidebar margin from main content */
     .main-content {
-        margin-left: 0;
-        padding: 1rem;
-        padding-bottom: 6rem;
-        /* Space for mobile bottom navigation */
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: 1rem !important;
+        padding-top: calc(60px + 1rem) !important;
+        padding-bottom: calc(100px + env(safe-area-inset-bottom, 2rem)) !important;
+        overflow-x: hidden;
     }
 
     /* Page Header Responsive */
@@ -678,5 +686,44 @@
 
     .subscriptions-section .data-table td div.usage-bar-wrapper {
         min-width: 100px;
+    }
+}
+
+/* ==================== GLOBAL RESPONSIVE UTILITIES ==================== */
+
+.responsive-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 1rem;
+}
+
+.chart-scroll-container {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .hide-on-mobile {
+        display: none !important;
+    }
+
+    .show-on-mobile {
+        display: block !important;
+    }
+
+    .flex-column-mobile {
+        flex-direction: column !important;
+    }
+
+    .full-width-mobile {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    .no-padding-mobile {
+        padding: 0 !important;
     }
 }

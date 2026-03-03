@@ -5,9 +5,10 @@ import { collection, query, getDocs, orderBy, doc, getDoc, updateDoc, addDoc, de
 import { FileText, Download, Eye, Search, Printer, Receipt, MessageCircle, Copy, ExternalLink, Plus, Edit, Trash2, Archive, RotateCcw, X, Car, CheckCircle2, ShieldCheck } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import SplitPaymentSelector from '../components/SplitPaymentSelector';
+import { getNextInvoiceNumber, migrateExistingInvoices } from '../utils/invoiceUtils';
 
 const Invoices = () => {
-    const { hasPermission, isEmployee, user, userProfile } = useAuth();
+    const { hasPermission, isAdmin, isEmployee, user, userProfile } = useAuth();
 
     // Get today and yesterday dates for employee filtering
     const today = new Date();
@@ -33,6 +34,11 @@ const Invoices = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingInvoice, setEditingInvoice] = useState(null);
+
+    // Migration states
+    const [isMigrating, setIsMigrating] = useState(false);
+    const [migrationProgress, setMigrationProgress] = useState({ current: 0, total: 0 });
+    const [migrationResult, setMigrationResult] = useState(null);
 
     useEffect(() => {
         fetchInvoices();
@@ -119,7 +125,29 @@ const Invoices = () => {
         }
     };
 
+    const handleRunMigration = async () => {
+        if (!window.confirm("This will overwrite/assign sequential invoice numbers to ALL existing records based on their creation date and payment method. This cannot be undone. Proceed?")) return;
+
+        try {
+            setIsMigrating(true);
+            const result = await migrateExistingInvoices(db, (current, total) => {
+                setMigrationProgress({ current, total });
+            });
+            setMigrationResult(result);
+            fetchInvoices(); // Refresh list to show new IDs
+        } catch (error) {
+            console.error("Migration failed:", error);
+            alert("Migration failed. Check console for details.");
+        } finally {
+            setIsMigrating(false);
+        }
+    };
+
     const exportToExcel = () => {
+        let cashCount = 1;
+        let onlineCount = 1;
+        let totalPaid = 0;
+
         const exportData = filteredInvoices.map(inv => {
             // Calculate payment methods from history
             const methodTotals = {};
@@ -139,30 +167,57 @@ const Invoices = () => {
                 methodTotals[inv.paymentMode.toLowerCase().trim()] = inv.paidAmount || 0;
             }
 
-            // If a specific method is filtered, only show that method in the column
-            // Otherwise, show all methods used for this invoice
-            const methodsToShow = (exportPaymentFilter !== 'all' && exportPaymentFilter !== 'unpaid')
-                ? { [exportPaymentFilter.toLowerCase()]: methodTotals[exportPaymentFilter.toLowerCase()] || 0 }
-                : methodTotals;
+            let methodsToShow = {};
+            let hasFilteredMethod = false;
 
-            // Format as a string: "CASH (₹500), UPI (₹200)" or just "UPI (₹200)" depending on filter
-            const paymentMethodsStr = Object.entries(methodsToShow)
-                .filter(([_, amount]) => amount > 0)
-                .map(([mode, amount]) => `${mode.toUpperCase()} (₹${amount})`)
-                .join(', ') || 'None';
-
-            const hasFilteredMethod = exportPaymentFilter === 'all' ||
-                (Object.keys(methodTotals).length === 0 && exportPaymentFilter === 'unpaid') ||
-                methodTotals[exportPaymentFilter.toLowerCase()] > 0;
+            if (exportPaymentFilter === 'all') {
+                hasFilteredMethod = true;
+                methodsToShow = methodTotals;
+            } else if (exportPaymentFilter === 'unpaid') {
+                hasFilteredMethod = (Object.keys(methodTotals).length === 0 || inv.paymentStatus === 'unpaid');
+                methodsToShow = methodTotals;
+            } else if (exportPaymentFilter === 'upi+cash') {
+                hasFilteredMethod = methodTotals['upi'] > 0 || methodTotals['cash'] > 0;
+                methodsToShow = { upi: methodTotals['upi'] || 0, cash: methodTotals['cash'] || 0 };
+            } else if (exportPaymentFilter === 'upi+card') {
+                hasFilteredMethod = methodTotals['upi'] > 0 || methodTotals['card'] > 0;
+                methodsToShow = { upi: methodTotals['upi'] || 0, card: methodTotals['card'] || 0 };
+            } else {
+                hasFilteredMethod = methodTotals[exportPaymentFilter.toLowerCase()] > 0;
+                methodsToShow = { [exportPaymentFilter.toLowerCase()]: methodTotals[exportPaymentFilter.toLowerCase()] || 0 };
+            }
 
             if (!hasFilteredMethod) return null;
 
+            // Format as a string without amount: "CASH, UPI"
+            const paymentMethodsArr = Object.entries(methodsToShow)
+                .filter(([_, amount]) => amount > 0)
+                .map(([mode, _]) => mode.toUpperCase());
+
+            const paymentMethodsStr = paymentMethodsArr.join(' + ') || (inv.paymentStatus === 'unpaid' ? 'UNPAID' : 'None');
+
+            const isCash = paymentMethodsArr.includes('CASH') && paymentMethodsArr.length === 1;
+            const invoiceNum = inv.invoiceNumber || inv.bookingReference || (isCash ? cashCount++ : onlineCount++);
+
+            let paidAmt = 0;
+            if (exportPaymentFilter === 'all') {
+                paidAmt = inv.paidAmount || 0;
+            } else if (exportPaymentFilter === 'upi+cash') {
+                paidAmt = (methodTotals['upi'] || 0) + (methodTotals['cash'] || 0);
+            } else if (exportPaymentFilter === 'upi+card') {
+                paidAmt = (methodTotals['upi'] || 0) + (methodTotals['card'] || 0);
+            } else {
+                paidAmt = methodTotals[exportPaymentFilter.toLowerCase()] || 0;
+            }
+
+            totalPaid += paidAmt;
+
             return {
-                'Invoice #': inv.bookingReference || inv.id.slice(0, 8),
+                'Invoice #': invoiceNum,
                 Date: inv.bookingDate || inv.invoiceDate,
                 Service: inv.serviceName,
                 'Total Amount': inv.price,
-                'Paid Amount': exportPaymentFilter === 'all' ? (inv.paidAmount || 0) : (methodTotals[exportPaymentFilter.toLowerCase()] || 0),
+                'Paid Amount': paidAmt,
                 'Payment Status': inv.paymentStatus || 'unpaid',
                 'Payment Method': paymentMethodsStr,
                 'License Plate': inv.licensePlate,
@@ -175,6 +230,19 @@ const Invoices = () => {
             alert(`No invoices found for the selected payment method: ${exportPaymentFilter}`);
             return;
         }
+
+        exportData.push({
+            'Invoice #': 'TOTAL',
+            Date: '',
+            Service: '',
+            'Total Amount': '',
+            'Paid Amount': totalPaid,
+            'Payment Status': '',
+            'Payment Method': '',
+            'License Plate': '',
+            'Customer Name': '',
+            'Customer Phone': ''
+        });
 
         const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
@@ -655,12 +723,16 @@ const Invoices = () => {
 
     // For employees: only show today's and yesterday's invoices (unless they have extended permissions, but user rule said restricting view is ok)
     // Actually, admins might want to see all.
+    // Use the correct source based on active tab
+    const currentInvoices = activeTab === 'active' ? invoices : archivedInvoices;
+
+    // For employees: only show today's and yesterday's invoices
     const baseInvoices = isEmployee
-        ? invoices.filter(inv => {
+        ? currentInvoices.filter(inv => {
             const date = inv.bookingDate || inv.invoiceDate;
             return date === todayStr || date === yesterdayStr;
         })
-        : invoices;
+        : currentInvoices;
 
     const filteredInvoices = baseInvoices.filter(inv => {
         // Date Range Filter
@@ -731,6 +803,34 @@ const Invoices = () => {
                 </div>
             </div>
 
+            {/* Migration Banner */}
+            {isMigrating && (
+                <div style={{ background: '#fef3c7', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid #fcd34d', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <ShieldCheck size={20} className="animate-pulse" style={{ color: '#b45309' }} />
+                        <span style={{ fontWeight: '600', color: '#b45309' }}>
+                            Migrating Invoice Numbers... ({migrationProgress.current} / {migrationProgress.total})
+                        </span>
+                    </div>
+                    <div style={{ width: '300px', height: '8px', background: '#fde68a', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${(migrationProgress.current / (migrationProgress.total || 1)) * 100}%`, height: '100%', background: '#b45309', transition: 'width 0.3s' }}></div>
+                    </div>
+                </div>
+            )}
+
+            {migrationResult && (
+                <div style={{ background: '#ecfdf5', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid #6ee7b7', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#065f46' }}>
+                        <CheckCircle2 size={20} />
+                        <span style={{ fontWeight: '600' }}>
+                            Migration Complete! {migrationResult.total} records updated.
+                            (Digital Seq: {migrationResult.digitalSeq}, Cash Seq: {migrationResult.cashSeq})
+                        </span>
+                    </div>
+                    <button className="btn-icon" onClick={() => setMigrationResult(null)} style={{ color: '#065f46' }}><X size={16} /></button>
+                </div>
+            )}
+
             {/* Stats */}
             <div className="quick-stats-row">
                 <div className="quick-stat-card">
@@ -757,8 +857,8 @@ const Invoices = () => {
             </div>
 
             {/* Search & Filters */}
-            <div className="search-filter-bar" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <div className="search-box" style={{ flex: 1, minWidth: '250px' }}>
+            <div className="search-filter-bar">
+                <div className="search-box">
                     <Search size={18} />
                     <input
                         type="text"
@@ -769,26 +869,26 @@ const Invoices = () => {
                 </div>
 
                 {/* Date Range Filter */}
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'white', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--navy-200)' }}>
+                <div className="date-filter-group">
                     <input
                         type="date"
                         value={dateFilter.start}
                         onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
-                        style={{ border: 'none', background: 'transparent', fontSize: '0.9rem', color: 'var(--navy-700)', padding: '0.5rem' }}
+                        className="date-input"
                         title="Start Date"
                     />
-                    <span style={{ color: 'var(--navy-400)' }}>to</span>
+                    <span className="date-separator">to</span>
                     <input
                         type="date"
                         value={dateFilter.end}
                         onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
-                        style={{ border: 'none', background: 'transparent', fontSize: '0.9rem', color: 'var(--navy-700)', padding: '0.5rem' }}
+                        className="date-input"
                         title="End Date"
                     />
                     {(dateFilter.start || dateFilter.end) && (
                         <button
                             onClick={() => setDateFilter({ start: '', end: '' })}
-                            style={{ border: 'none', background: '#fee2e2', color: '#ef4444', borderRadius: '4px', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginRight: '4px' }}
+                            className="clear-date-btn"
                             title="Clear Date Filter"
                         >
                             <X size={14} />
@@ -796,42 +896,48 @@ const Invoices = () => {
                     )}
                 </div>
 
-                <div className="header-actions">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'white', border: '1px solid var(--navy-200)', borderRadius: '8px', padding: '0 0.5rem' }}>
+                <div className="invoice-header-actions">
+                    <div className="export-tools">
                         <select
                             value={exportPaymentFilter}
                             onChange={(e) => setExportPaymentFilter(e.target.value)}
-                            style={{
-                                border: 'none',
-                                outline: 'none',
-                                background: 'transparent',
-                                padding: '0.625rem 0',
-                                cursor: 'pointer',
-                                color: 'var(--navy-700)',
-                                fontSize: '0.875rem',
-                                fontWeight: '500'
-                            }}
+                            className="export-select"
                             title="Filter Excel Export by Payment Method"
                         >
                             <option value="all">All Methods</option>
                             <option value="cash">Cash</option>
                             <option value="upi">UPI</option>
                             <option value="card">Card</option>
+                            <option value="upi+cash">UPI + Cash</option>
+                            <option value="upi+card">UPI + Card</option>
                             <option value="bank_transfer">Bank Transfer</option>
                             <option value="unpaid">Unpaid Only</option>
                         </select>
-                        <div style={{ width: '1px', height: '24px', background: 'var(--navy-200)' }}></div>
-                        <button className="btn btn-secondary" onClick={exportToExcel} style={{ border: 'none', background: 'transparent', paddingLeft: '0.5rem' }}>
-                            <Download size={20} /> Export
+                        <div className="divider-v"></div>
+                        <button className="btn-export" onClick={exportToExcel}>
+                            <Download size={20} /> <span>Export</span>
                         </button>
                     </div>
 
+                    {isAdmin && (
+                        <button
+                            className="btn btn-secondary"
+                            onClick={handleRunMigration}
+                            disabled={isMigrating}
+                            style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d' }}
+                            title="Update existing invoices to the new sequential format"
+                        >
+                            <ShieldCheck size={18} style={{ marginRight: '6px' }} />
+                            {isMigrating ? 'Migrating...' : 'Migrate IDs'}
+                        </button>
+                    )}
+
                     {hasPermission('bookings', 'create') && (
                         <button
-                            className="btn btn-primary"
+                            className="btn btn-primary btn-create-invoice"
                             onClick={() => setShowCreateModal(true)}
                         >
-                            <Plus size={20} /> Create Manual Invoice
+                            <Plus size={20} /> <span>Create Manual Invoice</span>
                         </button>
                     )}
                 </div>
@@ -867,7 +973,7 @@ const Invoices = () => {
                                         const payBadge = getPaymentBadge(invoice);
                                         return (
                                             <tr key={invoice.id}>
-                                                <td><strong>{invoice.bookingReference || invoice.id.slice(0, 8)}</strong></td>
+                                                <td><strong>{invoice.invoiceNumber || invoice.bookingReference || invoice.id.slice(0, 8)}</strong></td>
                                                 <td>{invoice.bookingDate || invoice.invoiceDate}</td>
                                                 <td>{invoice.serviceName}</td>
                                                 <td>
@@ -985,7 +1091,7 @@ const Invoices = () => {
                             <div key={invoice.id} className="booking-card">
                                 <div className="booking-card-header">
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <strong>{invoice.bookingReference || invoice.id.slice(0, 8)}</strong>
+                                        <strong>{invoice.invoiceNumber || invoice.bookingReference || invoice.id.slice(0, 8)}</strong>
                                         <span className={`badge ${getPaymentBadge(invoice).class}`}>{getPaymentBadge(invoice).label}</span>
                                     </div>
                                     <span style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{invoice.bookingDate || invoice.invoiceDate}</span>
@@ -1099,32 +1205,164 @@ const Invoices = () => {
             </div>
 
             <style>{`
+                .search-filter-bar {
+                    display: flex;
+                    gap: 1rem;
+                    flex-wrap: wrap;
+                    align-items: center;
+                    margin-bottom: 1.5rem;
+                }
+
+                .search-box {
+                    flex: 1;
+                    min-width: 250px;
+                }
+
+                .date-filter-group {
+                    display: flex;
+                    gap: 0.5rem;
+                    align-items: center;
+                    background: white;
+                    padding: 0.25rem 0.5rem;
+                    border-radius: 8px;
+                    border: 1px solid var(--navy-200);
+                }
+
+                .date-input {
+                    border: none;
+                    background: transparent;
+                    font-size: 0.9rem;
+                    color: var(--navy-700);
+                    padding: 0.5rem;
+                    outline: none;
+                }
+
+                .date-separator {
+                    color: var(--navy-400);
+                    font-size: 0.85rem;
+                }
+
+                .clear-date-btn {
+                    border: none;
+                    background: #fee2e2;
+                    color: #ef4444;
+                    border-radius: 4px;
+                    width: 24px;
+                    height: 24px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                }
+
+                .invoice-header-actions {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                    flex-wrap: wrap;
+                }
+
+                .export-tools {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.25rem;
+                    background: white;
+                    border: 1px solid var(--navy-200);
+                    border-radius: 8px;
+                    padding: 0 0.5rem;
+                }
+
+                .export-select {
+                    border: none;
+                    outline: none;
+                    background: transparent;
+                    padding: 0.625rem 0;
+                    cursor: pointer;
+                    color: var(--navy-700);
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                }
+
+                .divider-v {
+                    width: 1px;
+                    height: 20px;
+                    background: var(--navy-200);
+                    margin: 0 0.25rem;
+                }
+
+                .btn-export {
+                    border: none;
+                    background: transparent;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    color: var(--navy-700);
+                    cursor: pointer;
+                    padding: 0.5rem;
+                }
+
+                @media (min-width: 769px) {
+                    .mobile-cards { display: none; }
+                }
+
                 @media (max-width: 768px) {
+                    .table-container { display: none; }
+                    .mobile-cards { display: block; }
+                    
                     .page-header {
                         flex-direction: column;
                         align-items: flex-start;
                         gap: 1rem;
                     }
-                    
-                    .header-actions {
+
+                    .search-filter-bar {
+                        flex-direction: column;
+                        align-items: stretch;
+                        gap: 0.75rem;
+                    }
+
+                    .search-box {
+                        min-width: 100%;
+                    }
+
+                    .date-filter-group {
+                        justify-content: space-between;
+                        padding: 0.25rem;
+                    }
+
+                    .date-input {
+                        flex: 1;
+                        padding: 0.4rem;
+                        font-size: 0.85rem;
+                        min-width: 0; /* Allow shrinking */
+                    }
+
+                    .invoice-header-actions {
                         width: 100%;
-                        flex-wrap: wrap;
-                        gap: 0.5rem;
+                        flex-direction: column;
+                        gap: 0.75rem;
+                    }
+
+                    .export-tools {
+                        width: 100%;
+                        justify-content: space-between;
+                    }
+
+                    .btn-create-invoice {
+                        width: 100%;
+                        justify-content: center;
                     }
                     
                     .tab-group {
                         width: 100%;
-                        display: flex; /* Ensure tabs take full width row */
+                        display: flex;
                     }
                     
                     .tab-btn {
-                        flex: 1; /* Tabs split space equally */
-                        justify-content: center;
-                    }
-                    
-                    .header-actions .btn {
                         flex: 1;
-                        white-space: nowrap;
+                        justify-content: center;
+                        font-size: 0.8rem;
+                        padding: 0.5rem;
                     }
                 }
             `}</style>
@@ -1555,8 +1793,9 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
         e.preventDefault();
         setLoading(true);
         try {
-            // Generate ID similar to bookings but for manual invoices
-            const ref = `INV-${Date.now().toString().slice(-6)}`;
+            // Generate sequential ID using the utility
+            const sequentialInv = await getNextInvoiceNumber(db, isPaymentReceived ? paymentSplits : []);
+            const ref = sequentialInv; // Use the same ref for consistency
 
             const totalPrice = Number(formData.price) || 0;
             const paidAmount = isPaymentReceived
@@ -1626,6 +1865,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
             // Create standard invoice for both Service and AMC
             await addDoc(collection(db, 'invoices'), {
                 ...formData,
+                invoiceNumber: sequentialInv,
                 bookingReference: ref,
                 price: totalPrice,
                 status: 'completed',

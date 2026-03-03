@@ -797,7 +797,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                     )}
 
                     {/* Customer Stats */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                    <div className="customer-stats-grid">
                         <div style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
                             <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--primary)' }}>{bookings.length}</div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Total Visits</div>
@@ -816,7 +816,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                         </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div className="customer-info-grid">
                         <div>
                             <h4 style={{ color: 'var(--navy-500)', marginBottom: '0.5rem' }}>Contact</h4>
                             <p><strong>{customer.name || 'N/A'}</strong></p>
@@ -832,7 +832,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
 
                     {/* Additional Details Row */}
                     {hasPermission('customers', 'edit') && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                        <div className="customer-details-grid">
                             <div className="form-group" style={{ margin: 0 }}>
                                 <label style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Membership Tier</label>
                                 <select
@@ -939,7 +939,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
 
                     {/* Notes & Tags with History */}
                     <div style={{ marginBottom: '1.5rem' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div className="customer-history-grid">
                             <div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                     <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -1087,6 +1087,154 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                     <button className="btn btn-secondary" onClick={onClose}>Close</button>
                 </div>
             </div>
+            <style>{`
+        @media (min-width: 769px) {
+          .mobile-cards { display: none; }
+          .desktop-table { display: block; }
+        }
+
+        @media (max-width: 768px) {
+          .desktop-table { display: none; }
+          .mobile-cards { display: block; }
+
+          .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+          }
+
+          .header-actions {
+            width: 100%;
+            display: flex;
+            gap: 0.5rem;
+          }
+
+          .header-actions .btn {
+            flex: 1;
+            justify-content: center;
+          }
+
+          .quick-stats-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            padding: 0 1rem;
+          }
+
+          .quick-stat-card {
+            margin-bottom: 0;
+            padding: 0.75rem;
+          }
+
+          .stat-value {
+            font-size: 1.25rem;
+          }
+
+          .customer-stats-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+
+          .customer-info-grid, 
+          .customer-details-grid,
+          .customer-history-grid {
+            grid-template-columns: 1fr !important;
+          }
+          
+          .modal-content.modal-lg {
+            width: 95% !important;
+            padding: 1rem !important;
+            margin: 1rem auto !important;
+          }
+        }
+
+        .customer-stats-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 0.75rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .customer-info-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .customer-details-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .customer-history-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+        }
+
+        .booking-card {
+          background: white;
+          border: 1px solid var(--navy-100);
+          border-radius: var(--radius-lg);
+          padding: 1rem;
+          margin-bottom: 0.75rem;
+          box-shadow: var(--shadow-sm);
+        }
+        
+        .booking-card-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 0.75rem;
+          padding-bottom: 0.75rem;
+          border-bottom: 1px solid var(--navy-100);
+        }
+        
+        .booking-card-header strong {
+          font-size: 1rem;
+          color: var(--navy-800);
+          display: block;
+        }
+        
+        .booking-card-body {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+        
+        .booking-card-body p {
+          margin: 0;
+          font-size: 0.875rem;
+          color: var(--navy-600);
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        
+        .booking-card-body p svg {
+          color: var(--navy-400);
+          flex-shrink: 0;
+        }
+        
+        .booking-card-footer {
+          display: flex;
+          gap: 0.5rem;
+          margin-top: 1rem;
+          padding-top: 0.75rem;
+          border-top: 1px solid var(--navy-100);
+          flex-wrap: wrap;
+        }
+        
+        .booking-card-footer .btn {
+          flex: 1;
+          justify-content: center;
+          min-width: fit-content;
+          white-space: nowrap;
+        }
+    `}</style>
         </div>
     );
 };

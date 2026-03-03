@@ -429,7 +429,68 @@ const Employees = () => {
           font-size: 0.8rem;
         }
         
+        .employee-stats-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1rem;
+          margin-bottom: 1.5rem;
+        }
+
+        .employee-info-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1rem;
+        }
+
         @media (max-width: 768px) {
+          .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+          }
+
+          .header-actions {
+            width: 100%;
+            flex-direction: column;
+          }
+
+          .header-actions .btn {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .quick-stats-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+          }
+
+          .quick-stat-card {
+            padding: 0.75rem;
+            margin-bottom: 0;
+          }
+
+          .search-filter-bar {
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+
+          .search-box, .filter-select {
+            width: 100%;
+          }
+
+          .employee-stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .employee-info-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .modal-content.modal-lg {
+            width: 95% !important;
+            max-height: 95vh !important;
+          }
           .employees-grid {
             grid-template-columns: 1fr;
             gap: 0.75rem;
@@ -937,7 +998,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                     {activeTab === 'overview' && !loadingData && (
                         <div>
                             {/* KPI Stats */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+                            <div className="employee-stats-grid">
                                 <div style={{ padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--primary)' }}>{kpiStats.totalBookings}</div>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Total Bookings</div>
@@ -980,7 +1041,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                                             <label style={{ fontSize: '0.75rem' }}>Address</label>
                                             <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Employee address..." />
                                         </div>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                        <div className="employee-info-grid">
                                             <div className="form-group" style={{ margin: 0 }}>
                                                 <label style={{ fontSize: '0.75rem' }}>Emergency Contact</label>
                                                 <input type="text" value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value)} placeholder="Phone..." />
@@ -1015,7 +1076,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                     {activeTab === 'attendance' && !loadingData && (
                         <div>
                             {/* Attendance Stats */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+                            <div className="employee-stats-grid">
                                 <div style={{ padding: '1rem', background: '#dcfce7', borderRadius: '8px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: '#16a34a' }}>{attendanceStats.present}</div>
                                     <div style={{ fontSize: '0.75rem', color: '#166534' }}>Present</div>
@@ -1071,7 +1132,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                                 <div style={{ display: 'grid', gap: '1rem' }}>
                                     <div style={{ padding: '1.5rem', background: 'var(--navy-50)', borderRadius: '8px' }}>
                                         <h4 style={{ marginBottom: '1rem' }}>Salary Information</h4>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                                        <div className="employee-info-grid">
                                             <div>
                                                 <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Base Salary</div>
                                                 <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>₹{payrollData.baseSalary?.toLocaleString() || 'N/A'}</div>
@@ -1135,7 +1196,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 };
 

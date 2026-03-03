@@ -474,6 +474,118 @@ const Payroll = () => {
                 .btn-success:hover {
                     background-color: #059669;
                 }
+
+                @media (max-width: 768px) {
+                  .page-header {
+                    flex-direction: column;
+                    align-items: flex-start;
+                    gap: 1rem;
+                  }
+
+                  .header-actions {
+                    width: 100%;
+                    flex-direction: column;
+                  }
+
+                  .header-actions .filter-select,
+                  .header-actions .btn {
+                    width: 100%;
+                    justify-content: center;
+                  }
+
+                  .quick-stats-row {
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 0.75rem;
+                  }
+
+                  .quick-stat-card {
+                    padding: 0.75rem;
+                    margin-bottom: 0;
+                  }
+
+                  .desktop-table {
+                    display: none;
+                  }
+
+                  .mobile-cards {
+                    display: block;
+                  }
+
+                  .booking-card {
+                    background: var(--navy-50);
+                    border-radius: 8px;
+                    padding: 1rem;
+                    margin-bottom: 0.75rem;
+                    border: 1px solid var(--navy-100);
+                  }
+
+                  .booking-card-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 0.5rem;
+                    border-bottom: 1px solid var(--navy-100);
+                    padding-bottom: 0.5rem;
+                  }
+
+                  .booking-card-body p {
+                    margin: 0.25rem 0;
+                    font-size: 0.9rem;
+                  }
+
+                  .booking-card-footer {
+                    display: flex;
+                    gap: 0.5rem;
+                    margin-top: 0.75rem;
+                    padding-top: 0.75rem;
+                    border-top: 1px solid var(--navy-100);
+                  }
+
+                  .booking-card-footer .btn {
+                    flex: 1;
+                    justify-content: center;
+                  }
+
+                  .modal-content {
+                    width: 95% !important;
+                    margin: 10px auto !important;
+                    padding: 1.25rem;
+                  }
+
+                  .form-row {
+                    flex-direction: column;
+                    gap: 0;
+                  }
+
+                  /* History Modal Header */
+                  .modal-body > div[style*="display: flex"][style*="justify-content: space-between"] {
+                    flex-direction: column;
+                    align-items: flex-start !important;
+                    gap: 1rem;
+                  }
+
+                  .modal-body div[style*="text-align: right"] {
+                    text-align: left !important;
+                    width: 100%;
+                    flex-direction: column-reverse;
+                  }
+
+                  .modal-body div[style*="text-align: right"] .btn {
+                    width: 100%;
+                  }
+
+                  /* Manual Entry Stats Grid */
+                  div[style*="display: grid"][style*="grid-template-columns: repeat(auto-fit"] {
+                    grid-template-columns: repeat(3, 1fr) !important;
+                  }
+                }
+
+                @media (min-width: 769px) {
+                  .mobile-cards {
+                    display: none;
+                  }
+                }
             `}</style>
         </div>
     );
@@ -881,7 +993,7 @@ const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
                         {/* Header Info */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', marginBottom: '1.5rem' }}>
+                        <div className="manual-entry-header" style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', marginBottom: '1.5rem' }}>
                             <div>
                                 <h3 style={{ margin: 0 }}>{employee.displayName}</h3>
                                 <p style={{ color: 'var(--navy-500)', fontSize: '0.9rem' }}>{employee.role}</p>
@@ -1018,6 +1130,16 @@ const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
                     .stat-card-mini .value {
                         font-size: 1.25rem;
                         font-weight: 700;
+                    }
+
+                    @media (max-width: 768px) {
+                      .manual-entry-header {
+                        grid-template-columns: 1fr !important;
+                      }
+                      
+                      div[style*="display: grid"][style*="grid-template-columns: repeat(auto-fit"] {
+                        grid-template-columns: repeat(2, 1fr) !important;
+                      }
                     }
                 `}</style>
             </div>

@@ -600,6 +600,96 @@ const Services = () => {
           font-weight: 600;
           margin-bottom: 0.75rem;
         }
+
+        @media (max-width: 768px) {
+          .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+          }
+
+          .header-actions {
+            width: 100%;
+            flex-direction: column;
+          }
+
+          .header-actions .btn,
+          .header-actions a.btn {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .category-filter {
+            justify-content: flex-start;
+            overflow-x: auto;
+            padding-bottom: 0.5rem;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .category-filter .btn {
+            white-space: nowrap;
+          }
+
+          .quick-stats-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+          }
+
+          .quick-stat-card {
+            padding: 0.75rem;
+            margin-bottom: 0;
+          }
+
+          .services-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .vehicle-prices {
+            grid-template-columns: repeat(3, 1fr) !important;
+          }
+
+          .modal-content {
+            width: 95% !important;
+            margin: 10px auto !important;
+            padding: 1.25rem;
+          }
+
+          .form-row {
+            flex-direction: column;
+            gap: 0 !important;
+          }
+
+          .form-group[style*="flex: 2"],
+          .form-group[style*="flex: 1"] {
+            flex: none !important;
+            width: 100%;
+          }
+
+          div[style*="display: flex"][style*="align-items: center"][style*="gap: 0.75rem"] {
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 0.5rem !important;
+            position: relative;
+            padding-right: 2.5rem !important;
+          }
+
+          div[style*="display: flex"][style*="align-items: center"][style*="gap: 0.75rem"] input,
+          div[style*="display: flex"][style*="align-items: center"][style*="gap: 0.75rem"] select {
+            width: 100% !important;
+          }
+
+          div[style*="display: flex"][style*="align-items: center"][style*="gap: 0.75rem"] button {
+            position: absolute;
+            right: 0.5rem;
+            top: 0.5rem;
+          }
+
+          div[style*="display: flex"][style*="align-items: center"][style*="gap: 0.75rem"] span[style*="min-width: 50px"] {
+             text-align: right;
+             margin-top: 0.25rem;
+          }
+        }
       `}</style>
         </div>
     );

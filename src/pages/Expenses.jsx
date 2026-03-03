@@ -290,6 +290,11 @@ const Expenses = () => {
                     grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
                     gap: 8px;
                 }
+                @media (max-width: 768px) {
+                  .calendar-grid {
+                    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+                  }
+                }
                 .calendar-day {
                     border: 1px solid #e2e8f0;
                     border-radius: 8px;
@@ -537,9 +542,90 @@ const Expenses = () => {
         .cat-bar { height: 100%; border-radius: 4px; transition: width 0.3s; }
         .cat-value { font-size: 0.8rem; color: var(--navy-600); text-align: right; }
         
-        @media (max-width: 600px) {
-          .category-bar-row { grid-template-columns: 80px 1fr 80px; gap: 0.5rem; }
-          .cat-value { font-size: 0.7rem; }
+        @media (max-width: 768px) {
+          .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+          }
+
+          .header-actions {
+            width: 100%;
+            flex-direction: column;
+          }
+
+          .header-actions .btn {
+            width: 100%;
+            justify-content: center;
+          }
+
+          .expense-summary-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+          }
+
+          .expense-summary-card {
+            padding: 1rem;
+            flex-direction: column;
+            text-align: center;
+            gap: 0.5rem;
+          }
+
+          .expense-icon {
+            width: 40px;
+            height: 40px;
+          }
+
+          .expense-value {
+            font-size: 1.1rem;
+          }
+
+          .search-filter-bar {
+            flex-direction: column;
+            gap: 0.75rem;
+          }
+
+          .filter-select {
+            width: 100%;
+          }
+
+          .expense-item {
+            padding: 0.75rem;
+          }
+
+          .expense-item-icon {
+            width: 32px;
+            height: 32px;
+            flex-shrink: 0;
+          }
+
+          .expense-item-details h4 {
+            font-size: 0.875rem;
+          }
+
+          .expense-item-amount .amount {
+            font-size: 0.9rem;
+          }
+
+          .category-bar-row {
+            grid-template-columns: 1fr;
+            gap: 0.25rem;
+          }
+
+          .cat-value {
+            text-align: left;
+            font-size: 0.75rem;
+          }
+
+          .modal-content {
+            width: 95% !important;
+            margin: 10px auto !important;
+          }
+
+          .form-row {
+            flex-direction: column;
+            gap: 0;
+          }
         }
 
         /* Daily Breakdown Styles */

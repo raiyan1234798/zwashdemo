@@ -495,8 +495,8 @@ const Dashboard = () => {
                                 <th>Ref ID</th>
                                 <th>Service Type</th>
                                 <th>Date / Time</th>
-                                <th>Price</th>
-                                <th>Status</th>
+                                <th className="desktop-only text-center">Amount</th>
+                                <th className="text-center">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -504,14 +504,14 @@ const Dashboard = () => {
                                 const badge = getStatusBadge(booking.status);
                                 return (
                                     <tr key={booking.id}>
-                                        <td className="ref-cell">{booking.bookingReference || booking.id.slice(0, 8)}</td>
-                                        <td className="service-cell">{booking.serviceName}</td>
-                                        <td className="date-time-cell">
+                                        <td className="ref-cell" data-label="Ref">{booking.bookingReference || booking.id.slice(0, 8)}</td>
+                                        <td className="service-cell" data-label="Service">{booking.serviceName}</td>
+                                        <td className="date-time-cell" data-label="Date & Time">
                                             <span>{booking.bookingDate}</span>
                                             <small>{booking.startTime}</small>
                                         </td>
-                                        <td className="price-cell">{formatCurrency(booking.price || 0)}</td>
-                                        <td><span className={`status-badge ${booking.status}`}>{badge.label}</span></td>
+                                        <td className="price-cell desktop-only text-center" data-label="Amount">{formatCurrency(booking.price || 0)}</td>
+                                        <td className="text-center" data-label="Status"><span className={`status-badge ${booking.status}`}>{badge.label}</span></td>
                                     </tr>
                                 );
                             })}
@@ -521,7 +521,8 @@ const Dashboard = () => {
             </div>
             <style>{`
                 .dashboard-page {
-                    padding-bottom: 3rem;
+                    padding: 0.5rem;
+                    padding-bottom: 5rem;
                 }
 
                 .dashboard-section-title {
@@ -537,8 +538,8 @@ const Dashboard = () => {
                 /* Modern Stats Grid */
                 .stats-grid-modern {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                    gap: 1.25rem;
+                    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+                    gap: 1rem;
                     margin-bottom: 1.5rem;
                 }
 
@@ -582,9 +583,9 @@ const Dashboard = () => {
                 /* Compact Stats Row */
                 .stats-grid-compact {
                     display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-                    gap: 1.25rem;
-                    margin-bottom: 2rem;
+                    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                    gap: 0.75rem;
+                    margin-bottom: 1.5rem;
                 }
 
                 .stat-card-compact {
@@ -645,10 +646,16 @@ const Dashboard = () => {
                     grid-column: span 2;
                 }
 
+                @media (max-width: 1024px) {
+                    .wide-widget { grid-column: span 1; }
+                }
+
                 .chart-container-large {
                     padding: 1.5rem;
                     background: #f8fafc;
                     height: 250px;
+                    overflow-x: auto;
+                    -webkit-overflow-scrolling: touch;
                 }
 
                 .revenue-chart {
@@ -657,6 +664,7 @@ const Dashboard = () => {
                     justify-content: space-between;
                     height: 100%;
                     gap: 1rem;
+                    min-width: 450px; /* Ensure chart doesn't squish too much */
                 }
 
                 .revenue-bar-group {
@@ -815,6 +823,12 @@ const Dashboard = () => {
                 .section-header h2 { font-size: 1.1rem; font-weight: 700; margin: 0; }
                 .btn-text { font-size: 0.85rem; color: var(--primary); font-weight: 600; text-decoration: none; }
 
+                .table-responsive {
+                    width: 100%;
+                    overflow-x: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
+
                 .modern-table {
                     width: 100%;
                     border-collapse: collapse;
@@ -823,17 +837,19 @@ const Dashboard = () => {
                 .modern-table th {
                     background: #f8fafc;
                     text-align: left;
-                    padding: 0.75rem 1.5rem;
+                    padding: 0.75rem 1.25rem;
                     font-size: 0.75rem;
                     text-transform: uppercase;
                     letter-spacing: 0.05em;
                     color: var(--navy-500);
+                    white-space: nowrap;
                 }
 
                 .modern-table td {
                     padding: 1rem 1.5rem;
                     border-bottom: 1px solid #f1f5f9;
                     font-size: 0.85rem;
+                    white-space: nowrap;
                 }
 
                 .date-time-cell span { display: block; font-weight: 600; }
@@ -852,14 +868,63 @@ const Dashboard = () => {
                 .status-badge.confirmed { background: #dbeafe; color: #1e40af; }
                 .status-badge.pending_confirmation { background: #ffedd5; color: #9a3412; }
 
-                @media (max-width: 1024px) {
-                    .wide-widget { grid-column: span 1; }
-                }
-
                 @media (max-width: 768px) {
-                    .stats-grid-modern { grid-template-columns: repeat(2, 1fr); }
+                    .stats-grid-modern { 
+                        grid-template-columns: repeat(2, 1fr); 
+                        gap: 0.75rem;
+                    }
+                    
+                    .stat-card-modern {
+                        padding: 1rem;
+                    }
+
+                    .stat-value {
+                        font-size: 1.4rem;
+                    }
+
                     .revenue-bar { width: 60%; }
-                    .modern-table th:nth-child(4), .modern-table td:nth-child(4) { display: none; }
+                    
+                    /* Modern Table Response */
+                    .modern-table thead {
+                        display: none;
+                    }
+
+                    .modern-table tr {
+                        display: block;
+                        margin-bottom: 1rem;
+                        border: 1px solid var(--navy-100);
+                        border-radius: 12px;
+                        padding: 0.5rem;
+                        background: white;
+                    }
+
+                    .modern-table td {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        padding: 0.6rem 0.75rem !important;
+                        border-bottom: 1px solid #f1f5f9;
+                        font-size: 0.9rem;
+                        white-space: normal;
+                        text-align: right !important;
+                    }
+
+                    .modern-table td:last-child {
+                        border-bottom: none;
+                    }
+
+                    .modern-table td::before {
+                        content: attr(data-label);
+                        font-weight: 700;
+                        color: var(--navy-500);
+                        font-size: 0.75rem;
+                        text-transform: uppercase;
+                        margin-right: 1rem;
+                        text-align: left;
+                    }
+                    
+                    .desktop-only { display: none; }
+                    .text-center { text-align: left !important; }
                 }
 
                 .dashboard-grid {

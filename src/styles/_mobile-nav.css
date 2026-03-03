@@ -91,13 +91,6 @@
         display: none;
     }
 
-    /* Adjust main content */
-    .main-content {
-        margin-left: 0;
-        padding-top: calc(60px + 1rem);
-        padding-bottom: calc(100px + env(safe-area-inset-bottom, 0));
-    }
-
     /* Hide bottom navigation - using top nav hamburger menu instead */
     .mobile-bottom-nav {
         display: none;
@@ -385,11 +378,5 @@
     .more-menu-logout:active {
         transform: scale(0.98);
         background: #fecaca;
-    }
-
-    /* Main content padding for bottom nav */
-    .main-content {
-        margin-left: 0;
-        padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
     }
 }
