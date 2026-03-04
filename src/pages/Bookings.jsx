@@ -2204,6 +2204,10 @@ const CompletionModal = ({ booking, onClose, onComplete }) => {
     const [fetchingMaterials, setFetchingMaterials] = useState(true);
     const [paymentSplits, setPaymentSplits] = useState([{ mode: 'cash', amount: String(booking.price || 0) }]);
 
+    const totalMaterialCost = selectedMaterials.reduce((sum, sm) => {
+        return sum + (Number(sm.quantity) || 0) * (Number(sm.costPerUnit) || 0);
+    }, 0);
+
     useEffect(() => {
         fetchMaterials();
     }, []);

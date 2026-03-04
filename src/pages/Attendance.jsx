@@ -176,6 +176,7 @@ const Attendance = () => {
     const getStatusColor = (status) => {
         switch (status) {
             case 'present': return '#10b981';
+            case 'permission': return '#0ea5e9';
             case 'absent': return '#ef4444';
             case 'half-day': return '#f59e0b';
             case 'paid_leave': return '#3b82f6';
@@ -188,6 +189,7 @@ const Attendance = () => {
     const getStatusIcon = (status) => {
         switch (status) {
             case 'present': return <Check size={14} />;
+            case 'permission': return <Clock size={14} />;
             case 'absent': return <X size={14} />;
             case 'half-day': return <Clock size={14} />;
             case 'paid_leave': return <UserCheck size={14} />;
@@ -419,12 +421,18 @@ const Attendance = () => {
                                 {(isEmployee ? employees.filter(e => e.id === userProfile?.uid) : employees).map(emp => {
                                     const empAtt = attendance.filter(a => a.userId === emp.id);
                                     const otHours = empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
-                                    const permHours = empAtt.reduce((sum, a) => sum + (Number(a.permissionHours) || 0), 0);
+
+                                    // Calculate permission hours - if missing but status is permission, assume 2h default
+                                    const permHours = empAtt.reduce((sum, a) => {
+                                        if (a.permissionHours) return sum + Number(a.permissionHours);
+                                        if (a.status === 'permission') return sum + 2;
+                                        return sum;
+                                    }, 0);
 
                                     return (
                                         <tr key={emp.id}>
                                             {!isEmployee && <td><strong>{emp.displayName}</strong></td>}
-                                            <td style={{ color: '#10b981' }}>{(empAtt.filter(a => a.status === 'present' || a.status === 'permission').reduce((sum, a) => sum + (Number(a.presentHours) || 8), 0) / 8).toFixed(1)}</td>
+                                            <td style={{ color: '#10b981' }}>{(empAtt.filter(a => a.status === 'present' || a.status === 'permission' || a.status === 'overtime').reduce((sum, a) => sum + (Number(a.presentHours) || 8), 0) / 8).toFixed(1)}</td>
                                             <td style={{ color: '#ef4444' }}>{empAtt.filter(a => a.status === 'absent').length}</td>
                                             <td style={{ color: '#f59e0b' }}>{empAtt.filter(a => a.status === 'half-day').length}</td>
                                             <td style={{ color: '#3b82f6' }}>{empAtt.filter(a => a.status === 'paid_leave').length}</td>
@@ -1181,17 +1189,5 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
     );
 };
 
-const getStatusColor = (status) => {
-    switch (status) {
-        case 'present': return '#10b981';
-        case 'permission': return '#0ea5e9';
-        case 'absent': return '#ef4444';
-        case 'half-day': return '#f59e0b';
-        case 'paid_leave': return '#3b82f6';
-        case 'unpaid_leave': return '#fca5a5';
-        case 'overtime': return '#8b5cf6';
-        default: return '#e5e7eb';
-    }
-};
 
 export default Attendance;

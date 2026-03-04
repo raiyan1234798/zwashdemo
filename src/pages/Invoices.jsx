@@ -79,11 +79,25 @@ const Invoices = () => {
                 .map(d => ({ id: d.id, ...d.data(), source: 'booking' }))
                 .filter(b => b.status === 'completed' && b.isArchived);
 
-            // Combine and sort by date
-            const allActive = [...completedBookings, ...activeManual]
-                .sort((a, b) => (b.bookingDate || b.invoiceDate || '').localeCompare(a.bookingDate || a.invoiceDate || ''));
-            const allArchived = [...archivedBookings, ...archivedManual]
-                .sort((a, b) => (b.bookingDate || b.invoiceDate || '').localeCompare(a.bookingDate || a.invoiceDate || ''));
+            // Combine and sort by date, then invoice number, then creation time
+            const sortInvoices = (list) => {
+                return list.sort((a, b) => {
+                    const dateA = a.bookingDate || a.invoiceDate || '';
+                    const dateB = b.bookingDate || b.invoiceDate || '';
+                    if (dateA !== dateB) return dateB.localeCompare(dateA);
+
+                    const invA = a.invoiceNumber || '';
+                    const invB = b.invoiceNumber || '';
+                    if (invA !== invB) return invB.localeCompare(invA);
+
+                    const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
+                    const timeB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
+                    return timeB - timeA;
+                });
+            };
+
+            const allActive = sortInvoices([...completedBookings, ...activeManual]);
+            const allArchived = sortInvoices([...archivedBookings, ...archivedManual]);
 
             setInvoices(allActive);
             setArchivedInvoices(allArchived);
@@ -164,8 +178,18 @@ const Invoices = () => {
 
             // Fallback for older invoices or if history had no splits
             if (Object.keys(methodTotals).length === 0 && inv.paymentMode && inv.paymentMode !== 'none') {
-                methodTotals[inv.paymentMode.toLowerCase().trim()] = inv.paidAmount || 0;
+                // Handle legacy combined strings like "UPI + Cash"
+                const legacyModes = String(inv.paymentMode).toLowerCase().split(/[+/&,]/).map(m => m.trim());
+                legacyModes.forEach(m => {
+                    if (m) methodTotals[m] = (methodTotals[m] || 0) + (Number(inv.paidAmount) || 0);
+                });
             }
+
+            const isModeMatch = (modeKey, filterValue) => {
+                if (!modeKey || !filterValue) return false;
+                const normalize = (s) => String(s).replace(/_/g, ' ').toLowerCase().trim();
+                return normalize(modeKey) === normalize(filterValue);
+            };
 
             let methodsToShow = {};
             let hasFilteredMethod = false;
@@ -183,7 +207,17 @@ const Invoices = () => {
                 hasFilteredMethod = methodTotals['upi'] > 0 || methodTotals['card'] > 0;
                 methodsToShow = { upi: methodTotals['upi'] || 0, card: methodTotals['card'] || 0 };
             } else {
-                hasFilteredMethod = methodTotals[exportPaymentFilter.toLowerCase()] > 0;
+                hasFilteredMethod = Object.entries(methodTotals).some(([mode, amt]) =>
+                    amt > 0 && isModeMatch(mode, exportPaymentFilter)
+                );
+
+                // Fallback for unpaid intent
+                const hasPayments = Object.values(methodTotals).some(amt => amt > 0);
+                if (!hasFilteredMethod && !hasPayments && exportPaymentFilter !== 'all') {
+                    const intentMode = String(inv.paymentMode || '').toLowerCase();
+                    hasFilteredMethod = isModeMatch(intentMode, exportPaymentFilter);
+                }
+
                 methodsToShow = { [exportPaymentFilter.toLowerCase()]: methodTotals[exportPaymentFilter.toLowerCase()] || 0 };
             }
 
@@ -219,7 +253,6 @@ const Invoices = () => {
                 'Total Amount': inv.price,
                 'Paid Amount': paidAmt,
                 'Payment Status': inv.paymentStatus || 'unpaid',
-                'Payment Method': paymentMethodsStr,
                 'License Plate': inv.licensePlate,
                 'Customer Name': inv.customerName,
                 'Customer Phone': inv.contactPhone
@@ -238,7 +271,6 @@ const Invoices = () => {
             'Total Amount': '',
             'Paid Amount': totalPaid,
             'Payment Status': '',
-            'Payment Method': '',
             'License Plate': '',
             'Customer Name': '',
             'Customer Phone': ''
@@ -247,7 +279,8 @@ const Invoices = () => {
         const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Invoices');
-        XLSX.writeFile(wb, `invoices_${new Date().toISOString().split('T')[0]}.xlsx`);
+        const filename = `invoices_${exportPaymentFilter}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, filename);
     };
 
     // Payment status update
@@ -735,10 +768,69 @@ const Invoices = () => {
         : currentInvoices;
 
     const filteredInvoices = baseInvoices.filter(inv => {
+        // Remove invoices with amount 0 (user request)
+        if ((inv.price || 0) === 0) return false;
+
         // Date Range Filter
         const invDate = inv.bookingDate || inv.invoiceDate;
         if (dateFilter.start && invDate < dateFilter.start) return false;
         if (dateFilter.end && invDate > dateFilter.end) return false;
+
+        // Payment Method Filter
+        if (exportPaymentFilter !== 'all') {
+            const methodTotals = {};
+            if (inv.paymentHistory && Array.isArray(inv.paymentHistory)) {
+                inv.paymentHistory.forEach(historyEntry => {
+                    if (historyEntry.splits && Array.isArray(historyEntry.splits)) {
+                        historyEntry.splits.forEach(split => {
+                            const mode = (split.mode || 'unknown').toLowerCase().trim();
+                            methodTotals[mode] = (methodTotals[mode] || 0) + (Number(split.amount) || 0);
+                        });
+                    }
+                });
+            }
+
+            // Fallback for older invoices or if history had no splits
+            if (Object.keys(methodTotals).length === 0 && inv.paymentMode && inv.paymentMode !== 'none') {
+                // Handle legacy combined strings like "UPI + Cash"
+                const legacyModes = String(inv.paymentMode).toLowerCase().split(/[+/&,]/).map(m => m.trim());
+                legacyModes.forEach(m => {
+                    if (m) methodTotals[m] = (methodTotals[m] || 0) + (Number(inv.paidAmount) || 0);
+                });
+            }
+
+            const isModeMatch = (modeKey, filterValue) => {
+                if (!modeKey || !filterValue) return false;
+                const normalize = (s) => String(s).replace(/_/g, ' ').toLowerCase().trim();
+                return normalize(modeKey) === normalize(filterValue);
+            };
+
+            let hasFilteredMethod = false;
+            const hasPayments = Object.values(methodTotals).some(amt => amt > 0);
+
+            if (exportPaymentFilter === 'unpaid') {
+                hasFilteredMethod = (!hasPayments || inv.paymentStatus === 'unpaid');
+            } else if (exportPaymentFilter === 'upi+cash') {
+                hasFilteredMethod = methodTotals['upi'] > 0 || methodTotals['cash'] > 0;
+            } else if (exportPaymentFilter === 'upi+card') {
+                hasFilteredMethod = methodTotals['upi'] > 0 || methodTotals['card'] > 0;
+            } else {
+                // Check if any of the recorded payment modes match the selected filter
+                hasFilteredMethod = Object.entries(methodTotals).some(([mode, amt]) =>
+                    amt > 0 && isModeMatch(mode, exportPaymentFilter)
+                );
+
+                // If it's a specific mode search like 'cash', and record is unpaid, 
+                // we check if the intended mode (paymentMode) matches. This helps with 
+                // records that are unpaid but intended to be a certain mode.
+                if (!hasFilteredMethod && !hasPayments && exportPaymentFilter !== 'all') {
+                    const intentMode = String(inv.paymentMode || '').toLowerCase();
+                    hasFilteredMethod = isModeMatch(intentMode, exportPaymentFilter);
+                }
+            }
+
+            if (!hasFilteredMethod) return false;
+        }
 
         if (!searchTerm) return true;
         const search = searchTerm.toLowerCase();
@@ -849,7 +941,7 @@ const Invoices = () => {
                             <FileText size={20} />
                         </div>
                         <div className="stat-info">
-                            <span className="stat-value">{formatCurrency(filteredInvoices.reduce((sum, inv) => sum + (inv.price || 0), 0))}</span>
+                            <span className="stat-value">{formatCurrency(filteredInvoices.reduce((sum, inv) => sum + (Number(inv.price) || 0), 0))}</span>
                             <span className="stat-label">Revenue (Shown)</span>
                         </div>
                     </div>

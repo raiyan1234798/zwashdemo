@@ -7,6 +7,7 @@ import { generateAvailableStartTimes, getSettings, timeToMinutes } from '../util
 const Calendar = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [bookings, setBookings] = useState({});
+  const [attendance, setAttendance] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedBookings, setSelectedBookings] = useState([]);
@@ -26,6 +27,7 @@ const Calendar = () => {
 
   useEffect(() => {
     fetchMonthBookings();
+    fetchMonthAttendance();
   }, [currentDate]);
 
   useEffect(() => {
@@ -87,6 +89,38 @@ const Calendar = () => {
       console.error('Error fetching bookings:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMonthAttendance = async () => {
+    try {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const lastDay = `${year}-${String(month + 1).padStart(2, '0')}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, '0')}`;
+
+      const q = query(collection(db, 'attendance'), where('date', '>=', firstDay), where('date', '<=', lastDay));
+      const snapshot = await getDocs(q);
+      const attMap = {};
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (!attMap[data.date]) attMap[data.date] = [];
+        attMap[data.date].push(data);
+      });
+      setAttendance(attMap);
+    } catch (err) {
+      console.error("Error fetching monthly attendance:", err);
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'permission': return '#0ea5e9';
+      case 'absent': return '#ef4444';
+      case 'half-day': return '#f59e0b';
+      case 'paid_leave': return '#3b82f6';
+      case 'unpaid_leave': return '#fca5a5';
+      default: return null;
     }
   };
 
@@ -163,7 +197,16 @@ const Calendar = () => {
         onClick={() => handleDayClick(dateStr, dayBookings)}
         style={{ cursor: 'pointer' }}
       >
-        <span className="day-number">{day}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <span className="day-number">{day}</span>
+          <div style={{ display: 'flex', gap: '2px' }}>
+            {attendance[dateStr] && attendance[dateStr].map((att, idx) => {
+              const color = getStatusColor(att.status);
+              if (!color) return null;
+              return <div key={idx} style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: color }} title={att.status} />;
+            })}
+          </div>
+        </div>
         {dayBookings.length > 0 && (
           <div className="day-bookings">
             <span className="booking-count">{dayBookings.length} booking{dayBookings.length > 1 ? 's' : ''}</span>
@@ -783,7 +826,21 @@ const Calendar = () => {
             padding: 0.875rem;
           }
         }
-      `}</style>
+        .day-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+      .day-attendance-indicators {
+        display: flex;
+        gap: 2px;
+      }
+      .att-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+      }
+    `}</style>
     </div>
   );
 };
