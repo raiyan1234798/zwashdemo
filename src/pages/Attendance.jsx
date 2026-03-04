@@ -4,174 +4,188 @@ import { db } from '../config/firebase';
 import {
     collection,
     query,
-    where,
     getDocs,
     addDoc,
     updateDoc,
     deleteDoc,
     doc,
+    orderBy,
+    where,
     serverTimestamp
 } from 'firebase/firestore';
 import {
-    Calendar,
     Users,
-    Check,
-    X,
+    Calendar,
     Clock,
+    UserCheck,
+    UserX,
     AlertCircle,
     ChevronLeft,
     ChevronRight,
-    UserCheck,
-    UserX,
-    CalendarOff, // Added icon
-    Plus, // Added for HolidayManagementModal
-    Trash2 // Added for HolidayManagementModal
+    Save,
+    Trash2,
+    FileText,
+    Plus,
+    Download,
+    Mail,
+    Phone,
+    Briefcase,
+    Zap
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const Attendance = () => {
-    const { hasPermission, isEmployee, isSeniorEmployee, isManager, userProfile } = useAuth();
+    const { hasPermission, userProfile, isAdmin } = useAuth();
     const [employees, setEmployees] = useState([]);
     const [attendance, setAttendance] = useState([]);
-    const [holidays, setHolidays] = useState([]); // Holiday state
+    const [holidays, setHolidays] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [currentDate, setCurrentDate] = useState(new Date());
-    const [selectedEmployee, setSelectedEmployee] = useState('all');
+    const [currentMonth, setCurrentMonth] = useState(new Date());
     const [showMarkModal, setShowMarkModal] = useState(false);
-    const [showHolidayModal, setShowHolidayModal] = useState(false); // Holiday modal
-
-    const formatDecimalHours = (decimalHours) => {
-        if (!decimalHours || decimalHours <= 0) return '0h';
-        const h = Math.floor(decimalHours);
-        const m = Math.round((decimalHours - h) * 60);
-        if (h > 0 && m > 0) return `${h}h ${m}m`;
-        if (h > 0) return `${h}h`;
-        return `${m}m`;
-    };
+    const [showHolidayModal, setShowHolidayModal] = useState(false);
+    const [stats, setStats] = useState({ present: 0, absent: 0, leaves: 0, overtime: 0 });
 
     useEffect(() => {
         fetchData();
-    }, [currentDate]);
+    }, [currentMonth]);
 
     const fetchData = async () => {
         try {
             setLoading(true);
-            // Fetch employees
-            const empQuery = query(collection(db, 'adminUsers'), where('status', '==', 'approved'));
-            const empSnapshot = await getDocs(empQuery);
-            const empList = empSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setEmployees(empList);
+            // Fetch employees from adminUsers collection
+            const empSnapshot = await getDocs(query(
+                collection(db, 'adminUsers'),
+                where('status', '==', 'approved')
+            ));
+            const empData = empSnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(u => {
+                    const role = (u.role || '').toLowerCase();
+                    const validRoles = ['admin', 'manager', 'senior_employee', 'employee', 'worker', 'staff'];
+                    return validRoles.includes(role);
+                });
+            setEmployees(empData);
 
             // Fetch attendance for current month
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth();
-            // Use YYYY-MM-DD format with local dates
-            const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-            const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
-            const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
+            const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).toISOString().split('T')[0];
+            const endOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).toISOString().split('T')[0];
 
             const attQuery = query(
                 collection(db, 'attendance'),
-                where('date', '>=', startDate),
-                where('date', '<=', endDate)
+                where('date', '>=', startOfMonth),
+                where('date', '<=', endOfMonth)
             );
             const attSnapshot = await getDocs(attQuery);
-            const attList = attSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setAttendance(attList);
+            const attData = attSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setAttendance(attData);
 
-            // Fetch Holidays
-            const holidayQuery = query(
-                collection(db, 'holidays'),
-                where('date', '>=', startDate),
-                where('date', '<=', endDate)
-            );
-            const holidaySnapshot = await getDocs(holidayQuery);
-            const holidayList = holidaySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setHolidays(holidayList);
+            // Fetch holidays
+            const holSnapshot = await getDocs(collection(db, 'holidays'));
+            setHolidays(holSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
+            calculateStats(attData);
         } catch (error) {
-            console.error('Error fetching data:', error);
+            console.error('Error fetching attendance data:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    const getMonthDays = () => {
-        const year = currentDate.getFullYear();
-        const month = currentDate.getMonth();
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-        const days = [];
+    const calculateStats = (data) => {
+        const today = new Date().toISOString().split('T')[0];
+        const todayAtt = data.filter(a => a.date === today);
 
-        // Add empty cells for days before the first day of the month
-        for (let i = 0; i < firstDay.getDay(); i++) {
-            days.push(null);
-        }
-
-        // Add all days of the month
-        for (let i = 1; i <= lastDay.getDate(); i++) {
-            days.push(new Date(year, month, i));
-        }
-
-        return days;
+        setStats({
+            total: employees.length,
+            present: todayAtt.filter(a => a.status === 'present' || a.status === 'permission' || a.status === 'half-day').length,
+            leaves: todayAtt.filter(a => a.status.includes('leave')).length
+        });
     };
 
-    const getAttendanceForDate = (date, employeeId) => {
-        if (!date) return null;
-        // Format date as YYYY-MM-DD without timezone conversion
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
-        return attendance.find(a => a.date === dateStr && a.userId === employeeId);
-    };
-
-    const isHoliday = (date) => {
-        if (!date) return null;
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
-        return holidays.find(h => h.date === dateStr);
-    };
-
-    const markAttendance = async (employeeId, dateStr, status, extraData = {}) => {
+    const handleMarkAttendance = async (userId, date, status, extraData = {}) => {
         try {
-            // dateStr is already in YYYY-MM-DD format
-            const existing = attendance.find(a => a.date === dateStr && a.userId === employeeId);
+            const existing = attendance.find(a => a.userId === userId && a.date === date);
+            const data = {
+                userId,
+                date,
+                status,
+                ...extraData,
+                updatedAt: serverTimestamp(),
+                updatedBy: userProfile?.displayName || 'Admin'
+            };
 
             if (existing) {
-                if (status === 'delete') {
-                    await deleteDoc(doc(db, 'attendance', existing.id));
-                } else {
-                    await updateDoc(doc(db, 'attendance', existing.id), {
-                        status: status,
-                        updatedAt: serverTimestamp(),
-                        ...extraData
-                    });
-                }
-            } else if (status !== 'delete') {
+                await updateDoc(doc(db, 'attendance', existing.id), data);
+            } else {
                 await addDoc(collection(db, 'attendance'), {
-                    userId: employeeId,
-                    date: dateStr,
-                    status: status,
-                    createdAt: serverTimestamp(),
-                    ...extraData
+                    ...data,
+                    createdAt: serverTimestamp()
                 });
             }
-
             fetchData();
         } catch (error) {
             console.error('Error marking attendance:', error);
         }
     };
 
-    const prevMonth = () => {
-        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    const handleAddHoliday = async (date, name) => {
+        try {
+            await addDoc(collection(db, 'holidays'), {
+                date,
+                name,
+                createdAt: serverTimestamp()
+            });
+            fetchData();
+        } catch (error) {
+            console.error('Error adding holiday:', error);
+        }
     };
 
-    const nextMonth = () => {
-        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    const handleDeleteHoliday = async (id) => {
+        try {
+            await deleteDoc(doc(db, 'holidays', id));
+            fetchData();
+        } catch (error) {
+            console.error('Error deleting holiday:', error);
+        }
     };
+
+    const exportToExcel = () => {
+        // Create matrix: Row = Employee, Col = Day
+        const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+        const exportData = employees.map(emp => {
+            const row = { 'Employee Name': emp.displayName };
+            let totalPresent = 0;
+            let totalOt = 0;
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                const att = attendance.find(a => a.userId === emp.id && a.date === dateStr);
+                row[d] = att ? att.status.charAt(0).toUpperCase() : '-';
+                if (att?.status === 'present' || att?.status === 'permission') totalPresent++;
+                totalOt += Number(att?.overtimeHours || 0);
+            }
+
+            row['Total Present'] = totalPresent;
+            row['Total Overtime'] = totalOt.toFixed(1);
+            return row;
+        });
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+        XLSX.writeFile(wb, `Attendance_${currentMonth.getFullYear()}_${currentMonth.getMonth() + 1}.xlsx`);
+    };
+
+    const changeMonth = (offset) => {
+        const newDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
+        setCurrentMonth(newDate);
+    };
+
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -181,572 +195,323 @@ const Attendance = () => {
             case 'half-day': return '#f59e0b';
             case 'paid_leave': return '#3b82f6';
             case 'unpaid_leave': return '#fca5a5';
-            case 'overtime': return '#8b5cf6';
-            default: return '#e5e7eb';
-        }
-    };
-
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case 'present': return <Check size={14} />;
-            case 'permission': return <Clock size={14} />;
-            case 'absent': return <X size={14} />;
-            case 'half-day': return <Clock size={14} />;
-            case 'paid_leave': return <UserCheck size={14} />;
-            case 'unpaid_leave': return <UserX size={14} />;
-            case 'overtime': return <Clock size={14} />;
             default: return null;
         }
     };
 
-    // Calculate stats - use local date format
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const todayAttendance = attendance.filter(a => a.date === today);
-    const presentToday = todayAttendance.filter(a => a.status === 'present' || a.status === 'permission' || a.status === 'overtime').length;
-    const absentToday = todayAttendance.filter(a => a.status === 'absent' || a.status === 'unpaid_leave').length;
+    const renderCalendarDays = () => {
+        const days = [];
+        // Empty cells for the start of the month
+        for (let i = 0; i < firstDayOfMonth; i++) {
+            days.push(<div key={`empty-${i}`} className="calendar-day empty"></div>);
+        }
 
-    const monthDays = getMonthDays();
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'];
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const isToday = new Date().toISOString().split('T')[0] === dateStr;
+            const isHoliday = holidays.some(h => h.date === dateStr);
+            const dayAttendance = attendance.filter(a => a.date === dateStr);
 
-    // For employees: only show their own attendance
-    // For managers/admins: show all employees (or filtered if selected)
-    const filteredEmployees = isEmployee
-        ? employees.filter(e => e.id === userProfile?.uid)
-        : selectedEmployee === 'all'
-            ? employees
-            : employees.filter(e => e.id === selectedEmployee);
+            days.push(
+                <div key={day} className={`calendar-day ${isToday ? 'today' : ''} ${isHoliday ? 'holiday' : ''}`}>
+                    <div className="day-header">
+                        <span className="day-number">{day}</span>
+                        {isHoliday && <span style={{ fontSize: '0.6rem', color: '#8b5cf6', fontWeight: 'bold' }}>HOLIDAY</span>}
+                    </div>
+                    <div className="day-dots">
+                        {dayAttendance.map((att, idx) => (
+                            <div
+                                key={idx}
+                                className="att-dot"
+                                style={{ backgroundColor: getStatusColor(att.status) }}
+                                title={`${employees.find(e => e.id === att.userId)?.displayName}: ${att.status}`}
+                            />
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+        return days;
+    };
 
     return (
         <div className="attendance-page">
             <div className="page-header">
                 <div>
-                    <h1><Calendar size={28} /> {isEmployee ? 'My Attendance' : 'Attendance'}</h1>
-                    <p className="subtitle">{isEmployee ? 'View your attendance records' : 'Track employee attendance'}</p>
+                    <h1><Calendar size={28} /> Attendance</h1>
+                    <p className="subtitle">Track employee attendance</p>
                 </div>
                 <div className="header-actions">
-                    {(hasPermission('attendance', 'create') || hasPermission('attendance', 'edit')) && (
-                        <>
-                            <button className="btn btn-secondary" onClick={() => setShowHolidayModal(true)}>
-                                <CalendarOff size={18} /> Manage Holidays
-                            </button>
-                            <button className="btn btn-primary" onClick={() => setShowMarkModal(true)}>
-                                <UserCheck size={18} /> Mark Attendance
-                            </button>
-                        </>
+                    <button className="btn btn-secondary" onClick={() => setShowHolidayModal(true)}>
+                        Manage Holidays
+                    </button>
+                    {hasPermission('attendance', 'create') && (
+                        <button className="btn btn-primary" onClick={() => setShowMarkModal(true)}>
+                            <Plus size={18} /> Mark Attendance
+                        </button>
                     )}
                 </div>
             </div>
 
-            {/* Stats - Show employee-specific stats for employees */}
-            {isEmployee ? (
-                <div className="quick-stats-row">
-                    <div className="quick-stat-card">
-                        <div className="stat-icon green">
-                            <UserCheck size={20} />
-                        </div>
-                        <div className="stat-info">
-                            <span className="stat-value">{(attendance.filter(a => a.userId === userProfile?.uid && (a.status === 'present' || a.status === 'permission')).reduce((sum, a) => sum + (Number(a.presentHours) || 8), 0) / 8).toFixed(1)}</span>
-                            <span className="stat-label">Present (Days)</span>
-                        </div>
+            {/* Attendance Stats Cards */}
+            <div className="quick-stats-row">
+                <div className="quick-stat-card">
+                    <div className="stat-icon blue">
+                        <Users size={20} />
                     </div>
-                    <div className="quick-stat-card">
-                        <div className="stat-icon red">
-                            <UserX size={20} />
-                        </div>
-                        <div className="stat-info">
-                            <span className="stat-value">{attendance.filter(a => a.userId === userProfile?.uid && a.status === 'absent').length}</span>
-                            <span className="stat-label">Days Absent</span>
-                        </div>
-                    </div>
-                    <div className="quick-stat-card">
-                        <div className="stat-icon purple">
-                            <Clock size={20} />
-                        </div>
-                        <div className="stat-info">
-                            <span className="stat-value">{attendance.filter(a => a.userId === userProfile?.uid).reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0)}h</span>
-                            <span className="stat-label">Overtime</span>
-                        </div>
+                    <div className="stat-info">
+                        <span className="stat-value">{stats.total || 0}</span>
+                        <span className="stat-label">Total Employees</span>
                     </div>
                 </div>
-            ) : (
-                <div className="quick-stats-row">
-                    <div className="quick-stat-card">
-                        <div className="stat-icon blue">
-                            <Users size={20} />
-                        </div>
-                        <div className="stat-info">
-                            <span className="stat-value">{employees.length}</span>
-                            <span className="stat-label">Total Employees</span>
-                        </div>
+                <div className="quick-stat-card">
+                    <div className="stat-icon green">
+                        <UserCheck size={20} />
                     </div>
-                    <div className="quick-stat-card">
-                        <div className="stat-icon green">
-                            <UserCheck size={20} />
-                        </div>
-                        <div className="stat-info">
-                            <span className="stat-value">{presentToday}</span>
-                            <span className="stat-label">Present Today</span>
-                        </div>
-                    </div>
-                    <div className="quick-stat-card">
-                        <div className="stat-icon red">
-                            <UserX size={20} />
-                        </div>
-                        <div className="stat-info">
-                            <span className="stat-value">{absentToday}</span>
-                            <span className="stat-label">Absent Today</span>
-                        </div>
+                    <div className="stat-info">
+                        <span className="stat-value">{stats.present || 0}</span>
+                        <span className="stat-label">Present Today</span>
                     </div>
                 </div>
-            )}
-
-            {/* Calendar Header */}
-            <div className="calendar-header">
-                <button className="btn btn-secondary" onClick={prevMonth}>
-                    <ChevronLeft size={20} />
-                </button>
-                <h2>{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h2>
-                <button className="btn btn-secondary" onClick={nextMonth}>
-                    <ChevronRight size={20} />
-                </button>
-            </div>
-
-            {/* Employee Filter - Only show for managers/admins */}
-            {!isEmployee && (
-                <div className="search-filter-bar">
-                    <select
-                        className="filter-select"
-                        value={selectedEmployee}
-                        onChange={(e) => setSelectedEmployee(e.target.value)}
-                    >
-                        <option value="all">All Employees</option>
-                        {employees.map(emp => (
-                            <option key={emp.id} value={emp.id}>{emp.displayName}</option>
-                        ))}
-                    </select>
-                </div>
-            )}
-
-            {/* Calendar Grid */}
-            <div className="card">
-                <div className="card-body">
-                    {loading ? (
-                        <div className="empty-state"><div className="loader"></div></div>
-                    ) : (
-                        <>
-                            {/* Day Headers */}
-                            <div className="calendar-grid">
-                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                                    <div key={day} className="calendar-day-header">{day}</div>
-                                ))}
-
-                                {/* Calendar Days */}
-                                {monthDays.map((day, index) => {
-                                    const holiday = isHoliday(day);
-                                    return (
-                                        <div
-                                            key={index}
-                                            className={`calendar-day ${!day ? 'empty' : ''} ${day?.toDateString() === new Date().toDateString() ? 'today' : ''} ${holiday ? 'holiday' : ''}`}
-                                        >
-                                            {day && (
-                                                <>
-                                                    <span className="day-number">{day.getDate()}</span>
-                                                    {holiday && (
-                                                        <div className="holiday-badge" title={holiday.name}>
-                                                            <CalendarOff size={10} /> {holiday.name}
-                                                        </div>
-                                                    )}
-                                                    <div className="day-attendance">
-                                                        {filteredEmployees.map(emp => {
-                                                            const att = getAttendanceForDate(day, emp.id);
-                                                            if (!att) return null;
-                                                            return (
-                                                                <div
-                                                                    key={emp.id}
-                                                                    className="attendance-dot"
-                                                                    style={{ background: getStatusColor(att.status) }}
-                                                                    title={`${emp.displayName}: ${att.status} ${att.overtimeHours ? `(${att.overtimeHours}h OT)` : ''}`}
-                                                                >
-                                                                    {getStatusIcon(att.status)}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Legend */}
-                            <div className="attendance-legend">
-                                <span><span className="legend-dot" style={{ background: '#10b981' }}></span> Present</span>
-                                <span><span className="legend-dot" style={{ background: '#0ea5e9' }}></span> Permission</span>
-                                <span><span className="legend-dot" style={{ background: '#ef4444' }}></span> Absent</span>
-                                <span><span className="legend-dot" style={{ background: '#f59e0b' }}></span> Half-day</span>
-                                <span><span className="legend-dot" style={{ background: '#3b82f6' }}></span> Paid Leave</span>
-                                <span><span className="legend-dot" style={{ background: '#fca5a5' }}></span> Unpaid Leave</span>
-                                <span><span className="legend-dot" style={{ background: '#8b5cf6' }}></span> Overtime</span>
-                                <span><span className="legend-dot" style={{ background: '#fee2e2', border: '1px dashed #ef4444' }}></span> Holiday</span>
-                            </div>
-                        </>
-                    )}
+                <div className="quick-stat-card">
+                    <div className="stat-icon orange">
+                        <AlertCircle size={20} />
+                    </div>
+                    <div className="stat-info">
+                        <span className="stat-value">{stats.leaves || 0}</span>
+                        <span className="stat-label">On Leave</span>
+                    </div>
                 </div>
             </div>
 
-            {/* Employee Attendance Summary */}
-            <div className="card" style={{ marginTop: '1.5rem' }}>
-                <div className="card-header">
-                    <h3>{isEmployee ? 'My Monthly Summary' : 'Monthly Summary'}</h3>
-                </div>
-                <div className="card-body">
-                    <div className="table-container desktop-table">
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    {!isEmployee && <th>Employee</th>}
-                                    <th>Present (Days)</th>
-                                    <th>Absent</th>
-                                    <th>Half-day</th>
-                                    <th>Paid Leave</th>
-                                    <th>Unpaid Leave</th>
-                                    <th>Permission (Hrs)</th>
-                                    <th>Overtime (Hrs)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {(isEmployee ? employees.filter(e => e.id === userProfile?.uid) : employees).map(emp => {
-                                    const empAtt = attendance.filter(a => a.userId === emp.id);
-                                    const otHours = empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
-
-                                    // Calculate permission hours - if missing but status is permission, assume 2h default
-                                    const permHours = empAtt.reduce((sum, a) => {
-                                        if (a.permissionHours) return sum + Number(a.permissionHours);
-                                        if (a.status === 'permission') return sum + 2;
-                                        return sum;
-                                    }, 0);
-
-                                    return (
-                                        <tr key={emp.id}>
-                                            {!isEmployee && <td><strong>{emp.displayName}</strong></td>}
-                                            <td style={{ color: '#10b981' }}>{(empAtt.filter(a => a.status === 'present' || a.status === 'permission' || a.status === 'overtime').reduce((sum, a) => sum + (Number(a.presentHours) || 8), 0) / 8).toFixed(1)}</td>
-                                            <td style={{ color: '#ef4444' }}>{empAtt.filter(a => a.status === 'absent').length}</td>
-                                            <td style={{ color: '#f59e0b' }}>{empAtt.filter(a => a.status === 'half-day').length}</td>
-                                            <td style={{ color: '#3b82f6' }}>{empAtt.filter(a => a.status === 'paid_leave').length}</td>
-                                            <td style={{ color: '#fca5a5' }}>{empAtt.filter(a => a.status === 'unpaid_leave').length}</td>
-                                            <td style={{ color: '#0ea5e9' }}>{formatDecimalHours(permHours)}</td>
-                                            <td style={{ color: '#8b5cf6' }}>{formatDecimalHours(otHours)}</td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+            <div className="attendance-container">
+                <div className="card calendar-card">
+                    <div className="card-header" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem' }}>
+                        <button className="btn-icon" onClick={() => changeMonth(-1)}><ChevronLeft size={20} /></button>
+                        <h2 style={{ minWidth: '150px', textAlign: 'center', margin: 0 }}>
+                            {currentMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                        </h2>
+                        <button className="btn-icon" onClick={() => changeMonth(1)}><ChevronRight size={20} /></button>
                     </div>
-
-                    {/* Mobile Cards for Summary */}
-                    <div className="mobile-cards">
-                        {(isEmployee ? employees.filter(e => e.id === userProfile?.uid) : employees).map(emp => {
-                            const empAtt = attendance.filter(a => a.userId === emp.id);
-                            const otHours = empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
-
-                            return (
-                                <div key={emp.id} style={{
-                                    background: 'var(--navy-50)',
-                                    borderRadius: '8px',
-                                    padding: '1rem',
-                                    marginBottom: '0.75rem',
-                                    border: '1px solid var(--navy-100)'
-                                }}>
-                                    {!isEmployee && <div style={{ fontWeight: '600', marginBottom: '0.75rem', fontSize: '1rem' }}>{emp.displayName}</div>}
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
-                                        <div style={{ textAlign: 'center', background: '#dcfce7', padding: '0.5rem', borderRadius: '6px' }}>
-                                            <div style={{ color: '#10b981', fontWeight: 'bold', fontSize: '1.1rem' }}>{(empAtt.filter(a => a.status === 'present' || a.status === 'permission').reduce((sum, a) => sum + (Number(a.presentHours) || 8), 0) / 8).toFixed(1)}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#166534' }}>Present (Days)</div>
-                                        </div>
-                                        <div style={{ textAlign: 'center', background: '#fee2e2', padding: '0.5rem', borderRadius: '6px' }}>
-                                            <div style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '1.1rem' }}>{empAtt.filter(a => a.status === 'absent').length}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#991b1b' }}>Absent</div>
-                                        </div>
-                                        <div style={{ textAlign: 'center', background: '#fef3c7', padding: '0.5rem', borderRadius: '6px' }}>
-                                            <div style={{ color: '#d97706', fontWeight: 'bold', fontSize: '1.1rem' }}>{empAtt.filter(a => a.status === 'half-day').length}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#92400e' }}>Half-Day</div>
-                                        </div>
-                                        <div style={{ textAlign: 'center', background: '#dbeafe', padding: '0.5rem', borderRadius: '6px' }}>
-                                            <div style={{ color: '#2563eb', fontWeight: 'bold', fontSize: '1.1rem' }}>{empAtt.filter(a => a.status === 'paid_leave').length}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#1e40af' }}>Paid Leave</div>
-                                        </div>
-                                        <div style={{ textAlign: 'center', background: '#ffe4e6', padding: '0.5rem', borderRadius: '6px' }}>
-                                            <div style={{ color: '#e11d48', fontWeight: 'bold', fontSize: '1.1rem' }}>{empAtt.filter(a => a.status === 'unpaid_leave').length}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#9f1239' }}>Unpaid</div>
-                                        </div>
-                                        <div style={{ textAlign: 'center', background: '#e0f2fe', padding: '0.5rem', borderRadius: '6px' }}>
-                                            <div style={{ color: '#0ea5e9', fontWeight: 'bold', fontSize: '1rem' }}>{formatDecimalHours(empAtt.reduce((sum, a) => sum + (Number(a.permissionHours) || 0), 0))}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#0369a1' }}>Permission</div>
-                                        </div>
-                                        <div style={{ textAlign: 'center', background: '#f3e8ff', padding: '0.5rem', borderRadius: '6px' }}>
-                                            <div style={{ color: '#7c3aed', fontWeight: 'bold', fontSize: '1rem' }}>{formatDecimalHours(empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0))}</div>
-                                            <div style={{ fontSize: '0.7rem', color: '#5b21b6' }}>Overtime</div>
-                                        </div>
-                                    </div>
+                    <div className="card-body">
+                        {loading ? (
+                            <div className="empty-state"><div className="loader"></div></div>
+                        ) : (
+                            <div className="calendar-grid-wrapper">
+                                <div className="calendar-grid-header">
+                                    <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
                                 </div>
-                            );
-                        })}
+                                <div className="calendar-days-grid">
+                                    {renderCalendarDays()}
+                                </div>
+                                <div className="calendar-legend">
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#10b981' }}></span> Present</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#0ea5e9' }}></span> Permission</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#ef4444' }}></span> Absent</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#f59e0b' }}></span> Half-day</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#3b82f6' }}></span> Paid Leave</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#fca5a5' }}></span> Unpaid Leave</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#8b5cf6' }}></span> Overtime</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#ddd6fe' }}></span> Holiday</div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Monthly Summary Table */}
+                <div className="card summary-card" style={{ marginTop: '2rem' }}>
+                    <div className="card-header">
+                        <h2>Monthly Summary</h2>
+                    </div>
+                    <div className="card-body">
+                        <div className="table-responsive">
+                            <table className="summary-table">
+                                <thead>
+                                    <tr>
+                                        <th>Employee</th>
+                                        <th>Present (Days)</th>
+                                        <th>Absent</th>
+                                        <th>Half Day</th>
+                                        <th>Paid Leave</th>
+                                        <th>Unpaid Leave</th>
+                                        <th>Permission (Hrs)</th>
+                                        <th>Overtime (Hrs)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {employees.map(emp => {
+                                        const empAtt = attendance.filter(a => a.userId === emp.id);
+                                        const presentDays = empAtt.filter(a => a.status === 'present' || a.status === 'permission').length;
+                                        const absentDays = empAtt.filter(a => a.status === 'absent').length;
+                                        const halfDays = empAtt.filter(a => a.status === 'half-day').length;
+                                        const paidLeaves = empAtt.filter(a => a.status === 'paid_leave').length;
+                                        const unpaidLeaves = empAtt.filter(a => a.status === 'unpaid_leave').length;
+                                        const permissionHrs = empAtt.reduce((sum, a) => sum + (Number(a.permissionHours) || 0), 0);
+                                        const overtimeHrs = empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
+
+                                        return (
+                                            <tr key={emp.id}>
+                                                <td>
+                                                    <div style={{ fontWeight: '600' }}>{emp.displayName}</div>
+                                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{emp.role}</div>
+                                                </td>
+                                                <td>{presentDays}</td>
+                                                <td>{absentDays}</td>
+                                                <td>{halfDays}</td>
+                                                <td>{paidLeaves}</td>
+                                                <td>{unpaidLeaves}</td>
+                                                <td>{permissionHrs.toFixed(1)}</td>
+                                                <td>{overtimeHrs.toFixed(1)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Mark Attendance Modal */}
             {showMarkModal && (
                 <MarkAttendanceModal
-                    employees={(isManager || isSeniorEmployee) ? employees : (isEmployee ? filteredEmployees : employees)}
+                    employees={employees}
                     attendance={attendance}
                     onClose={() => setShowMarkModal(false)}
-                    onMark={markAttendance}
+                    onMark={handleMarkAttendance}
                 />
             )}
 
-            {/* Holiday Modal */}
             {showHolidayModal && (
-                <HolidayManagementModal
+                <HolidayModal
                     holidays={holidays}
+                    onAdd={handleAddHoliday}
+                    onDelete={handleDeleteHoliday}
                     onClose={() => setShowHolidayModal(false)}
-                    onUpdate={fetchData}
                 />
             )}
 
             <style>{`
-                .page-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 2rem;
+                .calendar-grid-wrapper {
+                    background: white;
                 }
-
-                .header-actions {
-                    display: flex;
-                    gap: 1rem;
-                }
-
-                .calendar-header {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 1.5rem;
-                    margin-bottom: 1rem;
-                }
-                
-                .calendar-header h2 {
-                    margin: 0;
-                    min-width: 200px;
-                    text-align: center;
-                }
-                
-                .calendar-grid {
+                .calendar-grid-header {
                     display: grid;
                     grid-template-columns: repeat(7, 1fr);
-                    gap: 4px;
-                }
-                
-                .calendar-day-header {
-                    padding: 0.75rem;
                     text-align: center;
                     font-weight: 600;
                     color: var(--navy-500);
-                    font-size: 0.85rem;
+                    border-bottom: 1px solid var(--navy-100);
+                    padding: 0.75rem 0;
                 }
-                
+                .calendar-days-grid {
+                    display: grid;
+                    grid-template-columns: repeat(7, 1fr);
+                    border-left: 1px solid var(--navy-100);
+                    border-top: 1px solid var(--navy-100);
+                }
                 .calendar-day {
-                    min-height: 80px;
+                    min-height: 100px;
+                    border-right: 1px solid var(--navy-100);
+                    border-bottom: 1px solid var(--navy-100);
                     padding: 0.5rem;
-                    background: var(--navy-100);
-                    border-radius: var(--radius-sm);
-                    position: relative;
-                }
-                
-                .calendar-day.empty {
-                    background: transparent;
-                }
-                
-                .calendar-day.today {
                     background: white;
-                    border: 2px solid var(--primary);
                 }
-
+                .calendar-day.empty {
+                    background: var(--navy-50);
+                }
+                .calendar-day.today {
+                    background: #f0fdf4;
+                }
                 .calendar-day.holiday {
-                    background: #fee2e2;
-                    border: 1px dashed #ef4444;
+                    background: #f5f3ff;
                 }
-
-                .holiday-badge {
-                    font-size: 0.65rem;
+                .day-header {
                     display: flex;
+                    justify-content: space-between;
                     align-items: center;
-                    gap: 2px;
-                    color: #b91c1c;
-                    background: rgba(255,255,255,0.6);
-                    padding: 2px 4px;
-                    border-radius: 4px;
-                    margin-top: 2px;
-                    font-weight: 500;
+                    margin-bottom: 0.5rem;
                 }
-                
                 .day-number {
                     font-weight: 600;
-                    font-size: 0.9rem;
+                    color: var(--navy-700);
                 }
-                
-                .day-attendance {
+                .day-dots {
                     display: flex;
                     flex-wrap: wrap;
                     gap: 3px;
-                    margin-top: 0.5rem;
                 }
-                
-                .attendance-dot {
-                    width: 20px;
-                    height: 20px;
-                    border-radius: 50%;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: white;
-                }
-                
-                .attendance-legend {
-                    display: flex;
-                    gap: 1rem;
-                    justify-content: center;
-                    margin-top: 1.5rem;
-                    padding-top: 1rem;
-                    border-top: 1px solid var(--navy-100);
-                    flex-wrap: wrap;
-                }
-                
-                .legend-dot {
-                    display: inline-block;
+                .att-dot {
                     width: 12px;
                     height: 12px;
                     border-radius: 50%;
-                    margin-right: 0.5rem;
+                }
+                .calendar-legend {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 1rem;
+                    padding: 1rem;
+                    justify-content: center;
+                    border-top: 1px solid var(--navy-100);
+                }
+                .legend-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    font-size: 0.8rem;
+                    color: var(--navy-600);
+                }
+                .legend-item .dot {
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 50%;
                 }
                 
-                .stat-icon.red { background: #fee2e2; color: #ef4444; }
-                .stat-icon.purple { background: linear-gradient(135deg, #e9d5ff 0%, #d8b4fe 100%); color: #8b5cf6; }
-                
-                .mobile-cards { display: none; }
+                .summary-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .summary-table th, .summary-table td {
+                    padding: 1rem;
+                    text-align: left;
+                    border-bottom: 1px solid var(--navy-100);
+                    font-size: 0.9rem;
+                }
+                .summary-table th {
+                    background: var(--navy-50);
+                    color: var(--navy-600);
+                    font-weight: 600;
+                }
+                .summary-table tr:hover {
+                    background: var(--navy-50);
+                }
                 
                 @media (max-width: 768px) {
-                    .page-header {
-                        flex-direction: column;
-                        align-items: flex-start;
-                        gap: 1rem;
-                    }
-
-                    .header-actions {
-                        width: 100%;
-                        flex-direction: column;
-                        gap: 0.5rem;
-                    }
-
-                    .header-actions .btn {
-                        width: 100%;
-                        justify-content: center;
-                    }
-
-                    .quick-stats-row {
-                        grid-template-columns: 1fr;
-                        gap: 0.75rem;
-                    }
-
                     .calendar-day {
-                        min-height: 50px;
-                        padding: 0.15rem;
+                        min-height: 60px;
+                        padding: 0.25rem;
                     }
-                    
-                    .day-number {
-                        font-size: 0.7rem;
-                    }
-
-                    .holiday-badge {
-                        font-size: 0.5rem;
-                        padding: 1px 2px;
-                    }
-                    
-                    .attendance-dot {
-                        width: 14px;
-                        height: 14px;
-                    }
-
-                    .attendance-dot svg {
-                        width: 10px;
-                        height: 10px;
-                    }
-                    
-                    .attendance-legend {
-                        font-size: 0.75rem;
-                        gap: 0.5rem;
-                    }
-
-                    .desktop-table { display: none; }
-                    .mobile-cards { display: block; }
-
-                    .search-filter-bar {
-                        padding: 0;
-                    }
-
-                    .filter-select {
-                        width: 100%;
-                    }
-
-                    .calendar-header h2 {
-                        font-size: 1.1rem;
-                        min-width: 120px;
+                    .day-number { font-size: 0.8rem; }
+                    .att-dot { width: 8px; height: 8px; }
+                    .summary-table th, .summary-table td {
+                        padding: 0.75rem 0.5rem;
+                        font-size: 0.8rem;
                     }
                 }
             `}</style>
-        </div >
+        </div>
     );
 };
 
-// Holiday Management Modal
-const HolidayManagementModal = ({ holidays, onClose, onUpdate }) => {
+const HolidayModal = ({ holidays, onAdd, onDelete, onClose }) => {
     const [date, setDate] = useState('');
     const [name, setName] = useState('');
-    const [loading, setLoading] = useState(false);
 
-    const handleAddHoliday = async (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
-        if (!date || !name) return;
-
-        setLoading(true);
-        try {
-            await addDoc(collection(db, 'holidays'), {
-                date,
-                name,
-                createdAt: serverTimestamp()
-            });
-            setDate('');
-            setName('');
-            onUpdate();
-        } catch (error) {
-            console.error('Error adding holiday:', error);
-            alert('Error adding holiday');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDeleteHoliday = async (id) => {
-        if (!window.confirm('Delete this holiday?')) return;
-        try {
-            await deleteDoc(doc(db, 'holidays', id));
-            onUpdate();
-        } catch (error) {
-            console.error('Error deleting holiday:', error);
-        }
+        onAdd(date, name);
+        setDate('');
+        setName('');
     };
 
     return (
@@ -757,46 +522,26 @@ const HolidayManagementModal = ({ holidays, onClose, onUpdate }) => {
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <div className="modal-body">
-                    <form onSubmit={handleAddHoliday} style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-                        <div style={{ flex: 1 }}>
-                            <input
-                                type="date"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
-                                required
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
-                            />
-                        </div>
-                        <div style={{ flex: 2 }}>
-                            <input
-                                type="text"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                placeholder="Holiday Name (e.g. Sunday)"
-                                required
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ddd' }}
-                            />
-                        </div>
-                        <button type="submit" className="btn btn-primary" disabled={loading}>
-                            <Plus size={16} /> Add
-                        </button>
+                    <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} required className="form-control" />
+                        <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Holiday Name" required className="form-control" />
+                        <button type="submit" className="btn btn-primary"><Plus size={18} /></button>
                     </form>
 
-                    <h4>Existing Holidays (This Month)</h4>
-                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                    <div className="holiday-list" style={{ maxHeight: '300px', overflowY: 'auto' }}>
                         {holidays.length === 0 ? (
-                            <p style={{ color: '#888', fontStyle: 'italic' }}>No holidays found for this month.</p>
+                            <p>No holidays added</p>
                         ) : (
                             <table className="data-table">
                                 <thead>
                                     <tr>
                                         <th>Date</th>
-                                        <th>Name</th>
+                                        <th>Holiday</th>
                                         <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {holidays.map(h => (
+                                    {holidays.sort((a, b) => a.date.localeCompare(b.date)).map(h => (
                                         <tr key={h.id}>
                                             <td>{h.date}</td>
                                             <td>{h.name}</td>
@@ -908,6 +653,8 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
             setPresentHours({ ...presentHours, [empId]: 8 });
             setPresentMins({ ...presentMins, [empId]: 0 });
         } else if (status === 'permission') {
+            // This case is now handled via the Present + Permission toggle, 
+            // but we keep the logic for backward compatibility if data has 'permission' status
             if (!presentHours[empId]) {
                 setPresentHours({ ...presentHours, [empId]: 8 });
                 setPresentMins({ ...presentMins, [empId]: 0 });
@@ -916,6 +663,15 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                 setPermissionHours({ ...permissionHours, [empId]: 2 });
                 setPermissionMins({ ...permissionMins, [empId]: 0 });
             }
+        }
+    };
+
+    const handlePermissionToggle = (empId) => {
+        const currentStatus = statuses[empId];
+        if (currentStatus === 'present') {
+            handleStatusChange(empId, 'permission');
+        } else if (currentStatus === 'permission') {
+            handleStatusChange(empId, 'present');
         }
     };
 
@@ -957,7 +713,6 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
     // Base statuses (excluding standalone overtime)
     const baseStatuses = [
         { id: 'present', label: 'Present', color: '#10b981' },
-        { id: 'permission', label: 'Permission', color: '#0ea5e9' },
         { id: 'absent', label: 'Absent', color: '#ef4444' },
         { id: 'half-day', label: 'Half-day', color: '#f59e0b' },
         { id: 'paid_leave', label: 'Paid Leave', color: '#3b82f6' },
@@ -1016,48 +771,10 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                                     ))}
                                 </div>
 
-                                {/* Hours Input for Present Status */}
-                                {statuses[emp.id] === 'present' && (
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '0.75rem',
-                                        padding: '0.75rem',
-                                        background: 'rgba(16, 185, 129, 0.1)',
-                                        borderRadius: 'var(--radius-sm)',
-                                        border: '1px solid #10b981',
-                                        marginBottom: '0.5rem'
-                                    }}>
-                                        <span style={{ fontWeight: '500', color: '#10b981', flex: 1 }}>Hours Worked:</span>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="24"
-                                                value={presentHours[emp.id] !== undefined ? presentHours[emp.id] : 8}
-                                                onChange={(e) => handlePresentHoursChange(emp.id, e.target.value)}
-                                                placeholder="8"
-                                                style={{ width: '50px', padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #10b981' }}
-                                            />
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)' }}>h</span>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="59"
-                                                value={presentMins[emp.id] !== undefined ? presentMins[emp.id] : 0}
-                                                onChange={(e) => handlePresentMinsChange(emp.id, e.target.value)}
-                                                placeholder="0"
-                                                style={{ width: '50px', padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #10b981' }}
-                                            />
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)' }}>m</span>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Hours Input for Permission Status */}
-                                {statuses[emp.id] === 'permission' && (
+                                {/* Hours Input for Present or Permission Status */}
+                                {(statuses[emp.id] === 'present' || statuses[emp.id] === 'permission') && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                                        {/* Working Hours Base */}
+                                        {/* Hours Worked (for either) */}
                                         <div style={{
                                             display: 'flex',
                                             alignItems: 'center',
@@ -1092,39 +809,51 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                                             </div>
                                         </div>
 
-                                        {/* Permission Hours */}
+                                        {/* Permission Toggle (Grouped under Present) */}
                                         <div style={{
                                             display: 'flex',
                                             alignItems: 'center',
                                             gap: '0.75rem',
                                             padding: '0.75rem',
-                                            background: 'rgba(14, 165, 233, 0.1)',
+                                            background: statuses[emp.id] === 'permission' ? 'rgba(14, 165, 233, 0.1)' : 'white',
                                             borderRadius: 'var(--radius-sm)',
-                                            border: '1px solid #0ea5e9'
+                                            border: `1px solid ${statuses[emp.id] === 'permission' ? '#0ea5e9' : 'var(--navy-200)'}`,
+                                            marginTop: '0.5rem'
                                         }}>
-                                            <span style={{ fontWeight: '500', color: '#0ea5e9', flex: 1 }}>Permission Hours:</span>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', flex: 1 }}>
                                                 <input
-                                                    type="number"
-                                                    min="0"
-                                                    max="24"
-                                                    value={permissionHours[emp.id] !== undefined ? permissionHours[emp.id] : 2}
-                                                    onChange={(e) => handlePermissionHoursChange(emp.id, e.target.value)}
-                                                    placeholder="2"
-                                                    style={{ width: '50px', padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #0ea5e9' }}
+                                                    type="checkbox"
+                                                    checked={statuses[emp.id] === 'permission'}
+                                                    onChange={() => handlePermissionToggle(emp.id)}
+                                                    style={{ width: '18px', height: '18px', accentColor: '#0ea5e9' }}
                                                 />
-                                                <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)' }}>h</span>
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    max="59"
-                                                    value={permissionMins[emp.id] !== undefined ? permissionMins[emp.id] : 0}
-                                                    onChange={(e) => handlePermissionMinsChange(emp.id, e.target.value)}
-                                                    placeholder="0"
-                                                    style={{ width: '50px', padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #0ea5e9' }}
-                                                />
-                                                <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)' }}>m</span>
-                                            </div>
+                                                <span style={{ fontWeight: '500', color: '#0ea5e9' }}>+ Permission</span>
+                                            </label>
+
+                                            {statuses[emp.id] === 'permission' && (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="24"
+                                                        value={permissionHours[emp.id] !== undefined ? permissionHours[emp.id] : 2}
+                                                        onChange={(e) => handlePermissionHoursChange(emp.id, e.target.value)}
+                                                        placeholder="2"
+                                                        style={{ width: '50px', padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #0ea5e9' }}
+                                                    />
+                                                    <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)' }}>h</span>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="59"
+                                                        value={permissionMins[emp.id] !== undefined ? permissionMins[emp.id] : 0}
+                                                        onChange={(e) => handlePermissionMinsChange(emp.id, e.target.value)}
+                                                        placeholder="0"
+                                                        style={{ width: '50px', padding: '0.25rem 0.5rem', borderRadius: '4px', border: '1px solid #0ea5e9' }}
+                                                    />
+                                                    <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)' }}>m</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -1188,6 +917,5 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
         </div>
     );
 };
-
 
 export default Attendance;

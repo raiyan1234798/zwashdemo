@@ -4,6 +4,7 @@ import { db } from '../config/firebase';
 import {
     collection,
     query,
+    getDoc,
     getDocs,
     addDoc,
     updateDoc,
@@ -30,7 +31,9 @@ import {
     Car,
     Edit,
     Trash2,
-    FileText
+    FileText,
+    MessageCircle,
+    RotateCcw
 } from 'lucide-react';
 import SplitPaymentSelector from '../components/SplitPaymentSelector';
 import { getNextInvoiceNumber } from '../utils/invoiceUtils';
@@ -52,13 +55,28 @@ const AMCPlans = () => {
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
     const [invoiceSubscription, setInvoiceSubscription] = useState(null);
 
+    const [settings, setSettings] = useState(null);
+
     useEffect(() => {
         if (activeTab === 'plans') {
             fetchPlans();
         } else {
             fetchSubscriptions();
         }
+        fetchSettings();
     }, [activeTab]);
+
+    const fetchSettings = async () => {
+        try {
+            const docRef = doc(db, 'settings', 'business');
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+                setSettings(docSnap.data());
+            }
+        } catch (error) {
+            console.log('Settings fetch not available');
+        }
+    };
 
     const fetchPlans = async () => {
         try {
@@ -147,6 +165,81 @@ const AMCPlans = () => {
         if (date.toDate) return date.toDate().toLocaleDateString();
         if (date.seconds) return new Date(date.seconds * 1000).toLocaleDateString();
         return new Date(date).toLocaleDateString();
+    };
+
+    const shareViaWhatsApp = (sub) => {
+        const businessName = settings?.businessName || "Detailing Commando";
+        const phone = sub.customerPhone;
+        if (!phone) {
+            alert("No phone number available for this customer.");
+            return;
+        }
+
+        const message = `*${businessName} - AMC Subscription*
+
+Hi *${sub.customerName}*,
+
+Thank you for subscribing to our *${sub.planName}* AMC!
+
+*Details:*
+*Vehicle:* *${sub.vehicleNumber}*
+*Start Date:* *${formatDate(sub.startDate)}*
+*Expiry Date:* *${formatDate(sub.expiryDate)}*
+*Total Amount:* *₹${sub.totalAmount?.toLocaleString()}*
+
+*Services Included:*
+${sub.serviceTracking?.map(s => `• ${s.serviceType}: ${s.totalAllowed} services`).join('\n')}
+
+We look forward to serving you!
+_Powered by Z3Connect_`;
+
+        const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+    };
+
+    const sendServiceReminder = (sub) => {
+        const businessName = settings?.businessName || "Detailing Commando";
+        const phone = sub.customerPhone;
+        if (!phone) return;
+
+        const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+        const message = `*${businessName} - Monthly Service Reminder*
+
+Hi *${sub.customerName}*,
+
+This is a friendly reminder for your *${sub.planName}* AMC services for the month of *${currentMonth}*.
+
+*Vehicle:* *${sub.vehicleNumber}*
+
+*Services Available:*
+${sub.serviceTracking?.filter(s => (s.usages?.length || 0) < s.totalAllowed).map(s => `• ${s.serviceType}`).join('\n')}
+
+Please visit us soon to avail your monthly services!
+_Powered by Z3Connect_`;
+
+        const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+    };
+
+    const sendServiceCompletionMessage = (sub, serviceType) => {
+        const businessName = settings?.businessName || "Detailing Commando";
+        const phone = sub.customerPhone || sub.phone;
+        if (!phone) return;
+
+        const message = `*${businessName} - Service Completed*
+
+Hi *${sub.customerName}*,
+
+The *${serviceType}* service for your *${sub.planName}* AMC has been completed!
+
+*Vehicle:* *${sub.vehicleNumber}*
+*Service:* *${serviceType}*
+
+Thank you for choosing us!
+_Powered by Z3Connect_`;
+
+        const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
     };
 
     return (
@@ -344,18 +437,35 @@ const AMCPlans = () => {
                                                                 </span>
                                                             </td>
                                                             <td>
-                                                                <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                                                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                                                                     <button
                                                                         className="btn btn-sm btn-primary"
                                                                         onClick={() => { setSelectedSubscription(sub); setShowTrackingModal(true); }}
                                                                         title="Track Services"
+                                                                        style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                                                                     >
                                                                         <Eye size={14} /> Track
+                                                                    </button>
+                                                                    <button
+                                                                        className="btn btn-sm"
+                                                                        style={{ background: '#25D366', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                                                        onClick={() => shareViaWhatsApp(sub)}
+                                                                        title="Share via WhatsApp"
+                                                                    >
+                                                                        <MessageCircle size={14} /> WhatsApp
+                                                                    </button>
+                                                                    <button
+                                                                        className="btn btn-sm"
+                                                                        style={{ background: '#0ea5e9', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                                                        onClick={() => sendServiceReminder(sub)}
+                                                                        title="Send Monthly Reminder"
+                                                                    >
+                                                                        <RotateCcw size={14} /> Reminder
                                                                     </button>
                                                                     {hasPermission('bookings', 'create') && (
                                                                         <button
                                                                             className="btn btn-sm"
-                                                                            style={{ background: '#10b981', color: 'white' }}
+                                                                            style={{ background: '#10b981', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}
                                                                             onClick={() => { setInvoiceSubscription(sub); setShowInvoiceModal(true); }}
                                                                             title="Create Invoice"
                                                                         >
@@ -480,6 +590,20 @@ const AMCPlans = () => {
                                                                 <Trash2 size={14} />
                                                             </button>
                                                         )}
+                                                        <button
+                                                            className="btn btn-sm"
+                                                            style={{ background: '#25D366', color: 'white' }}
+                                                            onClick={() => shareViaWhatsApp(sub)}
+                                                        >
+                                                            <MessageCircle size={14} />
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-sm"
+                                                            style={{ background: '#0ea5e9', color: 'white' }}
+                                                            onClick={() => sendServiceReminder(sub)}
+                                                        >
+                                                            <RotateCcw size={14} />
+                                                        </button>
                                                     </div>
                                                 </div>
                                             );
@@ -499,6 +623,7 @@ const AMCPlans = () => {
             {showAssignModal && selectedPlan && (
                 <AssignPlanModal
                     plan={selectedPlan}
+                    settings={settings}
                     onClose={() => { setShowAssignModal(false); setSelectedPlan(null); }}
                     onSuccess={() => {
                         fetchSubscriptions();
@@ -513,6 +638,7 @@ const AMCPlans = () => {
                     subscription={selectedSubscription}
                     onClose={() => { setShowTrackingModal(false); setSelectedSubscription(null); }}
                     onUpdate={fetchSubscriptions}
+                    sendCompletionMessage={sendServiceCompletionMessage}
                 />
             )}
 
@@ -1067,7 +1193,7 @@ const CreatePlanModal = ({ onClose, onSuccess }) => {
     );
 };
 
-const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
+const AssignPlanModal = ({ plan, settings, onClose, onSuccess }) => {
     const [activeTab, setActiveTab] = useState('existing'); // existing | new
     const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', vehicleNumber: '' });
     const [searchTerm, setSearchTerm] = useState('');
@@ -1077,6 +1203,7 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
     const [vehicleType, setVehicleType] = useState('hatchback');
     const [salePrice, setSalePrice] = useState(0);
     const [advancePayment, setAdvancePayment] = useState(0); // Advance payment amount
+    const [startDateStr, setStartDateStr] = useState(new Date().toISOString().split('T')[0]);
 
     // List of all customers for dropdown
     const [customerList, setCustomerList] = useState([]);
@@ -1113,6 +1240,81 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
         };
         fetchCustomers();
     }, []);
+
+    const shareViaWhatsApp = (sub) => {
+        const businessName = settings?.businessName || "Detailing Commando";
+        const phone = sub.customerPhone;
+        if (!phone) {
+            alert("No phone number available for this customer.");
+            return;
+        }
+
+        const message = `*${businessName} - AMC Subscription*
+
+Hi *${sub.customerName}*,
+
+Thank you for subscribing to our *${sub.planName}* AMC!
+
+*Details:*
+*Vehicle:* *${sub.vehicleNumber}*
+*Start Date:* *${new Date(sub.startDate?.toDate ? sub.startDate.toDate() : sub.startDate).toLocaleDateString()}*
+*Expiry Date:* *${new Date(sub.expiryDate?.toDate ? sub.expiryDate.toDate() : sub.expiryDate).toLocaleDateString()}*
+*Total Amount:* *₹${sub.totalAmount?.toLocaleString()}*
+
+*Services Included:*
+${sub.serviceTracking?.map(s => `• ${s.serviceType}: ${s.totalAllowed} services`).join('\n')}
+
+We look forward to serving you!
+_Powered by Z3Connect_`;
+
+        const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+    };
+
+    const sendServiceReminder = (sub) => {
+        const businessName = settings?.businessName || "Detailing Commando";
+        const phone = sub.customerPhone;
+        if (!phone) return;
+
+        const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+        const message = `*${businessName} - Monthly Service Reminder*
+
+Hi *${sub.customerName}*,
+
+This is a friendly reminder for your *${sub.planName}* AMC services for the month of *${currentMonth}*.
+
+*Vehicle:* *${sub.vehicleNumber}*
+
+*Services Available:*
+${sub.serviceTracking?.filter(s => (s.usages?.length || 0) < s.totalAllowed).map(s => `• ${s.serviceType}`).join('\n')}
+
+Please visit us soon to avail your monthly services!
+_Powered by Z3Connect_`;
+
+        const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+    };
+
+    const sendServiceCompletionMessage = (sub, serviceType) => {
+        const businessName = settings?.businessName || "Detailing Commando";
+        const phone = sub.customerPhone;
+        if (!phone) return;
+
+        const message = `*${businessName} - Service Completed*
+
+Hi *${sub.customerName}*,
+
+Good news! We have completed your *${serviceType}* service as part of your *${sub.planName}* AMC.
+
+*Vehicle:* *${sub.vehicleNumber}*
+*Date:* *${new Date().toLocaleDateString()}*
+
+Thank you for choosing us!
+_Powered by Z3Connect_`;
+
+        const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+        window.open(whatsappUrl, '_blank');
+    };
 
     const getPrice = () => {
         return plan.prices?.[vehicleType] || plan.price || 0;
@@ -1260,6 +1462,12 @@ const AssignPlanModal = ({ plan, onClose, onSuccess }) => {
             */
 
             alert('Plan assigned successfully!');
+
+            // Proactive message offer
+            if (window.confirm("Plan assigned successfully! Would you like to send the welcome message via WhatsApp?")) {
+                shareViaWhatsApp(subscriptionData);
+            }
+
             if (onSuccess) onSuccess();
             onClose();
         } catch (error) {
@@ -1687,7 +1895,7 @@ const EditSubscriptionModal = ({ subscription, onClose, onSuccess }) => {
 };
 
 // Service Tracking Modal - Track individual service usage with tick boxes
-const ServiceTrackingModal = ({ subscription, onClose, onUpdate }) => {
+const ServiceTrackingModal = ({ subscription, onClose, onUpdate, sendCompletionMessage }) => {
     const [serviceTracking, setServiceTracking] = useState(subscription.serviceTracking || []);
     const [saving, setSaving] = useState(false);
     const [selectedService, setSelectedService] = useState(null);
@@ -1714,6 +1922,12 @@ const ServiceTrackingModal = ({ subscription, onClose, onUpdate }) => {
                 serviceTracking: updated,
                 updatedAt: serverTimestamp()
             });
+
+            // Send completion message automatically
+            if (window.confirm('Service tracked! Send WhatsApp completion message to customer?')) {
+                sendCompletionMessage(subscription, serviceType);
+                onUpdate();
+            }
 
             /*
             // Generate 0-value Invoice for Record
@@ -1752,6 +1966,11 @@ const ServiceTrackingModal = ({ subscription, onClose, onUpdate }) => {
             setSelectedService(null);
             setUsageNotes('');
             onUpdate();
+
+            // Proactive service completion message
+            if (window.confirm(`${serviceType} usage added! Would you like to send a service completion message via WhatsApp?`)) {
+                sendServiceCompletionMessage(subscription, serviceType);
+            }
         } catch (error) {
             console.error('Error updating usage:', error);
             alert('Error saving: ' + error.message);
