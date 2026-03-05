@@ -577,6 +577,9 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
     const [presentMins, setPresentMins] = useState({});
     const [permissionHours, setPermissionHours] = useState({});
     const [permissionMins, setPermissionMins] = useState({});
+    // Track gross hours before permission subtraction (so re-adjusting permission works correctly)
+    const [baseHours, setBaseHours] = useState({});
+    const [baseMins, setBaseMins] = useState({});
 
     useEffect(() => {
         // Pre-fill with existing attendance
@@ -633,18 +636,40 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
 
     const handlePresentHoursChange = (empId, hours) => {
         setPresentHours({ ...presentHours, [empId]: hours });
+        // Also update the stored base hours so permission subtraction stays correct
+        setBaseHours(prev => ({ ...prev, [empId]: hours }));
+        setBaseMins(prev => ({ ...prev, [empId]: presentMins[empId] !== undefined ? presentMins[empId] : 0 }));
     };
 
     const handlePresentMinsChange = (empId, mins) => {
         setPresentMins({ ...presentMins, [empId]: mins });
+        // Update base mins
+        setBaseMins(prev => ({ ...prev, [empId]: mins }));
+        setBaseHours(prev => ({ ...prev, [empId]: presentHours[empId] !== undefined ? presentHours[empId] : 8 }));
     };
 
     const handlePermissionHoursChange = (empId, hours) => {
         setPermissionHours({ ...permissionHours, [empId]: hours });
+        // Auto-subtract from the base hours to update the Hours Worked field
+        const baseH = Number(baseHours[empId] !== undefined ? baseHours[empId] : 8);
+        const baseM = Number(baseMins[empId] !== undefined ? baseMins[empId] : 0);
+        const permH = Number(hours) || 0;
+        const permM = Number(permissionMins[empId] || 0);
+        const net = Math.max(0, (baseH + baseM / 60) - (permH + permM / 60));
+        setPresentHours(prev => ({ ...prev, [empId]: Math.floor(net) }));
+        setPresentMins(prev => ({ ...prev, [empId]: Math.round((net - Math.floor(net)) * 60) }));
     };
 
     const handlePermissionMinsChange = (empId, mins) => {
         setPermissionMins({ ...permissionMins, [empId]: mins });
+        // Auto-subtract from the base hours to update the Hours Worked field
+        const baseH = Number(baseHours[empId] !== undefined ? baseHours[empId] : 8);
+        const baseM = Number(baseMins[empId] !== undefined ? baseMins[empId] : 0);
+        const permH = Number(permissionHours[empId] || 0);
+        const permM = Number(mins) || 0;
+        const net = Math.max(0, (baseH + baseM / 60) - (permH + permM / 60));
+        setPresentHours(prev => ({ ...prev, [empId]: Math.floor(net) }));
+        setPresentMins(prev => ({ ...prev, [empId]: Math.round((net - Math.floor(net)) * 60) }));
     };
 
     const handleStatusChange = (empId, status) => {
@@ -701,14 +726,18 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                 if (status === 'present') {
                     extraData.presentHours = Number(presentHours[empId] || 0) + (Number(presentMins[empId] || 0) / 60);
                 } else if (status === 'permission') {
-                    extraData.presentHours = Number(presentHours[empId] || 0) + (Number(presentMins[empId] || 0) / 60);
-                    extraData.permissionHours = Number(permissionHours[empId] || 0) + (Number(permissionMins[empId] || 0) / 60);
+                    const rawPresent = Number(presentHours[empId] || 0) + (Number(presentMins[empId] || 0) / 60);
+                    const permHrs = Number(permissionHours[empId] || 0) + (Number(permissionMins[empId] || 0) / 60);
+                    // Net worked hours = hours worked minus permission hours taken
+                    extraData.presentHours = Math.max(0, rawPresent - permHrs);
+                    extraData.permissionHours = permHrs;
                 }
                 await onMark(empId, selectedDate, status, extraData);
             }
         }
         onClose();
     };
+
 
     // Base statuses (excluding standalone overtime)
     const baseStatuses = [
@@ -914,7 +943,7 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                     <button type="button" className="btn btn-primary" onClick={handleSave}>Save Attendance</button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

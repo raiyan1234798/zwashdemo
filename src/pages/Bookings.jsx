@@ -931,6 +931,23 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         bookingDate: new Date().toISOString().split('T')[0],
         startTime: ''
     });
+    const [plateError, setPlateError] = useState('');
+
+    // Validate TN license plate: TN-XX-YY-XXXX
+    const validatePlate = (val) => {
+        if (!val) return '';
+        const normalized = val.toUpperCase().replace(/[-\s]/g, '');
+        if (!/^TN\d{2}[A-Z]{2}\d{4}$/.test(normalized)) {
+            return 'Invalid format. Use TN-XX-YY-XXXX (e.g. TN-01-AB-1234)';
+        }
+        return '';
+    };
+
+    const handlePlateChange = (val) => {
+        const upper = val.toUpperCase();
+        setFormData(prev => ({ ...prev, licensePlate: upper }));
+        setPlateError(validatePlate(upper));
+    };
 
     // Advance Payment State
     const [paymentSplits, setPaymentSplits] = useState([{ mode: 'cash', amount: '' }]);
@@ -1213,15 +1230,18 @@ const WalkInModal = ({ onClose, onSuccess }) => {
             alert('Please fill in Name, Phone and License Plate to save customer.');
             return;
         }
+        const err = validatePlate(formData.licensePlate);
+        if (err) { alert('Invalid license plate: ' + err); return; }
 
         try {
             setLoading(true);
-            const customerRef = await addDoc(collection(db, 'customers'), {
+            await addDoc(collection(db, 'customers'), {
                 name: formData.customerName,
                 phone: formData.phone,
                 licensePlate: formData.licensePlate.toUpperCase(),
                 carMake: formData.carMake,
                 carModel: formData.carModel,
+                bookingCount: 1,
                 createdAt: serverTimestamp(),
                 vehicleType: vehicleType
             });
@@ -1251,6 +1271,10 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         if (!formData.startTime) {
             alert('Please select a start time');
             return;
+        }
+        if (formData.licensePlate) {
+            const pErr = validatePlate(formData.licensePlate);
+            if (pErr) { alert('License plate error: ' + pErr); return; }
         }
 
         setLoading(true);
@@ -1304,6 +1328,27 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                 note: 'Advance payment at booking'
             }] : [];
 
+            // Auto-save new customer to database if we're in new customer mode
+            let customerIdToLink = formData.customerId || null;
+            if (customerMode === 'new' && formData.customerName && formData.phone) {
+                try {
+                    const newCustomerRef = await addDoc(collection(db, 'customers'), {
+                        name: formData.customerName,
+                        phone: formData.phone,
+                        licensePlate: formData.licensePlate.toUpperCase(),
+                        carMake: formData.carMake,
+                        carModel: formData.carModel,
+                        bookingCount: 1,
+                        createdAt: serverTimestamp(),
+                        vehicleType: vehicleType
+                    });
+                    customerIdToLink = newCustomerRef.id;
+                } catch (customerErr) {
+                    console.warn('Could not save customer to DB:', customerErr);
+                    // Don't block booking creation if customer save fails
+                }
+            }
+
             await addDoc(collection(db, 'bookings'), {
                 bookingReference: bookingRef,
                 createdBy: user?.uid || 'unknown',
@@ -1333,7 +1378,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                 vehicleType: vehicleType,
                 bookingDate: formData.bookingDate,
                 startTime: formData.startTime || new Date().toTimeString().slice(0, 5),
-                customerId: formData.customerId || null, // Link to customer if selected
+                customerId: customerIdToLink, // Link to customer (new or existing)
                 customerName: formData.customerName,
                 carMake: formData.carMake,
                 carModel: formData.carModel,
@@ -1481,11 +1526,27 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                             <label>License Plate *</label>
                                             <input
                                                 value={formData.licensePlate}
-                                                onChange={(e) => setFormData({ ...formData, licensePlate: e.target.value })}
+                                                onChange={(e) => handlePlateChange(e.target.value)}
                                                 required
                                                 placeholder="TN-01-AB-1234"
-                                                style={{ textTransform: 'uppercase', background: 'white' }}
+                                                style={{
+                                                    textTransform: 'uppercase',
+                                                    background: 'white',
+                                                    border: formData.licensePlate
+                                                        ? (!plateError ? '2px solid #10b981' : '2px solid #ef4444')
+                                                        : undefined
+                                                }}
                                             />
+                                            {plateError && (
+                                                <small style={{ color: '#ef4444', display: 'block', marginTop: '4px' }}>
+                                                    ⚠ {plateError}
+                                                </small>
+                                            )}
+                                            {formData.licensePlate && !plateError && (
+                                                <small style={{ color: '#10b981', display: 'block', marginTop: '4px' }}>
+                                                    ✓ Valid TN plate
+                                                </small>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="form-row">

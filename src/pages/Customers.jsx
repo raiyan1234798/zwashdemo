@@ -43,6 +43,7 @@ const Customers = () => {
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, name }
+    const [filterType, setFilterType] = useState('all'); // all, repeat, new_car
 
     useEffect(() => {
         fetchCustomers();
@@ -61,13 +62,28 @@ const Customers = () => {
             const bookingsQuery = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'));
             const bookingsSnapshot = await getDocs(bookingsQuery);
 
+            // Count how many bookings each phone/plate key has (for repeat detection)
+            const bookingCounts = {};
+            bookingsSnapshot.docs.forEach(doc => {
+                const b = doc.data();
+                const key = b.contactPhone || b.licensePlate;
+                if (key) bookingCounts[key] = (bookingCounts[key] || 0) + 1;
+            });
+
             // Create a map of unique customers by phone or license plate
             const customerMap = new Map();
 
             // Add customers from customers collection first
+            // Since customersData is sorted by createdAt desc, we only set if not already in map
+            // to keep the newest record when there are duplicates.
             customersData.forEach(c => {
                 const key = c.phone || c.licensePlate;
-                if (key) customerMap.set(key, c);
+                if (key && !customerMap.has(key)) {
+                    customerMap.set(key, {
+                        ...c,
+                        bookingCount: bookingCounts[key] || c.bookingCount || 0
+                    });
+                }
             });
 
             // Add customers from bookings if not already in map
@@ -84,6 +100,7 @@ const Customers = () => {
                         carModel: booking.carModel || '',
                         licensePlate: booking.licensePlate || '',
                         source: 'booking',
+                        bookingCount: bookingCounts[key] || 0,
                         createdAt: booking.createdAt
                     });
                 }
@@ -126,15 +143,41 @@ const Customers = () => {
         }
     };
 
+    const isNewRegistration = (plate) => {
+        if (!plate) return false;
+        const normalized = plate.toUpperCase().replace(/[-\s]/g, '');
+        // TN-74: BJ and BK series only | TN-75: AK and AL series only
+        return /^TN74(BJ|BK)\d{4}$/.test(normalized) || /^TN75(AK|AL)\d{4}$/.test(normalized);
+    };
+
+    // Validate TN license plate format: TN-XX-YY-XXXX (XX=2 digits, YY=2 letters, XXXX=4 digits)
+    const isValidLicensePlate = (plate) => {
+        if (!plate) return false;
+        const normalized = plate.toUpperCase().replace(/[-\s]/g, '');
+        return /^TN\d{2}[A-Z]{2}\d{4}$/.test(normalized);
+    };
+
     const filteredCustomers = customers.filter(customer => {
-        if (!searchTerm) return true;
+        // Search Filter
         const search = searchTerm.toLowerCase().trim();
-        return (
+        const matchesSearch = !searchTerm || (
             (customer.name || '').toLowerCase().includes(search) ||
             (customer.phone || '').toString().includes(search) ||
             (customer.email || '').toLowerCase().includes(search) ||
             (customer.licensePlate || '').toLowerCase().includes(search)
         );
+
+        if (!matchesSearch) return false;
+
+        // Type Filter
+        if (filterType === 'repeat') {
+            return (customer.bookingCount || 0) > 1;
+        }
+        if (filterType === 'new_car') {
+            return isNewRegistration(customer.licensePlate);
+        }
+
+        return true;
     });
 
     return (
@@ -206,9 +249,9 @@ const Customers = () => {
                 </div>
             </div>
 
-            {/* Search */}
-            <div className="search-filter-bar">
-                <div className="search-box">
+            {/* Search & Filters */}
+            <div className="search-filter-bar" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <div className="search-box" style={{ flex: 1 }}>
                     <Search size={18} />
                     <input
                         type="text"
@@ -216,6 +259,26 @@ const Customers = () => {
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
+                </div>
+                <div className="filter-group" style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                        className={`btn btn-sm ${filterType === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setFilterType('all')}
+                    >All</button>
+                    <button
+                        className={`btn btn-sm ${filterType === 'repeat' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setFilterType('repeat')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                        <Star size={14} fill={filterType === 'repeat' ? 'white' : 'transparent'} /> Repeat
+                    </button>
+                    <button
+                        className={`btn btn-sm ${filterType === 'new_car' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setFilterType('new_car')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                        <Tag size={14} /> New Cars
+                    </button>
                 </div>
             </div>
 
@@ -253,7 +316,15 @@ const Customers = () => {
                                                     {customer.email && <div><Mail size={12} /> {customer.email}</div>}
                                                 </td>
                                                 <td>
-                                                    <div>{customer.carMake} {customer.carModel}</div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        {customer.carMake} {customer.carModel}
+                                                        {isNewRegistration(customer.licensePlate) && (
+                                                            <span className="badge badge-new-car" style={{ background: '#3b82f6', color: 'white', fontSize: '0.65rem' }}>NEW CAR</span>
+                                                        )}
+                                                        {(customer.bookingCount || 0) > 1 && (
+                                                            <span className="badge badge-repeat" style={{ background: '#8b5cf6', color: 'white', fontSize: '0.65rem' }}>REPEAT</span>
+                                                        )}
+                                                    </div>
                                                     <div><strong>{customer.licensePlate}</strong></div>
                                                 </td>
                                                 <td>
@@ -297,7 +368,15 @@ const Customers = () => {
                                     <div key={customer.id} className="booking-card">
                                         <div className="booking-card-header">
                                             <strong>{customer.name || 'Walk-in Customer'}</strong>
-                                            <span className="badge badge-confirmed">{customer.carMake || 'Unknown'}</span>
+                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                {isNewRegistration(customer.licensePlate) && (
+                                                    <span className="badge" style={{ background: '#3b82f6', color: 'white', fontSize: '0.65rem' }}>NEW CAR</span>
+                                                )}
+                                                {(customer.bookingCount || 0) > 1 && (
+                                                    <span className="badge" style={{ background: '#8b5cf6', color: 'white', fontSize: '0.65rem' }}>REPEAT</span>
+                                                )}
+                                                <span className="badge badge-confirmed">{customer.carMake || 'Unknown'}</span>
+                                            </div>
                                         </div>
                                         <div className="booking-card-body">
                                             <p><Phone size={14} /> {customer.phone || 'No phone'}</p>
@@ -375,9 +454,28 @@ const Customers = () => {
 
 const CustomerModal = ({ onClose, onSuccess }) => {
     const [loading, setLoading] = useState(false);
+    const [plateError, setPlateError] = useState('');
+    const [plateValue, setPlateValue] = useState('');
+
+    const validatePlate = (val) => {
+        if (!val) return { type: 'error', msg: 'License plate is required' };
+        const normalized = val.toUpperCase().replace(/[-\s]/g, '');
+        if (!/^TN\d{2}[A-Z]{2}\d{4}$/.test(normalized)) {
+            return { type: 'warning', msg: 'Not standard TN format (TN-XX-YY-XXXX). Save anyway?' };
+        }
+        return null;
+    };
+
+    const handlePlateChange = (e) => {
+        const val = e.target.value.toUpperCase();
+        setPlateValue(val);
+        setPlateError(validatePlate(val));
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        const validation = validatePlate(plateValue);
+        if (validation?.type === 'error') { setPlateError(validation); return; }
         setLoading(true);
 
         const form = e.target;
@@ -390,7 +488,7 @@ const CustomerModal = ({ onClose, onSuccess }) => {
                 email: formData.get('email') || null,
                 carMake: formData.get('carMake'),
                 carModel: formData.get('carModel'),
-                licensePlate: formData.get('licensePlate').toUpperCase(),
+                licensePlate: plateValue.toUpperCase(),
                 bookingCount: 0,
                 createdAt: serverTimestamp()
             });
@@ -403,6 +501,8 @@ const CustomerModal = ({ onClose, onSuccess }) => {
             setLoading(false);
         }
     };
+
+    const plateValid = plateValue && !validatePlate(plateValue);
 
     return (
         <div className="modal">
@@ -439,7 +539,29 @@ const CustomerModal = ({ onClose, onSuccess }) => {
                         </div>
                         <div className="form-group">
                             <label>License Plate *</label>
-                            <input name="licensePlate" required placeholder="TN-01-AB-1234" style={{ textTransform: 'uppercase' }} />
+                            <input
+                                name="licensePlate"
+                                value={plateValue}
+                                onChange={handlePlateChange}
+                                required
+                                placeholder="TN-01-AB-1234"
+                                style={{
+                                    textTransform: 'uppercase',
+                                    border: plateValue
+                                        ? (plateValid ? '2px solid #10b981' : '2px solid #f59e0b')
+                                        : undefined
+                                }}
+                            />
+                            {plateError && (
+                                <small style={{ color: plateError.type === 'error' ? '#ef4444' : '#f59e0b', display: 'block', marginTop: '4px' }}>
+                                    {plateError.type === 'error' ? '⚠ ' : '⚠ '}{plateError.msg}
+                                </small>
+                            )}
+                            {plateValid && (
+                                <small style={{ color: '#10b981', display: 'block', marginTop: '4px' }}>
+                                    ✓ Valid TN plate{(/^TN74(BJ|BK)\d{4}$/.test(plateValue.replace(/[-\s]/g, '')) || /^TN75(AK|AL)\d{4}$/.test(plateValue.replace(/[-\s]/g, ''))) ? ' — New Registration' : ''}
+                                </small>
+                            )}
                         </div>
                     </div>
                     <div className="modal-footer">
@@ -465,14 +587,28 @@ const EditCustomerModal = ({ customer, onClose, onSuccess, userProfile }) => {
         carModel: customer.carModel || '',
         licensePlate: customer.licensePlate || ''
     });
+    const [plateError, setPlateError] = useState('');
+
+    const validatePlate = (val) => {
+        if (!val) return { type: 'error', msg: 'License plate is required' };
+        const normalized = val.toUpperCase().replace(/[-\s]/g, '');
+        if (!/^TN\d{2}[A-Z]{2}\d{4}$/.test(normalized)) {
+            return { type: 'warning', msg: 'Not standard TN format (TN-XX-YY-XXXX). Save anyway?' };
+        }
+        return null;
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        const newVal = name === 'licensePlate' ? value.toUpperCase() : value;
+        setFormData(prev => ({ ...prev, [name]: newVal }));
+        if (name === 'licensePlate') setPlateError(validatePlate(newVal));
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        const validation = validatePlate(formData.licensePlate);
+        if (validation?.type === 'error') { setPlateError(validation); return; }
         setLoading(true);
 
         try {
@@ -493,6 +629,8 @@ const EditCustomerModal = ({ customer, onClose, onSuccess, userProfile }) => {
             setLoading(false);
         }
     };
+
+    const plateValid = formData.licensePlate && !validatePlate(formData.licensePlate);
 
     return (
         <div className="modal">
@@ -547,7 +685,29 @@ const EditCustomerModal = ({ customer, onClose, onSuccess, userProfile }) => {
                         </div>
                         <div className="form-group">
                             <label>License Plate *</label>
-                            <input name="licensePlate" required value={formData.licensePlate} onChange={handleChange} placeholder="TN-01-AB-1234" style={{ textTransform: 'uppercase' }} />
+                            <input
+                                name="licensePlate"
+                                required
+                                value={formData.licensePlate}
+                                onChange={handleChange}
+                                placeholder="TN-01-AB-1234"
+                                style={{
+                                    textTransform: 'uppercase',
+                                    border: formData.licensePlate
+                                        ? (plateValid ? '2px solid #10b981' : '2px solid #f59e0b')
+                                        : undefined
+                                }}
+                            />
+                            {plateError && (
+                                <small style={{ color: plateError.type === 'error' ? '#ef4444' : '#f59e0b', display: 'block', marginTop: '4px' }}>
+                                    ⚠ {plateError.msg}
+                                </small>
+                            )}
+                            {plateValid && (
+                                <small style={{ color: '#10b981', display: 'block', marginTop: '4px' }}>
+                                    ✓ Valid TN plate{(/^TN74(BJ|BK)\d{4}$/.test(formData.licensePlate.replace(/[-\s]/g, '')) || /^TN75(AK|AL)\d{4}$/.test(formData.licensePlate.replace(/[-\s]/g, ''))) ? ' — New Registration' : ''}
+                                </small>
+                            )}
                         </div>
                     </div>
                     <div className="modal-footer">
