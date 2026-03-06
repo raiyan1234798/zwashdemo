@@ -935,12 +935,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
 
     // Validate TN license plate: TN-XX-YY-XXXX
     const validatePlate = (val) => {
-        if (!val) return '';
-        const normalized = val.toUpperCase().replace(/[-\s]/g, '');
-        if (!/^TN\d{2}[A-Z]{2}\d{4}$/.test(normalized)) {
-            return 'Invalid format. Use TN-XX-YY-XXXX (e.g. TN-01-AB-1234)';
-        }
-        return '';
+        return ''; // Validation removed
     };
 
     const handlePlateChange = (val) => {
@@ -1226,12 +1221,10 @@ const WalkInModal = ({ onClose, onSuccess }) => {
     };
 
     const saveNewCustomer = async () => {
-        if (!formData.customerName || !formData.phone || !formData.licensePlate) {
-            alert('Please fill in Name, Phone and License Plate to save customer.');
+        if (!formData.customerName || !formData.phone) {
+            alert('Please fill in Name and Phone to save customer.');
             return;
         }
-        const err = validatePlate(formData.licensePlate);
-        if (err) { alert('Invalid license plate: ' + err); return; }
 
         try {
             setLoading(true);
@@ -1271,10 +1264,6 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         if (!formData.startTime) {
             alert('Please select a start time');
             return;
-        }
-        if (formData.licensePlate) {
-            const pErr = validatePlate(formData.licensePlate);
-            if (pErr) { alert('License plate error: ' + pErr); return; }
         }
 
         setLoading(true);
@@ -1523,30 +1512,16 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                             />
                                         </div>
                                         <div className="form-group">
-                                            <label>License Plate *</label>
+                                            <label>License Plate</label>
                                             <input
                                                 value={formData.licensePlate}
                                                 onChange={(e) => handlePlateChange(e.target.value)}
-                                                required
                                                 placeholder="TN-01-AB-1234"
                                                 style={{
                                                     textTransform: 'uppercase',
-                                                    background: 'white',
-                                                    border: formData.licensePlate
-                                                        ? (!plateError ? '2px solid #10b981' : '2px solid #ef4444')
-                                                        : undefined
+                                                    background: 'white'
                                                 }}
                                             />
-                                            {plateError && (
-                                                <small style={{ color: '#ef4444', display: 'block', marginTop: '4px' }}>
-                                                    ⚠ {plateError}
-                                                </small>
-                                            )}
-                                            {formData.licensePlate && !plateError && (
-                                                <small style={{ color: '#10b981', display: 'block', marginTop: '4px' }}>
-                                                    ✓ Valid TN plate
-                                                </small>
-                                            )}
                                         </div>
                                     </div>
                                     <div className="form-row">
@@ -2506,18 +2481,21 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
         licensePlate: booking.licensePlate || '',
         bookingDate: booking.bookingDate || '',
         startTime: booking.startTime || '',
-        serviceCategory: booking.serviceCategory || ''
+        serviceCategory: booking.serviceCategory || '',
+        serviceName: booking.serviceName || '',
+        price: booking.price || 0
     });
 
     const [categories, setCategories] = useState(['Detailed Wash', 'Quick Wash', 'Interior Clean', 'Coating', 'Other']);
     const [showNewCategory, setShowNewCategory] = useState(false);
     const [newCategory, setNewCategory] = useState('');
+    const [services, setServices] = useState([]);
+    const [showServiceDropdown, setShowServiceDropdown] = useState(false);
 
     useEffect(() => {
         fetchCategories();
+        fetchServices();
     }, []);
-
-
     const fetchCategories = async () => {
         try {
             const docRef = doc(db, 'settings', 'booking_categories');
@@ -2527,6 +2505,16 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
             }
         } catch (error) {
             console.error('Error fetching categories:', error);
+        }
+    };
+
+    const fetchServices = async () => {
+        try {
+            const snapshot = await getDocs(query(collection(db, 'services'), where('isActive', '==', true)));
+            const serviceList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setServices(serviceList);
+        } catch (error) {
+            console.error('Error fetching services:', error);
         }
     };
 
@@ -2567,6 +2555,8 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                 bookingDate: formData.bookingDate,
                 startTime: formData.startTime,
                 serviceCategory: formData.serviceCategory,
+                serviceName: formData.serviceName,
+                price: Number(formData.price) || 0,
                 updatedAt: serverTimestamp()
             });
             onSuccess();
@@ -2610,7 +2600,6 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                                     value={formData.licensePlate}
                                     onChange={e => setFormData({ ...formData, licensePlate: e.target.value })}
                                     style={{ textTransform: 'uppercase' }}
-                                    required
                                 />
                             </div>
                         </div>
@@ -2700,6 +2689,82 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                                     </button>
                                 </div>
                             )}
+                        </div>
+                        <div className="form-row">
+                            <div className="form-group" style={{ position: 'relative' }}>
+                                <label>Service Name</label>
+                                <input
+                                    value={formData.serviceName}
+                                    onChange={e => {
+                                        setFormData({ ...formData, serviceName: e.target.value });
+                                        setShowServiceDropdown(true);
+                                    }}
+                                    onFocus={() => setShowServiceDropdown(true)}
+                                    onBlur={() => setTimeout(() => setShowServiceDropdown(false), 200)}
+                                    placeholder="Search or type service name"
+                                    autoComplete="off"
+                                />
+                                {showServiceDropdown && services.length > 0 && (
+                                    <div className="dropdown-menu" style={{
+                                        position: 'absolute', top: '100%', left: 0, right: 0,
+                                        background: 'white', border: '1px solid var(--navy-200)',
+                                        borderRadius: 'var(--radius-md)', maxHeight: '200px',
+                                        overflowY: 'auto', zIndex: 10,
+                                        boxShadow: 'var(--shadow-md)'
+                                    }}>
+                                        {services
+                                            .filter(s => s.name?.toLowerCase().includes((formData.serviceName || '').toLowerCase()))
+                                            .map(s => (
+                                                <div
+                                                    key={s.id}
+                                                    onClick={() => {
+                                                        const vType = (booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_');
+                                                        const calcPrice = (s.prices && s.prices[vType] > 0) ? s.prices[vType] : (s.price || 0);
+                                                        setFormData({
+                                                            ...formData,
+                                                            serviceName: s.name,
+                                                            price: calcPrice,
+                                                            serviceCategory: s.category || formData.serviceCategory
+                                                        });
+                                                        setShowServiceDropdown(false);
+                                                    }}
+                                                    style={{
+                                                        padding: '0.75rem 1rem', cursor: 'pointer',
+                                                        borderBottom: '1px solid var(--navy-50)',
+                                                        display: 'flex', justifyContent: 'space-between',
+                                                        alignItems: 'center', transition: 'background-color 0.2s',
+                                                        gap: '1rem'
+                                                    }}
+                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--navy-50)'}
+                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                                >
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <strong style={{ color: 'var(--navy-900)', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</strong>
+                                                        <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.category}</div>
+                                                    </div>
+                                                    <span style={{ color: 'var(--primary)', fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0, paddingRight: '0.5rem' }}>
+                                                        ₹{(s.prices && s.prices[(booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_')] > 0)
+                                                            ? s.prices[(booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_')]
+                                                            : (s.price || 0)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        {services.filter(s => s.name?.toLowerCase().includes((formData.serviceName || '').toLowerCase())).length === 0 && (
+                                            <div style={{ padding: '0.75rem 1rem', color: 'var(--navy-400)', textAlign: 'center', fontSize: '0.85rem' }}>
+                                                No services found
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="form-group">
+                                <label>Amount (₹)</label>
+                                <input
+                                    type="number"
+                                    value={formData.price}
+                                    onChange={e => setFormData({ ...formData, price: e.target.value })}
+                                />
+                            </div>
                         </div>
                     </div>
                     <div className="modal-footer">

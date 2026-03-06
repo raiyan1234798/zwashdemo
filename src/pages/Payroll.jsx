@@ -276,40 +276,42 @@ const Payroll = () => {
                         <div className="table-container desktop-table">
                             <table className="data-table">
                                 <thead>
-                                    <tr>
-                                        <th>Employee</th>
-                                        <th>Role</th>
-                                        <th>Base Salary</th>
-                                        <th>Bonus</th>
-                                        <th>Deductions</th>
-                                        <th>Net Pay</th>
-                                        <th>Actions</th>
+                                    <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+                                        <th style={{ padding: '12px' }}>Employee</th>
+                                        <th style={{ padding: '12px' }}>Role</th>
+                                        <th style={{ padding: '12px', color: '#64748b' }}>Base Salary</th>
+                                        <th style={{ padding: '12px', color: '#10b981' }}>Bonus (+)</th>
+                                        <th style={{ padding: '12px', color: '#ef4444' }}>Deductions (-)</th>
+                                        <th style={{ padding: '12px', color: 'var(--navy-900)' }}>Net Pay</th>
+                                        <th style={{ padding: '12px' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {employees.map(emp => (
-                                        <tr key={emp.id}>
-                                            <td>
-                                                <strong>{emp.displayName}</strong>
+                                    {employees.map((emp, index) => (
+                                        <tr key={emp.id} style={{ borderBottom: '1px solid #e2e8f0', background: index % 2 === 0 ? 'white' : '#f8fafc', transition: 'background 0.2s' }}>
+                                            <td style={{ padding: '12px' }}>
+                                                <strong style={{ color: 'var(--navy-900)' }}>{emp.displayName}</strong>
                                                 <br />
-                                                <small>{emp.email}</small>
+                                                <small style={{ color: '#64748b' }}>{emp.email}</small>
                                             </td>
-                                            <td>{emp.role}</td>
-                                            <td>{formatCurrency(emp.baseSalary)}</td>
-                                            <td>
-                                                <span style={{ color: emp.bonus > 0 ? '#10b981' : 'inherit' }}>
-                                                    {formatCurrency(emp.bonus)}
+                                            <td style={{ padding: '12px' }}>
+                                                <span className="badge badge-completed" style={{ background: 'var(--navy-100)', color: 'var(--navy-700)' }}>{emp.role}</span>
+                                            </td>
+                                            <td style={{ padding: '12px', fontWeight: '500', color: 'var(--navy-700)' }}>{formatCurrency(emp.baseSalary)}</td>
+                                            <td style={{ padding: '12px' }}>
+                                                <span style={{ color: emp.bonus > 0 ? '#10b981' : '#cbd5e1', fontWeight: emp.bonus > 0 ? '600' : '400' }}>
+                                                    {emp.bonus > 0 ? '+' : ''}{formatCurrency(emp.bonus)}
                                                 </span>
                                             </td>
-                                            <td>
-                                                <span style={{ color: emp.deductions > 0 ? '#ef4444' : 'inherit' }}>
-                                                    {formatCurrency(emp.deductions)}
+                                            <td style={{ padding: '12px' }}>
+                                                <span style={{ color: emp.deductions > 0 ? '#ef4444' : '#cbd5e1', fontWeight: emp.deductions > 0 ? '600' : '400' }}>
+                                                    {emp.deductions > 0 ? '-' : ''}{formatCurrency(emp.deductions)}
                                                 </span>
                                             </td>
-                                            <td>
-                                                <strong>{formatCurrency(emp.netPay)}</strong>
+                                            <td style={{ padding: '12px' }}>
+                                                <strong style={{ fontSize: '1.05rem', color: 'var(--navy-900)' }}>{formatCurrency(emp.netPay)}</strong>
                                             </td>
-                                            <td>
+                                            <td style={{ padding: '12px' }}>
                                                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                                     <button
                                                         className="btn-icon"

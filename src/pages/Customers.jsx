@@ -458,11 +458,6 @@ const CustomerModal = ({ onClose, onSuccess }) => {
     const [plateValue, setPlateValue] = useState('');
 
     const validatePlate = (val) => {
-        if (!val) return { type: 'error', msg: 'License plate is required' };
-        const normalized = val.toUpperCase().replace(/[-\s]/g, '');
-        if (!/^TN\d{2}[A-Z]{2}\d{4}$/.test(normalized)) {
-            return { type: 'warning', msg: 'Not standard TN format (TN-XX-YY-XXXX). Save anyway?' };
-        }
         return null;
     };
 
@@ -538,12 +533,11 @@ const CustomerModal = ({ onClose, onSuccess }) => {
                             </div>
                         </div>
                         <div className="form-group">
-                            <label>License Plate *</label>
+                            <label>License Plate</label>
                             <input
                                 name="licensePlate"
                                 value={plateValue}
                                 onChange={handlePlateChange}
-                                required
                                 placeholder="TN-01-AB-1234"
                                 style={{
                                     textTransform: 'uppercase',
@@ -590,11 +584,6 @@ const EditCustomerModal = ({ customer, onClose, onSuccess, userProfile }) => {
     const [plateError, setPlateError] = useState('');
 
     const validatePlate = (val) => {
-        if (!val) return { type: 'error', msg: 'License plate is required' };
-        const normalized = val.toUpperCase().replace(/[-\s]/g, '');
-        if (!/^TN\d{2}[A-Z]{2}\d{4}$/.test(normalized)) {
-            return { type: 'warning', msg: 'Not standard TN format (TN-XX-YY-XXXX). Save anyway?' };
-        }
         return null;
     };
 
@@ -684,10 +673,9 @@ const EditCustomerModal = ({ customer, onClose, onSuccess, userProfile }) => {
                             </div>
                         </div>
                         <div className="form-group">
-                            <label>License Plate *</label>
+                            <label>License Plate</label>
                             <input
                                 name="licensePlate"
-                                required
                                 value={formData.licensePlate}
                                 onChange={handleChange}
                                 placeholder="TN-01-AB-1234"

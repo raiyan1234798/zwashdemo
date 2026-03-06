@@ -1596,7 +1596,8 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
         carModel: invoice.carModel || '',
         licensePlate: invoice.licensePlate || '',
         serviceName: invoice.serviceName || '',
-        price: invoice.price || 0
+        price: invoice.price || 0,
+        paymentMode: invoice.paymentMode || 'none'
     });
     const [loading, setLoading] = useState(false);
     const [isPaymentReceived, setIsPaymentReceived] = useState(false);
@@ -1636,7 +1637,7 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                 paymentStatus: newStatus,
                 paidAmount: totalPaid,
                 paymentHistory,
-                paymentMode: isPaymentReceived ? (paymentSplits[0]?.mode || invoice.paymentMode) : (invoice.paymentMode || 'none'),
+                paymentMode: isPaymentReceived ? (paymentSplits[0]?.mode || formData.paymentMode) : formData.paymentMode,
                 updatedAt: serverTimestamp()
             });
             onSuccess();
@@ -1707,14 +1708,30 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                                 required
                             />
                         </div>
-                        <div className="form-group">
-                            <label>Amount (₹)</label>
-                            <input
-                                type="number"
-                                value={formData.price}
-                                onChange={e => setFormData({ ...formData, price: e.target.value })}
-                                required
-                            />
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label>Amount (₹)</label>
+                                <input
+                                    type="number"
+                                    value={formData.price}
+                                    onChange={e => setFormData({ ...formData, price: e.target.value })}
+                                    required
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Payment Method</label>
+                                <select
+                                    value={formData.paymentMode}
+                                    onChange={e => setFormData({ ...formData, paymentMode: e.target.value })}
+                                >
+                                    <option value="none">None</option>
+                                    <option value="cash">Cash</option>
+                                    <option value="upi">UPI</option>
+                                    <option value="card">Card</option>
+                                    <option value="bank_transfer">Bank Transfer</option>
+                                    <option value="online">Online</option>
+                                </select>
+                            </div>
                         </div>
 
                         {/* Additional Payment Status */}
