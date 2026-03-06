@@ -38,6 +38,8 @@ const Expenses = () => {
     const [showModal, setShowModal] = useState(false);
     const [categoryFilter, setCategoryFilter] = useState('');
     const [categories, setCategories] = useState(['supplies', 'utilities', 'maintenance', 'rent', 'misc']);
+    const [startDateFilter, setStartDateFilter] = useState('');
+    const [endDateFilter, setEndDateFilter] = useState('');
     const [stats, setStats] = useState({ total: 0 });
     const [selectedDate, setSelectedDate] = useState(null);
     const [editingExpense, setEditingExpense] = useState(null);
@@ -51,9 +53,21 @@ const Expenses = () => {
         try {
             const docRef = doc(db, 'settings', 'expenses');
             const docSnap = await getDoc(docRef);
+            let expenseCategories = ['supplies', 'utilities', 'maintenance', 'rent', 'misc'];
+
             if (docSnap.exists() && docSnap.data().categories) {
-                setCategories(docSnap.data().categories);
+                expenseCategories = docSnap.data().categories;
             }
+
+            // Fetch services to include them as categories
+            const servicesSnapshot = await getDocs(collection(db, 'services'));
+            const servicesList = servicesSnapshot.docs
+                .map(doc => doc.data().name.toLowerCase())
+                .filter(name => name);
+
+            // Merge and remove duplicates
+            const combinedCategories = [...new Set([...expenseCategories, ...servicesList])];
+            setCategories(combinedCategories);
         } catch (error) {
             console.error('Error fetching categories:', error);
         }
@@ -82,6 +96,7 @@ const Expenses = () => {
                 yesterday: 0,
                 week: 0,
                 month: 0,
+                last30Days: 0,
                 supplies: 0,
                 utilities: 0,
                 maintenance: 0,
@@ -92,6 +107,8 @@ const Expenses = () => {
 
             // Calculate daily breakdown for last 30 days
             const dailyMap = {};
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+
             for (let i = 0; i < 30; i++) {
                 const d = new Date();
                 d.setDate(d.getDate() - i);
@@ -107,6 +124,7 @@ const Expenses = () => {
                 if (exp.date === yesterday) statsCalc.yesterday += amount;
                 if (exp.date >= weekAgo) statsCalc.week += amount;
                 if (exp.date >= monthStart) statsCalc.month += amount;
+                if (exp.date >= thirtyDaysAgo) statsCalc.last30Days += amount;
 
                 if (exp.category && statsCalc[exp.category] !== undefined) {
                     statsCalc[exp.category] += amount;
@@ -176,9 +194,13 @@ const Expenses = () => {
 
     const filteredExpenses = expenses.filter(e => {
         if (selectedDate && e.date !== selectedDate) return false;
+        if (startDateFilter && e.date < startDateFilter) return false;
+        if (endDateFilter && e.date > endDateFilter) return false;
         if (categoryFilter && e.category !== categoryFilter) return false;
         return true;
     });
+
+    const filteredTotal = filteredExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
 
     return (
         <div className="expenses-page">
@@ -235,6 +257,15 @@ const Expenses = () => {
                     <div className="expense-content">
                         <span className="expense-label">This Month</span>
                         <span className="expense-value">{formatCurrency(stats.month)}</span>
+                    </div>
+                </div>
+                <div className="expense-summary-card" style={{ gridColumn: '1 / -1', background: 'var(--navy-900)', color: 'white', borderColor: 'var(--navy-800)' }}>
+                    <div className="expense-icon" style={{ background: 'rgba(255,255,255,0.1)', color: 'white' }}>
+                        <IndianRupee size={24} />
+                    </div>
+                    <div className="expense-content">
+                        <span className="expense-label" style={{ color: 'var(--navy-200)' }}>Last 30 Days</span>
+                        <span className="expense-value">{formatCurrency(stats.last30Days)}</span>
                     </div>
                 </div>
             </div>
@@ -381,17 +412,63 @@ const Expenses = () => {
             )}
 
             {/* Filter */}
-            <div className="search-filter-bar">
+            <div className="search-filter-bar" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
                 <select
                     className="filter-select"
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value)}
+                    style={{ flex: '1 1 200px' }}
                 >
                     <option value="">All Categories</option>
                     {categories.map(cat => (
                         <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
                     ))}
                 </select>
+
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flex: '2 1 300px' }}>
+                    <input
+                        type="date"
+                        className="filter-input"
+                        value={startDateFilter}
+                        onChange={(e) => setStartDateFilter(e.target.value)}
+                        placeholder="Start Date"
+                        style={{ flex: 1 }}
+                    />
+                    <span style={{ color: 'var(--navy-500)', fontWeight: '500' }}>to</span>
+                    <input
+                        type="date"
+                        className="filter-input"
+                        value={endDateFilter}
+                        onChange={(e) => setEndDateFilter(e.target.value)}
+                        placeholder="End Date"
+                        style={{ flex: 1 }}
+                    />
+                    {(startDateFilter || endDateFilter) && (
+                        <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => { setStartDateFilter(''); setEndDateFilter(''); }}
+                            style={{ padding: '0.4rem 0.75rem' }}
+                        >
+                            Clear Dates
+                        </button>
+                    )}
+                </div>
+
+                <div style={{
+                    marginLeft: 'auto',
+                    background: 'var(--primary)',
+                    color: 'white',
+                    padding: '0.6rem 1.25rem',
+                    borderRadius: 'var(--radius-md)',
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    boxShadow: 'var(--shadow-sm)'
+                }}>
+                    <span>Filtered Total:</span>
+                    <span>{formatCurrency(filteredTotal)}</span>
+                </div>
             </div>
 
             {/* Expenses List */}
