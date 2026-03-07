@@ -452,10 +452,13 @@ const Payroll = () => {
             <style>{`
                 .desktop-table-container { display: block; overflow-x: auto; }
                 .mobile-cards-container { display: none; padding: 1rem; }
+                .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+                .analytics-grid > div { min-width: 0; }
                 @media (max-width: 1024px) {
                     .desktop-table-container { display: none !important; }
                     .mobile-cards-container { display: flex !important; flex-direction: column; gap: 1rem; }
                     .summary-cards-row1, .summary-cards-row2 { grid-template-columns: 1fr !important; }
+                    .analytics-grid { grid-template-columns: 1fr !important; }
                 }
             `}</style>
             <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -705,7 +708,7 @@ const Payroll = () => {
 
             {/* Payroll Analytics Section */}
             {!loading && filteredEmployees.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+                <div className="analytics-grid">
                     <div className="card" style={{ background: 'white', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', padding: '1.5rem' }}>
                         <h3 style={{ fontSize: '1.1rem', color: '#1e293b', marginBottom: '1.5rem', fontWeight: '600' }}>Payroll Cost by Role</h3>
                         <div style={{ height: '300px' }}>
