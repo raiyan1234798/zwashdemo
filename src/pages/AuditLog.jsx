@@ -218,7 +218,7 @@ const AuditLog = () => {
             {/* Logs Table */}
             <div className="card">
                 <div className="card-body" style={{ padding: 0 }}>
-                    <div className="table-container">
+                    <div className="desktop-audit-view">
                         <table className="data-table">
                             <thead>
                                 <tr>
@@ -244,63 +244,68 @@ const AuditLog = () => {
                                     </tr>
                                 ) : (
                                     filteredLogs.map(log => (
-                                        <React.Fragment key={log.id}>
-                                            <tr className="desktop-view-row">
-                                                <td style={{ whiteSpace: 'nowrap', color: 'var(--navy-600)', fontSize: '0.85rem' }}>
-                                                    {formatTime(log.timestamp)}
-                                                </td>
-                                                <td>
-                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                        <span style={{ fontWeight: 500 }}>{log.userName}</span>
-                                                        <span style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{log.userRole}</span>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <span
-                                                        style={{
-                                                            padding: '0.25rem 0.5rem',
-                                                            borderRadius: '4px',
-                                                            fontSize: '0.75rem',
-                                                            fontWeight: 600,
-                                                            textTransform: 'uppercase'
-                                                        }}
-                                                        className={getActionColor(log.action)}
-                                                    >
-                                                        {log.action}
-                                                    </span>
-                                                </td>
-                                                <td style={{ textTransform: 'capitalize' }}>
-                                                    {log.resource}
-                                                </td>
-                                                <td style={{ color: 'var(--navy-700)' }}>
-                                                    {log.details}
-                                                    {log.metadata && log.metadata.name && (
-                                                        <span style={{ color: 'var(--navy-500)', fontSize: '0.85rem', marginLeft: '0.5rem' }}>
-                                                            ({log.metadata.name})
-                                                        </span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                            <div className="mobile-log-card">
-                                                <div className="log-card-header">
-                                                    <div className="log-card-user">{log.userName}</div>
-                                                    <span className={`log-card-action-badge ${getActionColor(log.action)}`}>
-                                                        {log.action}
-                                                    </span>
+                                        <tr key={log.id} className="desktop-view-row">
+                                            <td style={{ whiteSpace: 'nowrap', color: 'var(--navy-600)', fontSize: '0.85rem' }}>
+                                                {formatTime(log.timestamp)}
+                                            </td>
+                                            <td>
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                    <span style={{ fontWeight: 500 }}>{log.userName}</span>
+                                                    <span style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{log.userRole}</span>
                                                 </div>
-                                                <div className="log-card-time">{formatTime(log.timestamp)}</div>
-                                                <div className="log-card-resource">{log.resource}</div>
-                                                <div className="log-card-details">
-                                                    {log.details}
-                                                    {log.metadata && log.metadata.name && ` (${log.metadata.name})`}
-                                                </div>
-                                            </div>
-                                        </React.Fragment>
+                                            </td>
+                                            <td>
+                                                <span
+                                                    style={{
+                                                        padding: '0.25rem 0.5rem',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.75rem',
+                                                        fontWeight: 600,
+                                                        textTransform: 'uppercase'
+                                                    }}
+                                                    className={getActionColor(log.action)}
+                                                >
+                                                    {log.action}
+                                                </span>
+                                            </td>
+                                            <td style={{ textTransform: 'capitalize' }}>
+                                                {log.resource}
+                                            </td>
+                                            <td style={{ color: 'var(--navy-700)' }}>
+                                                {log.details}
+                                                {log.metadata && log.metadata.name && (
+                                                    <span style={{ color: 'var(--navy-500)', fontSize: '0.85rem', marginLeft: '0.5rem' }}>
+                                                        ({log.metadata.name})
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
                                     ))
                                 )}
                             </tbody>
                         </table>
                     </div>
+
+                    {!loading && filteredLogs.length > 0 && (
+                        <div className="mobile-audit-view">
+                            {filteredLogs.map(log => (
+                                <div key={log.id} className="mobile-log-card">
+                                    <div className="log-card-header">
+                                        <div className="log-card-user">{log.userName}</div>
+                                        <span className={`log-card-action-badge ${getActionColor(log.action)}`}>
+                                            {log.action}
+                                        </span>
+                                    </div>
+                                    <div className="log-card-time">{formatTime(log.timestamp)}</div>
+                                    <div className="log-card-resource">{log.resource}</div>
+                                    <div className="log-card-details">
+                                        {log.details}
+                                        {log.metadata && log.metadata.name && ` (${log.metadata.name})`}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -316,10 +321,13 @@ const AuditLog = () => {
                 .text-gray-600 { color: #4b5563; }
                 .bg-gray-50 { background-color: #f9fafb; }
 
+                .desktop-audit-view { display: block; }
+                .mobile-audit-view { display: none; }
+
                 .mobile-log-card {
-                    display: none;
                     padding: 1rem;
                     border-bottom: 1px solid var(--navy-50);
+                    background: white;
                 }
 
                 .log-card-header {
@@ -394,12 +402,12 @@ const AuditLog = () => {
                         display: none;
                     }
 
-                    .data-table tbody tr {
-                        display: none;
+                    .desktop-audit-view {
+                        display: none !important;
                     }
 
-                    .mobile-log-card {
-                        display: block;
+                    .mobile-audit-view {
+                        display: block !important;
                     }
                     
                     .card-body {
