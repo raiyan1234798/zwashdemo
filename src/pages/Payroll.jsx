@@ -17,7 +17,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Receipt, Download, Users, Edit, Check, X, IndianRupee, TrendingUp, CreditCard, History, AlertCircle, Calendar, CheckCircle, XCircle, PlusSquare, Calculator, Search, Filter, Eye, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
 const Payroll = () => {

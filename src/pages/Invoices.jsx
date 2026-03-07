@@ -1826,8 +1826,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
         licensePlate: '',
         serviceName: '',
         price: '',
-        invoiceDate: new Date().toISOString().split('T')[0],
-        vehicleType: 'hatchback'
+        invoiceDate: new Date().toISOString().split('T')[0]
     });
     const [loading, setLoading] = useState(false);
     const [isPaymentReceived, setIsPaymentReceived] = useState(false);
