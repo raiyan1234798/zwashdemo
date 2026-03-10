@@ -14,6 +14,20 @@ import {
     IndianRupee
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    Legend,
+    ResponsiveContainer,
+    PieChart,
+    Pie,
+    Cell,
+    Tooltip as RechartsTooltip
+} from 'recharts';
 
 const MaterialUsageAnalytics = () => {
     const navigate = useNavigate();
@@ -233,6 +247,30 @@ const MaterialUsageAnalytics = () => {
     const totalMaterialCost = serviceAnalytics.reduce((sum, s) => sum + s.totalMaterialCost, 0);
     const totalProfit = totalRevenue - totalMaterialCost;
 
+    // Data for charts
+    const barChartData = serviceAnalytics.map(s => ({
+        name: s.name.length > 15 ? s.name.substring(0, 15) + '...' : s.name,
+        fullName: s.name,
+        cost: s.materialCost,
+        revenue: s.price,
+        profit: s.profit
+    })).sort((a, b) => b.cost - a.cost).slice(0, 8);
+
+    const categoryDataMap = materialSummary.reduce((acc, curr) => {
+        if (!acc[curr.category]) {
+            acc[curr.category] = 0;
+        }
+        acc[curr.category] += curr.totalCost;
+        return acc;
+    }, {});
+
+    const pieChartData = Object.entries(categoryDataMap).map(([name, value]) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        value
+    })).sort((a, b) => b.value - a.value);
+
+    const COLORS = ['#8b5cf6', '#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#6366f1'];
+
     if (loading) {
         return (
             <div className="usage-analytics-page">
@@ -280,6 +318,69 @@ const MaterialUsageAnalytics = () => {
                     <div>
                         <span className="value">{formatCurrency(totalProfit)}</span>
                         <span className="label">Total Profit</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Charts Section */}
+            <div className="analytics-charts">
+                <div className="chart-card">
+                    <div className="chart-header">
+                        <h3><BarChart3 size={18} /> Material Cost per Service (Top 8)</h3>
+                    </div>
+                    <div className="chart-body" style={{ height: '300px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={barChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis
+                                    dataKey="name"
+                                    angle={-45}
+                                    textAnchor="end"
+                                    interval={0}
+                                    tick={{ fontSize: 11, fill: '#64748b' }}
+                                />
+                                <YAxis
+                                    tickFormatter={(val) => `₹${val}`}
+                                    tick={{ fontSize: 11, fill: '#64748b' }}
+                                />
+                                <Tooltip
+                                    formatter={(value) => formatCurrency(value)}
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                />
+                                <Legend verticalAlign="top" height={36} />
+                                <Bar dataKey="cost" name="Material Cost" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={24} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                <div className="chart-card">
+                    <div className="chart-header">
+                        <h3><PieChart size={18} /> Cost Distribution by Category</h3>
+                    </div>
+                    <div className="chart-body" style={{ height: '300px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={pieChartData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={100}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    {pieChartData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip
+                                    formatter={(value) => formatCurrency(value)}
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                />
+                                <Legend verticalAlign="bottom" height={36} />
+                            </PieChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             </div>
@@ -464,6 +565,37 @@ const MaterialUsageAnalytics = () => {
                     color: var(--navy-500);
                     font-size: 0.9rem;
                     margin: 0.25rem 0 0;
+                }
+
+                .analytics-charts {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+                    gap: 1.5rem;
+                    margin-bottom: 2rem;
+                }
+
+                .chart-card {
+                    background: white;
+                    padding: 1.5rem;
+                    border-radius: var(--radius-lg);
+                    box-shadow: var(--shadow-sm);
+                    border: 1px solid var(--navy-100);
+                }
+
+                .chart-header {
+                    margin-bottom: 1.5rem;
+                    padding-bottom: 0.75rem;
+                    border-bottom: 1px solid var(--navy-100);
+                }
+
+                .chart-header h3 {
+                    font-size: 1rem;
+                    font-weight: 600;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    margin: 0;
+                    color: var(--navy-800);
                 }
                 
                 .analytics-stats {
@@ -737,6 +869,10 @@ const MaterialUsageAnalytics = () => {
                     .material-summary-table {
                         margin: 0 -1rem;
                         padding: 0 1rem;
+                    }
+
+                    .analytics-charts {
+                        grid-template-columns: 1fr;
                     }
                 }
                 

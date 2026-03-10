@@ -194,4 +194,5 @@
     padding: 1.25rem 1.5rem;
     min-height: 100vh;
     background: linear-gradient(135deg, var(--navy-50) 0%, #e9eef6 100%);
+    overflow-x: hidden;
 }

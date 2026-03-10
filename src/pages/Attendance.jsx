@@ -44,6 +44,7 @@ const Attendance = () => {
     const [showMarkModal, setShowMarkModal] = useState(false);
     const [showHolidayModal, setShowHolidayModal] = useState(false);
     const [stats, setStats] = useState({ present: 0, absent: 0, leaves: 0, overtime: 0 });
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState('all');
 
     useEffect(() => {
         fetchData();
@@ -67,8 +68,13 @@ const Attendance = () => {
             setEmployees(empData);
 
             // Fetch attendance for current month
-            const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1).toISOString().split('T')[0];
-            const endOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).toISOString().split('T')[0];
+            const toLocalDateStr = (date) => {
+                const offset = date.getTimezoneOffset() * 60000;
+                const localDate = new Date(date.getTime() - offset);
+                return localDate.toISOString().split('T')[0];
+            };
+            const startOfMonth = toLocalDateStr(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1));
+            const endOfMonth = toLocalDateStr(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0));
 
             const attQuery = query(
                 collection(db, 'attendance'),
@@ -322,54 +328,162 @@ const Attendance = () => {
 
                 {/* Monthly Summary Table */}
                 <div className="card summary-card" style={{ marginTop: '2rem' }}>
-                    <div className="card-header">
-                        <h2>Monthly Summary</h2>
+                    <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                        <h2 style={{ margin: 0 }}>Monthly Summary</h2>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <label style={{ fontWeight: '500', color: 'var(--navy-600)', fontSize: '0.85rem' }}>View:</label>
+                            <select
+                                value={selectedEmployeeId}
+                                onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                                style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid var(--navy-200)', background: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
+                            >
+                                <option value="all">Overall Analytics</option>
+                                {employees.map(emp => (
+                                    <option key={emp.id} value={emp.id}>{emp.displayName}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
                     <div className="card-body">
-                        <div className="table-responsive">
-                            <table className="summary-table">
-                                <thead>
-                                    <tr>
-                                        <th>Employee</th>
-                                        <th>Present (Days)</th>
-                                        <th>Absent</th>
-                                        <th>Half Day</th>
-                                        <th>Paid Leave</th>
-                                        <th>Unpaid Leave</th>
-                                        <th>Permission (Hrs)</th>
-                                        <th>Overtime (Hrs)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {employees.map(emp => {
-                                        const empAtt = attendance.filter(a => a.userId === emp.id);
-                                        const presentDays = empAtt.filter(a => a.status === 'present' || a.status === 'permission').length;
-                                        const absentDays = empAtt.filter(a => a.status === 'absent').length;
-                                        const halfDays = empAtt.filter(a => a.status === 'half-day').length;
-                                        const paidLeaves = empAtt.filter(a => a.status === 'paid_leave').length;
-                                        const unpaidLeaves = empAtt.filter(a => a.status === 'unpaid_leave').length;
-                                        const permissionHrs = empAtt.reduce((sum, a) => sum + (Number(a.permissionHours) || 0), 0);
-                                        const overtimeHrs = empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
+                        {selectedEmployeeId === 'all' ? (
+                            <div className="table-responsive">
+                                <table className="summary-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Employee</th>
+                                            <th>Present (Days)</th>
+                                            <th>Absent</th>
+                                            <th>Half Day</th>
+                                            <th>Paid Leave</th>
+                                            <th>Unpaid Leave</th>
+                                            <th>Permission (Hrs)</th>
+                                            <th>Overtime (Hrs)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {employees.map(emp => {
+                                            const empAtt = attendance.filter(a => a.userId === emp.id);
+                                            const presentAtt = empAtt.filter(a => a.status === 'present' || a.status === 'permission');
+                                            const presentDaysCount = presentAtt.length;
 
-                                        return (
-                                            <tr key={emp.id}>
-                                                <td data-label="Employee">
-                                                    <div style={{ fontWeight: '600' }}>{emp.displayName}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{emp.role}</div>
-                                                </td>
-                                                <td data-label="Present (Days)">{presentDays}</td>
-                                                <td data-label="Absent">{absentDays}</td>
-                                                <td data-label="Half Day">{halfDays}</td>
-                                                <td data-label="Paid Leave">{paidLeaves}</td>
-                                                <td data-label="Unpaid Leave">{unpaidLeaves}</td>
-                                                <td data-label="Permission (Hrs)">{permissionHrs.toFixed(1)}</td>
-                                                <td data-label="Overtime (Hrs)">{overtimeHrs.toFixed(1)}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
+                                            // Format dates like "5 Mar, 6 Mar"
+                                            const presentDatesFormatted = presentAtt
+                                                .map(a => {
+                                                    const d = new Date(a.date);
+                                                    return `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`;
+                                                })
+                                                .sort((a, b) => new Date(a.date) - new Date(b.date))
+                                                .join(', ');
+
+                                            const absentDays = empAtt.filter(a => a.status === 'absent').length;
+                                            const halfDays = empAtt.filter(a => a.status === 'half-day').length;
+                                            const paidLeaves = empAtt.filter(a => a.status === 'paid_leave').length;
+                                            const unpaidLeaves = empAtt.filter(a => a.status === 'unpaid_leave').length;
+                                            const permissionHrs = empAtt.reduce((sum, a) => sum + (Number(a.permissionHours) || 0), 0);
+                                            const overtimeHrs = empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
+
+                                            return (
+                                                <tr key={emp.id}>
+                                                    <td data-label="Employee"
+                                                        style={{ cursor: 'pointer' }}
+                                                        onClick={() => setSelectedEmployeeId(emp.id)}
+                                                    >
+                                                        <div style={{ fontWeight: '600', color: 'var(--primary)', textDecoration: 'underline' }}>{emp.displayName}</div>
+                                                        <div style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{emp.role}</div>
+                                                    </td>
+                                                    <td data-label="Present (Days)">
+                                                        <div style={{ fontWeight: '600' }}>{presentDaysCount}</div>
+                                                    </td>
+                                                    <td data-label="Absent">{absentDays}</td>
+                                                    <td data-label="Half Day">{halfDays}</td>
+                                                    <td data-label="Paid Leave">{paidLeaves}</td>
+                                                    <td data-label="Unpaid Leave">{unpaidLeaves}</td>
+                                                    <td data-label="Permission (Hrs)">{permissionHrs.toFixed(1)}</td>
+                                                    <td data-label="Overtime (Hrs)">{overtimeHrs.toFixed(1)}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (() => {
+                            const emp = employees.find(e => e.id === selectedEmployeeId);
+                            if (!emp) return <p>Employee not found</p>;
+
+                            const empAtt = attendance.filter(a => a.userId === emp.id);
+                            const presentAtt = empAtt.filter(a => a.status === 'present' || a.status === 'permission');
+                            const absentDays = empAtt.filter(a => a.status === 'absent').length;
+                            const permissionHrs = empAtt.reduce((sum, a) => sum + (Number(a.permissionHours) || 0), 0);
+                            const overtimeHrs = empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
+
+                            return (
+                                <div className="employee-analytics-card" style={{ padding: '1rem', background: '#f8fafc', border: '1px solid var(--navy-100)', borderRadius: 'var(--radius-lg)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                        <div>
+                                            <h3 style={{ margin: 0, color: 'var(--navy-900)' }}>{emp.displayName}'s Analytics</h3>
+                                            <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'var(--navy-500)' }}>{emp.role}</p>
+                                        </div>
+                                        <button className="btn btn-sm btn-secondary" onClick={() => setSelectedEmployeeId('all')}>Back to Overview</button>
+                                    </div>
+
+                                    <div className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                                        <div className="stat-card mini" style={{ background: 'white', border: '1px solid #10b981', textAlign: 'center', padding: '1rem', borderRadius: '8px' }}>
+                                            <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Present Days</span>
+                                            <strong style={{ fontSize: '1.5rem', color: '#10b981' }}>{presentAtt.length}</strong>
+                                        </div>
+                                        <div className="stat-card mini" style={{ background: 'white', border: '1px solid #ef4444', textAlign: 'center', padding: '1rem', borderRadius: '8px' }}>
+                                            <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Absent Days</span>
+                                            <strong style={{ fontSize: '1.5rem', color: '#ef4444' }}>{absentDays}</strong>
+                                        </div>
+                                        <div className="stat-card mini" style={{ background: 'white', border: '1px solid #0ea5e9', textAlign: 'center', padding: '1rem', borderRadius: '8px' }}>
+                                            <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Permission</span>
+                                            <strong style={{ fontSize: '1.5rem', color: '#0ea5e9' }}>{permissionHrs.toFixed(1)}h</strong>
+                                        </div>
+                                        <div className="stat-card mini" style={{ background: 'white', border: '1px solid #8b5cf6', textAlign: 'center', padding: '1rem', borderRadius: '8px' }}>
+                                            <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Overtime</span>
+                                            <strong style={{ fontSize: '1.5rem', color: '#8b5cf6' }}>{overtimeHrs.toFixed(1)}h</strong>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ background: 'white', padding: '1.5rem', border: '1px solid var(--navy-100)', borderRadius: '8px' }}>
+                                        <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--navy-700)' }}>
+                                            <Calendar size={18} /> Exact Dates Present / Permission
+                                        </h4>
+                                        {presentAtt.length > 0 ? (
+                                            <div style={{
+                                                display: 'flex',
+                                                flexWrap: 'wrap',
+                                                gap: '0.5rem'
+                                            }}>
+                                                {presentAtt
+                                                    .sort((a, b) => new Date(a.date) - new Date(b.date))
+                                                    .map(a => {
+                                                        const d = new Date(a.date);
+                                                        const dateStr = `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`;
+                                                        return (
+                                                            <span key={a.id} style={{
+                                                                background: a.status === 'permission' ? '#e0f2fe' : '#d1fae5',
+                                                                color: a.status === 'permission' ? '#0369a1' : '#047857',
+                                                                padding: '0.3rem 0.6rem',
+                                                                borderRadius: '4px',
+                                                                fontSize: '0.85rem',
+                                                                fontWeight: '500',
+                                                                border: `1px solid ${a.status === 'permission' ? '#bce4fe' : '#a7f3d0'}`
+                                                            }}>
+                                                                {dateStr} {a.status === 'permission' ? '(P)' : ''}
+                                                            </span>
+                                                        )
+                                                    })}
+                                            </div>
+                                        ) : (
+                                            <p style={{ margin: 0, color: 'var(--navy-400)', fontStyle: 'italic', fontSize: '0.9rem' }}>
+                                                No presence logged for this month.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
             </div>

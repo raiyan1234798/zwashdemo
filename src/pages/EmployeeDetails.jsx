@@ -104,14 +104,16 @@ const EmployeeDetails = () => {
         try {
             const attendanceQuery = query(
                 collection(db, 'attendance'),
-                where('userId', '==', id),
-                orderBy('date', 'desc')
+                where('userId', '==', id)
             );
             const snapshot = await getDocs(attendanceQuery);
             const records = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+            // Sort manually to avoid Firestore composite index requirement
+            records.sort((a, b) => new Date(b.date) - new Date(a.date));
             setAttendanceRecords(records.slice(0, 30));
 
-            const present = records.filter(r => r.status === 'present' || r.checkIn).length;
+            const present = records.filter(r => r.status === 'present' || r.status === 'permission' || r.checkIn).length;
             const absent = records.filter(r => r.status === 'absent').length;
             const late = records.filter(r => r.isLate).length;
             setAttendanceStats({ present, absent, late });
