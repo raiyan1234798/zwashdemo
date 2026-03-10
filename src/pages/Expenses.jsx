@@ -220,6 +220,17 @@ const Expenses = () => {
             Note: exp.note || ''
         }));
 
+        const totalAmount = filteredExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+
+        dataToExport.push({
+            Date: 'Total',
+            Title: '',
+            Category: '',
+            Amount: totalAmount,
+            'Payment Mode': '',
+            Note: ''
+        });
+
         const ws = XLSX.utils.json_to_sheet(dataToExport);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
