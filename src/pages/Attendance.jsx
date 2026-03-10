@@ -83,7 +83,7 @@ const Attendance = () => {
             const holSnapshot = await getDocs(collection(db, 'holidays'));
             setHolidays(holSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
 
-            calculateStats(attData);
+            calculateStats(attData, empData);
         } catch (error) {
             console.error('Error fetching attendance data:', error);
         } finally {
@@ -91,12 +91,13 @@ const Attendance = () => {
         }
     };
 
-    const calculateStats = (data) => {
+    const calculateStats = (data, empDataToUse) => {
         const today = new Date().toISOString().split('T')[0];
         const todayAtt = data.filter(a => a.date === today);
+        const totalEmployees = empDataToUse ? empDataToUse.length : employees.length;
 
         setStats({
-            total: employees.length,
+            total: totalEmployees,
             present: todayAtt.filter(a => a.status === 'present' || a.status === 'permission' || a.status === 'half-day').length,
             leaves: todayAtt.filter(a => a.status.includes('leave')).length
         });
@@ -352,17 +353,17 @@ const Attendance = () => {
 
                                         return (
                                             <tr key={emp.id}>
-                                                <td>
+                                                <td data-label="Employee">
                                                     <div style={{ fontWeight: '600' }}>{emp.displayName}</div>
                                                     <div style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{emp.role}</div>
                                                 </td>
-                                                <td>{presentDays}</td>
-                                                <td>{absentDays}</td>
-                                                <td>{halfDays}</td>
-                                                <td>{paidLeaves}</td>
-                                                <td>{unpaidLeaves}</td>
-                                                <td>{permissionHrs.toFixed(1)}</td>
-                                                <td>{overtimeHrs.toFixed(1)}</td>
+                                                <td data-label="Present (Days)">{presentDays}</td>
+                                                <td data-label="Absent">{absentDays}</td>
+                                                <td data-label="Half Day">{halfDays}</td>
+                                                <td data-label="Paid Leave">{paidLeaves}</td>
+                                                <td data-label="Unpaid Leave">{unpaidLeaves}</td>
+                                                <td data-label="Permission (Hrs)">{permissionHrs.toFixed(1)}</td>
+                                                <td data-label="Overtime (Hrs)">{overtimeHrs.toFixed(1)}</td>
                                             </tr>
                                         );
                                     })}
@@ -466,10 +467,15 @@ const Attendance = () => {
                     height: 10px;
                     border-radius: 50%;
                 }
-                
+                .table-responsive {
+                    width: 100%;
+                    overflow-x: auto;
+                    -webkit-overflow-scrolling: touch;
+                }
                 .summary-table {
                     width: 100%;
                     border-collapse: collapse;
+                    white-space: nowrap;
                 }
                 .summary-table th, .summary-table td {
                     padding: 1rem;
@@ -493,9 +499,52 @@ const Attendance = () => {
                     }
                     .day-number { font-size: 0.8rem; }
                     .att-dot { width: 8px; height: 8px; }
-                    .summary-table th, .summary-table td {
-                        padding: 0.75rem 0.5rem;
-                        font-size: 0.8rem;
+                    
+                    .table-responsive {
+                        overflow-x: hidden;
+                    }
+                    .summary-table, .summary-table tbody, .summary-table tr, .summary-table td {
+                        display: block;
+                        width: 100%;
+                    }
+                    .summary-table thead {
+                        display: none;
+                    }
+                    .summary-table tr {
+                        margin-bottom: 1rem;
+                        border: 1px solid var(--navy-200);
+                        border-radius: var(--radius-md);
+                        background: white;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                        white-space: normal;
+                    }
+                    .summary-table td {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        border-bottom: 1px solid var(--navy-50);
+                        padding: 0.75rem 1rem !important;
+                        font-size: 0.9rem;
+                    }
+                    .summary-table td:last-child {
+                        border-bottom: none;
+                    }
+                    .summary-table td::before {
+                        content: attr(data-label);
+                        font-weight: 600;
+                        color: var(--navy-600);
+                        text-align: left;
+                        flex: 1;
+                    }
+                    .summary-table td[data-label="Employee"] {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        background: var(--navy-50);
+                        border-bottom: 1px solid var(--navy-200);
+                        border-radius: var(--radius-md) var(--radius-md) 0 0;
+                    }
+                    .summary-table td[data-label="Employee"]::before {
+                        content: none;
                     }
                 }
             `}</style>
@@ -750,13 +799,13 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
 
     return (
         <div className="modal">
-            <div className="modal-content modal-lg">
-                <div className="modal-header">
+            <div className="modal-content modal-lg" style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+                <div className="modal-header" style={{ flexShrink: 0 }}>
                     <h2><UserCheck size={20} /> Mark Attendance</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
-                <div className="modal-body">
-                    <div className="form-group">
+                <div className="modal-body" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, paddingBottom: 0 }}>
+                    <div className="form-group" style={{ flexShrink: 0 }}>
                         <label>Date</label>
                         <input
                             type="date"
@@ -765,7 +814,7 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                         />
                     </div>
 
-                    <div className="attendance-list" style={{ marginTop: '1rem', maxHeight: '60vh', overflowY: 'auto' }}>
+                    <div className="attendance-list" style={{ marginTop: '1rem', flex: 1, overflowY: 'auto', paddingBottom: '1rem' }}>
                         {employees.map(emp => (
                             <div key={emp.id} className="attendance-row" style={{
                                 display: 'flex',
@@ -788,8 +837,8 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                                             className={`btn btn-sm`}
                                             onClick={() => handleStatusChange(emp.id, opt.id)}
                                             style={{
-                                                background: statuses[emp.id] === opt.id ? opt.color : 'white',
-                                                color: statuses[emp.id] === opt.id ? 'white' : 'var(--navy-600)',
+                                                background: (statuses[emp.id] === opt.id || (statuses[emp.id] === 'permission' && opt.id === 'present')) ? opt.color : 'white',
+                                                color: (statuses[emp.id] === opt.id || (statuses[emp.id] === 'permission' && opt.id === 'present')) ? 'white' : 'var(--navy-600)',
                                                 border: `1px solid ${opt.color}`,
                                                 flex: '1',
                                                 minWidth: '80px'
@@ -938,7 +987,7 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                         ))}
                     </div>
                 </div>
-                <div className="modal-footer">
+                <div className="modal-footer" style={{ flexShrink: 0, marginTop: 'auto', background: 'white', borderTop: '1px solid var(--navy-100)', paddingTop: '1rem', paddingBottom: '0.5rem' }}>
                     <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
                     <button type="button" className="btn btn-primary" onClick={handleSave}>Save Attendance</button>
                 </div>
