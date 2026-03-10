@@ -48,27 +48,29 @@ const Analytics = () => {
     const [pivotCol, setPivotCol] = useState('status');
     const [pivotMetric, setPivotMetric] = useState('revenue'); // 'revenue' or 'count'
 
+    // Helper for local date string
+    const toLocalDateStr = (date) => {
+        const offset = date.getTimezoneOffset() * 60000;
+        const localDate = new Date(date.getTime() - offset);
+        return localDate.toISOString().split('T')[0];
+    };
+
     // Custom Date Range State - Default to Current Month
     const [startDate, setStartDate] = useState(() => {
         const d = new Date();
-        return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
+        const start = new Date(d.getFullYear(), d.getMonth(), 1);
+        return toLocalDateStr(start);
     });
-    const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+    const [endDate, setEndDate] = useState(() => toLocalDateStr(new Date()));
+    const [isAllTime, setIsAllTime] = useState(false);
 
     useEffect(() => {
         fetchAnalytics();
-    }, [startDate, endDate]);
+    }, [startDate, endDate, isAllTime]);
 
     const fetchAnalytics = async () => {
         try {
             setLoading(true);
-            // Use local date string (YYYY-MM-DD)
-            const toLocalDateStr = (date) => {
-                const offset = date.getTimezoneOffset() * 60000;
-                const localDate = new Date(date.getTime() - offset);
-                return localDate.toISOString().split('T')[0];
-            };
-
             const today = new Date();
             const todayStr = toLocalDateStr(today);
 
@@ -104,19 +106,19 @@ const Analytics = () => {
             const sumPaid = (bookings) => bookings.reduce((sum, b) => sum + (Number(b.paidAmount) || 0), 0);
 
             // Today's revenue
-            const todayRevenue = sumPaid(allBookings.filter(b => b.bookingDate === todayStr));
+            const todayRevenue = sumPaid(bookingsData.filter(b => b.bookingDate === todayStr));
 
             // Yesterday's revenue
-            const yesterdayRevenue = sumPaid(allBookings.filter(b => b.bookingDate === yesterdayStr));
+            const yesterdayRevenue = sumPaid(bookingsData.filter(b => b.bookingDate === yesterdayStr));
 
             // Week revenue
-            const weekRevenue = sumPaid(allBookings.filter(b => b.bookingDate >= weekAgoStr));
+            const weekRevenue = sumPaid(bookingsData.filter(b => b.bookingDate >= weekAgoStr));
 
             // Month revenue
-            const monthRevenue = sumPaid(allBookings.filter(b => b.bookingDate >= monthStartStr));
+            const monthRevenue = sumPaid(bookingsData.filter(b => b.bookingDate >= monthStartStr));
 
             // Custom Range Revenue
-            const customRevenue = sumPaid(allBookings.filter(b => b.bookingDate >= startDate && b.bookingDate <= endDate));
+            const customRevenue = sumPaid(bookingsData.filter(b => isAllTime || (b.bookingDate >= startDate && b.bookingDate <= endDate)));
 
             // Fetch expenses
             const expensesSnap = await getDocs(collection(db, 'expenses'));
@@ -127,14 +129,14 @@ const Analytics = () => {
 
             // Custom Range Expenses
             const customExpenses = allExpenses
-                .filter(e => e.date >= startDate && e.date <= endDate)
+                .filter(e => isAllTime || (e.date >= startDate && e.date <= endDate))
                 .reduce((sum, e) => sum + (e.amount || 0), 0);
 
             // Month Bookings Data for Other Stats
-            const monthBookings = allBookings.filter(b => b.bookingDate >= monthStartStr);
+            const monthBookings = bookingsData.filter(b => b.bookingDate >= monthStartStr);
 
             // Service breakdown (Based on Custom Range)
-            const rangeBookings = bookingsForCalculations.filter(b => b.bookingDate >= startDate && b.bookingDate <= endDate);
+            const rangeBookings = bookingsForCalculations.filter(b => isAllTime || (b.bookingDate >= startDate && b.bookingDate <= endDate));
             const serviceStats = {};
             rangeBookings.filter(b => b.status === 'completed').forEach(b => {
                 const name = b.serviceName || 'Unknown';
@@ -149,21 +151,31 @@ const Analytics = () => {
                 .slice(0, 10);
             setServiceBreakdown(serviceList);
 
-            // Employee performance (Month)
+            // Employee performance (Dynamic Range)
             try {
                 const empSnap = await getDocs(query(collection(db, 'adminUsers'), where('status', '==', 'approved')));
-                const employees = empSnap.docs
-                    .map(doc => ({ id: doc.id, ...doc.data() }))
-                    .filter(e => e.role === 'employee');
+                const employees = empSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                const empStats = employees.map(emp => {
-                    const empBookings = monthBookings.filter(b => b.assignedEmployee === emp.id && b.status === 'completed');
+                let empStats = employees.map(emp => {
+                    const empBookings = rangeBookings.filter(b => b.assignedEmployee === emp.id && b.status === 'completed');
                     return {
                         name: emp.displayName || emp.email?.split('@')[0] || 'Employee',
                         bookings: empBookings.length,
                         revenue: empBookings.reduce((sum, b) => sum + (Number(b.paidAmount) || 0), 0)
                     };
-                }).sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+                }).filter(emp => emp.bookings > 0);
+
+                // Add unassigned workers metric
+                const unassignedBookings = rangeBookings.filter(b => !b.assignedEmployee && b.status === 'completed');
+                if (unassignedBookings.length > 0) {
+                    empStats.push({
+                        name: 'Unassigned',
+                        bookings: unassignedBookings.length,
+                        revenue: unassignedBookings.reduce((sum, b) => sum + (Number(b.paidAmount) || 0), 0)
+                    });
+                }
+
+                empStats = empStats.sort((a, b) => b.revenue - a.revenue).slice(0, 5);
                 setEmployeePerformance(empStats);
             } catch (e) {
                 console.log('Employee fetch error:', e);
@@ -173,10 +185,10 @@ const Analytics = () => {
             const monthlyData = [];
             for (let i = 5; i >= 0; i--) {
                 const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
-                const monthStr = date.toISOString().slice(0, 7);
+                const monthStr = toLocalDateStr(date).slice(0, 7); // Uses correct timezone
                 const monthName = date.toLocaleDateString('en-US', { month: 'short' });
 
-                const mRevenue = sumPaid(allBookings.filter(b => b.bookingDate?.startsWith(monthStr)));
+                const mRevenue = sumPaid(bookingsData.filter(b => b.bookingDate?.startsWith(monthStr)));
                 const mExpenses = allExpenses
                     .filter(e => e.date?.startsWith(monthStr))
                     .reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -190,11 +202,11 @@ const Analytics = () => {
             for (let i = 13; i >= 0; i--) {
                 const date = new Date(today);
                 date.setDate(date.getDate() - i);
-                const dateStr = date.toISOString().split('T')[0];
+                const dateStr = toLocalDateStr(date); // Uses correct timezone
                 const dayLabel = date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
 
-                const dayRevenue = sumPaid(allBookings.filter(b => b.bookingDate === dateStr));
-                const dayBookings = allBookings.filter(b => b.bookingDate === dateStr && b.status === 'completed').length;
+                const dayRevenue = sumPaid(bookingsData.filter(b => b.bookingDate === dateStr));
+                const dayBookings = bookingsData.filter(b => b.bookingDate === dateStr && b.status === 'completed').length;
 
                 dailyData.push({ date: dateStr, label: dayLabel, revenue: dayRevenue, bookings: dayBookings });
             }
@@ -213,7 +225,7 @@ const Analytics = () => {
             const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
             const prevMonthStartStr = prevMonthStart.toISOString().split('T')[0];
             const prevMonthEndStr = prevMonthEnd.toISOString().split('T')[0];
-            const prevMonthRevenue = sumPaid(allBookings.filter(b => b.bookingDate >= prevMonthStartStr && b.bookingDate <= prevMonthEndStr));
+            const prevMonthRevenue = sumPaid(bookingsData.filter(b => b.bookingDate >= prevMonthStartStr && b.bookingDate <= prevMonthEndStr));
 
             const growthRate = prevMonthRevenue > 0
                 ? ((monthRevenue - prevMonthRevenue) / prevMonthRevenue * 100)
@@ -272,20 +284,39 @@ const Analytics = () => {
                 </div>
                 {/* Date Picker for Custom View */}
                 <div className="date-filter" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'white', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--navy-100)' }}>
-                    <Calendar size={18} color="var(--navy-500)" />
-                    <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.9rem', color: 'var(--navy-700)' }}
-                    />
-                    <span style={{ color: 'var(--navy-400)' }}>to</span>
-                    <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.9rem', color: 'var(--navy-700)' }}
-                    />
+                    <button
+                        onClick={() => setIsAllTime(!isAllTime)}
+                        style={{
+                            padding: '0.3rem 0.6rem',
+                            borderRadius: '4px',
+                            background: isAllTime ? 'var(--primary)' : 'transparent',
+                            color: isAllTime ? 'white' : 'var(--navy-600)',
+                            border: `1px solid ${isAllTime ? 'var(--primary)' : 'var(--navy-300)'}`,
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            fontWeight: '500'
+                        }}
+                    >
+                        All Time
+                    </button>
+                    {!isAllTime && (
+                        <>
+                            <Calendar size={18} color="var(--navy-500)" />
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.9rem', color: 'var(--navy-700)' }}
+                            />
+                            <span style={{ color: 'var(--navy-400)' }}>to</span>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.9rem', color: 'var(--navy-700)' }}
+                            />
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -298,7 +329,7 @@ const Analytics = () => {
                     </div>
                     <div className="metric-card-body">
                         <div className="metric-card-value" style={{ color: 'var(--primary)' }}>{formatCurrency(stats.customRevenue)}</div>
-                        <div className="metric-card-label">Revenue ({startDate} - {endDate})</div>
+                        <div className="metric-card-label">Revenue ({isAllTime ? 'All Time' : `${startDate} to ${endDate}`})</div>
                     </div>
                 </div>
 
@@ -439,7 +470,7 @@ const Analytics = () => {
                             return item[dim] || 'N/A';
                         };
 
-                        allBookings.filter(b => b.bookingDate >= startDate && b.bookingDate <= endDate).forEach(b => {
+                        allBookings.filter(b => isAllTime || (b.bookingDate >= startDate && b.bookingDate <= endDate)).forEach(b => {
                             const rVal = getVal(b, pivotRow);
                             const cVal = getVal(b, pivotCol);
                             const mVal = pivotMetric === 'revenue' ? (Number(b.paidAmount) || 0) : 1;
@@ -554,7 +585,7 @@ const Analytics = () => {
                 {/* Employee Performance */}
                 <div className="analytics-card">
                     <div className="analytics-card-header">
-                        <h3><UserCheck size={18} /> Employee Performance (This Month)</h3>
+                        <h3><UserCheck size={18} /> Employee Performance ({isAllTime ? 'All Time' : `${startDate} to ${endDate}`})</h3>
                     </div>
                     <div className="performance-list">
                         {employeePerformance.length === 0 ? (
