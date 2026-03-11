@@ -645,6 +645,7 @@ _Powered by Z3Connect_`;
             {showEditSubModal && selectedSubscription && (
                 <EditSubscriptionModal
                     subscription={selectedSubscription}
+                    plans={plans}
                     onClose={() => { setShowEditSubModal(false); setSelectedSubscription(null); }}
                     onSuccess={fetchSubscriptions}
                 />
@@ -1814,7 +1815,7 @@ _Powered by Z3Connect_`;
     );
 };
 
-const EditSubscriptionModal = ({ subscription, onClose, onSuccess }) => {
+const EditSubscriptionModal = ({ subscription, plans, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [expiryDate, setExpiryDate] = useState(
         subscription.expiryDate?.toDate ? subscription.expiryDate.toDate().toISOString().split('T')[0] :
@@ -1822,12 +1823,41 @@ const EditSubscriptionModal = ({ subscription, onClose, onSuccess }) => {
     );
     const [status, setStatus] = useState(subscription.status);
     const [vehicleNumber, setVehicleNumber] = useState(subscription.vehicleNumber);
+    const [customerName, setCustomerName] = useState(subscription.customerName || '');
+    const [customerPhone, setCustomerPhone] = useState(subscription.customerPhone || '');
+    const [planId, setPlanId] = useState(subscription.planId || '');
+    const [planName, setPlanName] = useState(subscription.planName || '');
+    const [price, setPrice] = useState(subscription.price || subscription.totalAmount || 0);
+
+    const handlePlanChange = (e) => {
+        const selectedId = e.target.value;
+        setPlanId(selectedId);
+        
+        const selectedPlan = plans?.find(p => p.id === selectedId);
+        if (selectedPlan) {
+            setPlanName(selectedPlan.name);
+            
+            let newPrice = 0;
+            if (selectedPlan.prices && subscription.vehicleType && selectedPlan.prices[subscription.vehicleType]) {
+                newPrice = Number(selectedPlan.prices[subscription.vehicleType]);
+            } else {
+                newPrice = Number(selectedPlan.price) || 0;
+            }
+            setPrice(newPrice);
+        }
+    };
 
     const handleUpdate = async (e) => {
         e.preventDefault();
         setLoading(true);
         try {
             await updateDoc(doc(db, 'customer_amc_subscriptions', subscription.id), {
+                customerName,
+                customerPhone,
+                planId,
+                planName,
+                price: Number(price),
+                totalAmount: Number(price),
                 expiryDate: Timestamp.fromDate(new Date(expiryDate)),
                 status,
                 vehicleNumber,
@@ -1853,8 +1883,43 @@ const EditSubscriptionModal = ({ subscription, onClose, onSuccess }) => {
                 <form onSubmit={handleUpdate}>
                     <div className="modal-body">
                         <div className="form-group">
-                            <label>Customer</label>
-                            <input value={subscription.customerName} disabled style={{ background: '#f5f5f5' }} />
+                            <label>Customer Name</label>
+                            <input
+                                value={customerName}
+                                onChange={(e) => setCustomerName(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>Phone Number</label>
+                            <input
+                                value={customerPhone}
+                                type="tel"
+                                onChange={(e) => setCustomerPhone(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>Plan</label>
+                            <select
+                                value={planId}
+                                onChange={handlePlanChange}
+                                required
+                            >
+                                <option value="" disabled>Select a Plan</option>
+                                {plans?.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label>Price (₹)</label>
+                            <input
+                                type="number"
+                                value={price}
+                                onChange={(e) => setPrice(e.target.value)}
+                                required
+                            />
                         </div>
                         <div className="form-group">
                             <label>Vehicle Number</label>
