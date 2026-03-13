@@ -98,7 +98,8 @@ const Attendance = () => {
     };
 
     const calculateStats = (data, empDataToUse) => {
-        const today = new Date().toISOString().split('T')[0];
+        // Use local date for "Today" stats
+        const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
         const todayAtt = data.filter(a => a.date === today);
         const totalEmployees = empDataToUse ? empDataToUse.length : employees.length;
 
@@ -215,7 +216,7 @@ const Attendance = () => {
 
         for (let day = 1; day <= daysInMonth; day++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const isToday = new Date().toISOString().split('T')[0] === dateStr;
+            const isToday = new Date().toLocaleDateString('en-CA') === dateStr;
             const isHoliday = holidays.some(h => h.date === dateStr);
             const dayAttendance = attendance.filter(a => a.date === dateStr);
 
@@ -729,9 +730,8 @@ const HolidayModal = ({ holidays, onAdd, onDelete, onClose }) => {
     );
 };
 
-// Mark Attendance Modal - Updated to allow Present + Overtime together
 const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
     const [statuses, setStatuses] = useState({});
     const [overtimeEnabled, setOvertimeEnabled] = useState({}); // Separate toggle for overtime
     const [overtimeHours, setOvertimeHours] = useState({});

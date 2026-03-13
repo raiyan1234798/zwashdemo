@@ -1982,7 +1982,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
 const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick, onRefresh }) => {
     const { hasPermission } = useAuth();
     const [employees, setEmployees] = useState([]);
-    const [assignedEmployee, setAssignedEmployee] = useState(booking.assignedEmployee || '');
+    const [assignedEmployees, setAssignedEmployees] = useState(booking.assignedEmployees || (booking.assignedEmployee ? [booking.assignedEmployee] : []));
     const [notes, setNotes] = useState(booking.notes || '');
     const [showReschedule, setShowReschedule] = useState(false);
     const [newDate, setNewDate] = useState(booking.bookingDate || '');
@@ -2007,7 +2007,11 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
             const snapshot = await getDocs(q);
             const empList = snapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(e => e.role === 'employee');
+                .filter(u => {
+                    const role = (u.role || '').toLowerCase();
+                    const validRoles = ['admin', 'manager', 'senior_employee', 'employee', 'worker', 'staff'];
+                    return validRoles.includes(role);
+                });
             setEmployees(empList);
         } catch (error) {
             console.error('Error fetching employees:', error);
@@ -2017,12 +2021,15 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
     const saveAssignment = async () => {
         try {
             setSaving(true);
+            const selectedEmps = employees.filter(e => assignedEmployees.includes(e.id));
+            const names = selectedEmps.map(e => e.displayName).join(', ');
+
             await updateDoc(doc(db, 'bookings', booking.id), {
-                assignedEmployee: assignedEmployee,
-                assignedEmployeeName: employees.find(e => e.id === assignedEmployee)?.displayName || '',
+                assignedEmployees: assignedEmployees, // Store array of IDs
+                assignedEmployeeName: names, // Store joined names for display
                 updatedAt: serverTimestamp()
             });
-            alert('Employee assigned successfully!');
+            alert('Employees assigned successfully!');
         } catch (error) {
             console.error('Error assigning employee:', error);
         } finally {
@@ -2121,22 +2128,32 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
                     {/* Assign Employee */}
                     {hasPermission('bookings', 'edit') && booking.status !== 'completed' && (
                         <div style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px' }}>
-                            <h4 style={{ marginBottom: '0.5rem' }}>Assign Employee</h4>
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <select
-                                    value={assignedEmployee}
-                                    onChange={(e) => setAssignedEmployee(e.target.value)}
-                                    style={{ flex: 1 }}
-                                >
-                                    <option value="">Select Employee</option>
-                                    {employees.map(emp => (
-                                        <option key={emp.id} value={emp.id}>{emp.displayName}</option>
-                                    ))}
-                                </select>
-                                <button className="btn btn-primary btn-sm" onClick={saveAssignment} disabled={saving}>
-                                    {saving ? '...' : 'Assign'}
-                                </button>
+                            <h4 style={{ marginBottom: '0.5rem' }}>Assign Employees</h4>
+                            <div style={{ maxHeight: '150px', overflowY: 'auto', background: 'white', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--navy-200)', marginBottom: '0.5rem' }}>
+                                {employees.length === 0 ? (
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--navy-400)' }}>Loading employees...</p>
+                                ) : (
+                                    employees.map(emp => (
+                                        <label key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.25rem 0', cursor: 'pointer', fontSize: '0.9rem' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={assignedEmployees.includes(emp.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setAssignedEmployees([...assignedEmployees, emp.id]);
+                                                    } else {
+                                                        setAssignedEmployees(assignedEmployees.filter(id => id !== emp.id));
+                                                    }
+                                                }}
+                                            />
+                                            {emp.displayName} <small style={{ color: 'var(--navy-400)' }}>({emp.role})</small>
+                                        </label>
+                                    ))
+                                )}
                             </div>
+                            <button className="btn btn-primary btn-sm w-100" onClick={saveAssignment} disabled={saving || employees.length === 0}>
+                                {saving ? 'Saving...' : 'Save Assignments'}
+                            </button>
                             {booking.assignedEmployeeName && (
                                 <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--success)' }}>
                                     Currently assigned to: <strong>{booking.assignedEmployeeName}</strong>
