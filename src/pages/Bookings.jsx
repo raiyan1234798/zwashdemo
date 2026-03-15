@@ -402,6 +402,11 @@ const Bookings = () => {
                                                         <small style={{ color: 'var(--navy-500)' }}>
                                                             <Phone size={12} /> {booking.contactPhone}
                                                         </small>
+                                                        {booking.assignedEmployeeName && (
+                                                            <div style={{ marginTop: '4px', padding: '2px 6px', background: 'var(--navy-50)', borderRadius: '4px', fontSize: '0.75rem', color: 'var(--navy-600)', display: 'inline-block' }}>
+                                                                👤 {booking.assignedEmployeeName}
+                                                            </div>
+                                                        )}
                                                     </td>
                                                     <td>{booking.serviceName}</td>
                                                     <td>
@@ -525,6 +530,11 @@ const Bookings = () => {
                                                     <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>
                                                         {booking.createdByName ? `By: ${booking.createdByName.split(' ')[0]}` : ''}
                                                     </div>
+                                                    {booking.assignedEmployeeName && (
+                                                        <div style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: '600', marginTop: '2px' }}>
+                                                            👤 {booking.assignedEmployeeName}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 {hasPermission('bookings', 'edit') && viewMode !== 'archived' ? (
                                                     <select
@@ -619,6 +629,7 @@ const Bookings = () => {
                     onClose={() => setSelectedBooking(null)}
                     onStatusChange={updateBookingStatus}
                     onCompleteClick={handleCompleteClick}
+                    onRefresh={fetchBookings}
                 />
             )}
 
@@ -931,6 +942,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         bookingDate: new Date().toISOString().split('T')[0],
         startTime: ''
     });
+    const [employees, setEmployees] = useState([]);
+    const [assignedEmployees, setAssignedEmployees] = useState([]);
     const [plateError, setPlateError] = useState('');
 
     // Validate TN license plate: TN-XX-YY-XXXX
@@ -951,7 +964,25 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         fetchServices();
         fetchCustomers();
         loadSettings();
+        fetchEmployees();
     }, []);
+
+    const fetchEmployees = async () => {
+        try {
+            const q = query(collection(db, 'adminUsers'), where('status', '==', 'approved'));
+            const snapshot = await getDocs(q);
+            const empList = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(u => {
+                    const role = (u.role || '').toLowerCase();
+                    const validRoles = ['admin', 'manager', 'senior_employee', 'employee', 'worker', 'staff'];
+                    return validRoles.includes(role);
+                });
+            setEmployees(empList);
+        } catch (error) {
+            console.error('Error fetching employees:', error);
+        }
+    };
 
     // Load settings once
     const loadSettings = async () => {
@@ -1373,6 +1404,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                 carModel: formData.carModel,
                 licensePlate: formData.licensePlate.toUpperCase(),
                 contactPhone: formData.phone,
+                assignedEmployees: assignedEmployees,
+                assignedEmployeeName: employees.filter(e => assignedEmployees.includes(e.id)).map(e => e.displayName).join(', '),
                 status: 'in_progress',
                 isWalkIn: true,
                 createdAt: serverTimestamp(),
@@ -1399,9 +1432,9 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                 <form onSubmit={handleSubmit}>
                     <div className="full-page-form-body">
 
-                        {/* STEP 1: Customer Selection Tabs */}
-                        <div className="form-section">
-                            <label style={{ fontSize: '1rem', color: '#166534', marginBottom: '0.75rem', display: 'block' }}>🔍 Step 1: Customer Details</label>
+                        {/* STEP 1: Customer Details */}
+                        <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1.5rem' }}>
+                            <label style={{ fontSize: '1rem', color: '#166534', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>🔍 Step 1: Customer Details</label>
 
                             <div className="tabs" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
                                 <button
@@ -1550,9 +1583,9 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                             )}
                         </div>
 
-                        {/* Vehicle Type Selection */}
-                        <div className="form-group">
-                            <label>Vehicle Type *</label>
+						{/* STEP 2: Vehicle Type Selection */}
+                        <div className="form-group" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1.5rem' }}>
+                            <label style={{ fontSize: '1rem', color: 'var(--navy-800)', marginBottom: '0.75rem', display: 'block' }}>🚗 Step 2: Vehicle Type Selection</label>
                             <div className="vehicle-type-sections">
                                 <div style={{ marginBottom: '0.75rem' }}>
                                     <small style={{ fontWeight: '600', color: 'var(--navy-500)', display: 'block', marginBottom: '0.25rem' }}>Four Wheelers</small>
@@ -1612,9 +1645,9 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                             </div>
                         </div>
 
-                        {/* Multi-Service Selection */}
-                        <div className="form-group">
-                            <label>Services *</label>
+                        {/* STEP 3: Service Selection */}
+                        <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1.5rem' }}>
+                            <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>🛠️ Step 3: Service Selection</label>
 
                             {/* Extra Time Input moved to top as per request (though implementation keeps logical flow, UI shows "Add Extra Time" button near time field now) */}
                             {/* Keeping the legacy/full extra time selector if user wants granular control for extensive work */}
@@ -1807,7 +1840,10 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                         </div>
 
 
-                        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                        {/* STEP 4: Select Date & Time */}
+                        <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1.5rem' }}>
+                            <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>📅 Step 4: Select Date & Time</label>
+                            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
                             <div className="form-group" style={{ flex: 1 }}>
                                 <label>Date</label>
                                 <input
@@ -1897,13 +1933,14 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                     ))}
                                 </div>
                             )}
-
+ 
                             {selectedServices.length > 0 && availableSlots.length > 0 && (
                                 <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--navy-500)' }}>
                                     ℹ️ Showing {availableSlots.length} available start times. Times account for service duration + buffer.
                                 </div>
                             )}
                         </div>
+                    </div>
 
 
 
@@ -1965,6 +2002,36 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                 )}
                             </div>
                         )}
+
+                        {/* STEP 5: Assign Employees */}
+                        <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1.5rem' }}>
+                            <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>👥 Step 5: Assign Employees (Optional)</label>
+                            <div style={{ maxHeight: '150px', overflowY: 'auto', background: 'white', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--navy-200)' }}>
+                                {employees.length === 0 ? (
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--navy-400)', textAlign: 'center', padding: '1rem' }}>Loading employees...</p>
+                                ) : (
+                                    employees.map(emp => (
+                                        <label key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', borderBottom: '1px solid var(--navy-50)' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={assignedEmployees.includes(emp.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setAssignedEmployees([...assignedEmployees, emp.id]);
+                                                    } else {
+                                                        setAssignedEmployees(assignedEmployees.filter(id => id !== emp.id));
+                                                    }
+                                                }}
+                                            />
+                                            <div>
+                                                <span style={{ fontWeight: '600' }}>{emp.displayName}</span>
+                                                <small style={{ color: 'var(--navy-400)', marginLeft: '0.5rem' }}>({emp.role})</small>
+                                            </div>
+                                        </label>
+                                    ))
+                                )}
+                            </div>
+                        </div>
                     </div>
                     <div className="full-page-form-footer">
                         <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
@@ -2030,6 +2097,7 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
                 updatedAt: serverTimestamp()
             });
             alert('Employees assigned successfully!');
+            if (onRefresh) onRefresh();
         } catch (error) {
             console.error('Error assigning employee:', error);
         } finally {
@@ -2503,6 +2571,9 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
         price: booking.price || 0
     });
 
+    const [employees, setEmployees] = useState([]);
+    const [assignedEmployees, setAssignedEmployees] = useState(booking.assignedEmployees || (booking.assignedEmployee ? [booking.assignedEmployee] : []));
+
     const [categories, setCategories] = useState(['Detailed Wash', 'Quick Wash', 'Interior Clean', 'Coating', 'Other']);
     const [showNewCategory, setShowNewCategory] = useState(false);
     const [newCategory, setNewCategory] = useState('');
@@ -2512,7 +2583,25 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
     useEffect(() => {
         fetchCategories();
         fetchServices();
+        fetchEmployees();
     }, []);
+
+    const fetchEmployees = async () => {
+        try {
+            const q = query(collection(db, 'adminUsers'), where('status', '==', 'approved'));
+            const snapshot = await getDocs(q);
+            const empList = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(u => {
+                    const role = (u.role || '').toLowerCase();
+                    const validRoles = ['admin', 'manager', 'senior_employee', 'employee', 'worker', 'staff'];
+                    return validRoles.includes(role);
+                });
+            setEmployees(empList);
+        } catch (error) {
+            console.error('Error fetching employees:', error);
+        }
+    };
     const fetchCategories = async () => {
         try {
             const docRef = doc(db, 'settings', 'booking_categories');
@@ -2574,6 +2663,8 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                 serviceCategory: formData.serviceCategory,
                 serviceName: formData.serviceName,
                 price: Number(formData.price) || 0,
+                assignedEmployees: assignedEmployees,
+                assignedEmployeeName: employees.filter(e => assignedEmployees.includes(e.id)).map(e => e.displayName).join(', '),
                 updatedAt: serverTimestamp()
             });
             onSuccess();
@@ -2594,193 +2685,238 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit}>
-                    <div className="modal-body">
-                        <div className="form-group">
-                            <label>Customer Name</label>
-                            <input
-                                value={formData.customerName}
-                                onChange={e => setFormData({ ...formData, customerName: e.target.value })}
-                                required
-                            />
-                        </div>
-                        <div className="form-row">
+                    <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto', padding: '1rem' }}>
+                        
+                        {/* Section 1: Customer & Vehicle Info */}
+                        <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1rem' }}>
+                            <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>👤 Customer & Vehicle Info</label>
                             <div className="form-group">
-                                <label>Phone</label>
+                                <label>Customer Name</label>
                                 <input
-                                    value={formData.phone}
-                                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>License Plate</label>
-                                <input
-                                    value={formData.licensePlate}
-                                    onChange={e => setFormData({ ...formData, licensePlate: e.target.value })}
-                                    style={{ textTransform: 'uppercase' }}
-                                />
-                            </div>
-                        </div>
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label>Make</label>
-                                <input
-                                    value={formData.carMake}
-                                    onChange={e => setFormData({ ...formData, carMake: e.target.value })}
-                                />
-                            </div>
-                            <div className="form-group">
-                                <label>Model</label>
-                                <input
-                                    value={formData.carModel}
-                                    onChange={e => setFormData({ ...formData, carModel: e.target.value })}
-                                />
-                            </div>
-                        </div>
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label>Date</label>
-                                <input
-                                    type="date"
-                                    value={formData.bookingDate}
-                                    onChange={e => setFormData({ ...formData, bookingDate: e.target.value })}
+                                    value={formData.customerName}
+                                    onChange={e => setFormData({ ...formData, customerName: e.target.value })}
                                     required
                                 />
                             </div>
-                            <div className="form-group">
-                                <label>Time</label>
-                                <input
-                                    type="time"
-                                    value={formData.startTime}
-                                    onChange={e => setFormData({ ...formData, startTime: e.target.value })}
-                                    required
-                                />
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Phone</label>
+                                    <input
+                                        value={formData.phone}
+                                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>License Plate</label>
+                                    <input
+                                        value={formData.licensePlate}
+                                        onChange={e => setFormData({ ...formData, licensePlate: e.target.value })}
+                                        style={{ textTransform: 'uppercase' }}
+                                    />
+                                </div>
+                            </div>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Make</label>
+                                    <input
+                                        value={formData.carMake}
+                                        onChange={e => setFormData({ ...formData, carMake: e.target.value })}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Model</label>
+                                    <input
+                                        value={formData.carModel}
+                                        onChange={e => setFormData({ ...formData, carModel: e.target.value })}
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        {/* Service Category with Add Option */}
-                        <div className="form-group">
-                            <label>Service Category</label>
-                            {!showNewCategory ? (
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                    <select
-                                        value={formData.serviceCategory}
-                                        onChange={e => setFormData({ ...formData, serviceCategory: e.target.value })}
-                                        style={{ flex: 1 }}
-                                    >
-                                        <option value="">Select Category</option>
-                                        {categories.map(cat => (
-                                            <option key={cat} value={cat}>{cat}</option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary btn-sm"
-                                        onClick={() => setShowNewCategory(true)}
-                                        title="Add New Category"
-                                    >
-                                        <Plus size={16} />
-                                    </button>
-                                </div>
-                            ) : (
-                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {/* Section 2: Date & Time */}
+                        <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1rem' }}>
+                            <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>📅 Date & Time</label>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>Date</label>
                                     <input
-                                        placeholder="New Category Name"
-                                        value={newCategory}
-                                        onChange={e => setNewCategory(e.target.value)}
-                                        autoFocus
-                                        style={{ flex: 1 }}
+                                        type="date"
+                                        value={formData.bookingDate}
+                                        onChange={e => setFormData({ ...formData, bookingDate: e.target.value })}
+                                        required
                                     />
-                                    <button
-                                        type="button"
-                                        className="btn btn-primary btn-sm"
-                                        onClick={handleSaveCategory}
-                                    >
-                                        Save
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="btn btn-secondary btn-sm"
-                                        onClick={() => { setShowNewCategory(false); setNewCategory(''); }}
-                                    >
-                                        Cancel
-                                    </button>
                                 </div>
-                            )}
+                                <div className="form-group">
+                                    <label>Time</label>
+                                    <input
+                                        type="time"
+                                        value={formData.startTime}
+                                        onChange={e => setFormData({ ...formData, startTime: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                            </div>
                         </div>
-                        <div className="form-row">
-                            <div className="form-group" style={{ position: 'relative' }}>
-                                <label>Service Name</label>
-                                <input
-                                    value={formData.serviceName}
-                                    onChange={e => {
-                                        setFormData({ ...formData, serviceName: e.target.value });
-                                        setShowServiceDropdown(true);
-                                    }}
-                                    onFocus={() => setShowServiceDropdown(true)}
-                                    onBlur={() => setTimeout(() => setShowServiceDropdown(false), 200)}
-                                    placeholder="Search or type service name"
-                                    autoComplete="off"
-                                />
-                                {showServiceDropdown && services.length > 0 && (
-                                    <div className="dropdown-menu" style={{
-                                        position: 'absolute', top: '100%', left: 0, right: 0,
-                                        background: 'white', border: '1px solid var(--navy-200)',
-                                        borderRadius: 'var(--radius-md)', maxHeight: '200px',
-                                        overflowY: 'auto', zIndex: 10,
-                                        boxShadow: 'var(--shadow-md)'
-                                    }}>
-                                        {services
-                                            .filter(s => s.name?.toLowerCase().includes((formData.serviceName || '').toLowerCase()))
-                                            .map(s => (
-                                                <div
-                                                    key={s.id}
-                                                    onClick={() => {
-                                                        const vType = (booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_');
-                                                        const calcPrice = (s.prices && s.prices[vType] > 0) ? s.prices[vType] : (s.price || 0);
-                                                        setFormData({
-                                                            ...formData,
-                                                            serviceName: s.name,
-                                                            price: calcPrice,
-                                                            serviceCategory: s.category || formData.serviceCategory
-                                                        });
-                                                        setShowServiceDropdown(false);
-                                                    }}
-                                                    style={{
-                                                        padding: '0.75rem 1rem', cursor: 'pointer',
-                                                        borderBottom: '1px solid var(--navy-50)',
-                                                        display: 'flex', justifyContent: 'space-between',
-                                                        alignItems: 'center', transition: 'background-color 0.2s',
-                                                        gap: '1rem'
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--navy-50)'}
-                                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
-                                                >
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <strong style={{ color: 'var(--navy-900)', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</strong>
-                                                        <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.category}</div>
-                                                    </div>
-                                                    <span style={{ color: 'var(--primary)', fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0, paddingRight: '0.5rem' }}>
-                                                        ₹{(s.prices && s.prices[(booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_')] > 0)
-                                                            ? s.prices[(booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_')]
-                                                            : (s.price || 0)}
-                                                    </span>
-                                                </div>
+
+                        {/* Section 3: Service Details */}
+                        <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1rem' }}>
+                            <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>⚙️ Service Details</label>
+                            
+                            {/* Service Category with Add Option */}
+                            <div className="form-group">
+                                <label>Service Category</label>
+                                {!showNewCategory ? (
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <select
+                                            value={formData.serviceCategory}
+                                            onChange={e => setFormData({ ...formData, serviceCategory: e.target.value })}
+                                            style={{ flex: 1 }}
+                                        >
+                                            <option value="">Select Category</option>
+                                            {categories.map(cat => (
+                                                <option key={cat} value={cat}>{cat}</option>
                                             ))}
-                                        {services.filter(s => s.name?.toLowerCase().includes((formData.serviceName || '').toLowerCase())).length === 0 && (
-                                            <div style={{ padding: '0.75rem 1rem', color: 'var(--navy-400)', textAlign: 'center', fontSize: '0.85rem' }}>
-                                                No services found
-                                            </div>
-                                        )}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary btn-sm"
+                                            onClick={() => setShowNewCategory(true)}
+                                            title="Add New Category"
+                                        >
+                                            <Plus size={16} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                        <input
+                                            placeholder="New Category Name"
+                                            value={newCategory}
+                                            onChange={e => setNewCategory(e.target.value)}
+                                            autoFocus
+                                            style={{ flex: 1 }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary btn-sm"
+                                            onClick={handleSaveCategory}
+                                        >
+                                            Save
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn-secondary btn-sm"
+                                            onClick={() => { setShowNewCategory(false); setNewCategory(''); }}
+                                        >
+                                            Cancel
+                                        </button>
                                     </div>
                                 )}
                             </div>
-                            <div className="form-group">
-                                <label>Amount (₹)</label>
-                                <input
-                                    type="number"
-                                    value={formData.price}
-                                    onChange={e => setFormData({ ...formData, price: e.target.value })}
-                                />
+                            <div className="form-row">
+                                <div className="form-group" style={{ position: 'relative' }}>
+                                    <label>Service Name</label>
+                                    <input
+                                        value={formData.serviceName}
+                                        onChange={e => {
+                                            setFormData({ ...formData, serviceName: e.target.value });
+                                            setShowServiceDropdown(true);
+                                        }}
+                                        onFocus={() => setShowServiceDropdown(true)}
+                                        onBlur={() => setTimeout(() => setShowServiceDropdown(false), 200)}
+                                        placeholder="Search or type service name"
+                                        autoComplete="off"
+                                    />
+                                    {showServiceDropdown && services.length > 0 && (
+                                        <div className="dropdown-menu" style={{
+                                            position: 'absolute', top: '100%', left: 0, right: 0,
+                                            background: 'white', border: '1px solid var(--navy-200)',
+                                            borderRadius: 'var(--radius-md)', maxHeight: '200px',
+                                            overflowY: 'auto', zIndex: 10,
+                                            boxShadow: 'var(--shadow-md)'
+                                        }}>
+                                            {services
+                                                .filter(s => s.name?.toLowerCase().includes((formData.serviceName || '').toLowerCase()))
+                                                .map(s => (
+                                                    <div
+                                                        key={s.id}
+                                                        onClick={() => {
+                                                            const vType = (booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_');
+                                                            const calcPrice = (s.prices && s.prices[vType] > 0) ? s.prices[vType] : (s.price || 0);
+                                                            setFormData({
+                                                                ...formData,
+                                                                serviceName: s.name,
+                                                                price: calcPrice,
+                                                                serviceCategory: s.category || formData.serviceCategory
+                                                            });
+                                                            setShowServiceDropdown(false);
+                                                        }}
+                                                        style={{
+                                                            padding: '0.75rem 1rem', cursor: 'pointer',
+                                                            borderBottom: '1px solid var(--navy-50)',
+                                                            display: 'flex', justifyContent: 'space-between',
+                                                            alignItems: 'center', transition: 'background-color 0.2s',
+                                                            gap: '1rem'
+                                                        }}
+                                                        onMouseEnter={e => e.currentTarget.style.backgroundColor = 'var(--navy-50)'}
+                                                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                                                    >
+                                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                                            <strong style={{ color: 'var(--navy-900)', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.name}</strong>
+                                                            <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.category}</div>
+                                                        </div>
+                                                        <span style={{ color: 'var(--primary)', fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0, paddingRight: '0.5rem' }}>
+                                                            ₹{(s.prices && s.prices[(booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_')] > 0)
+                                                                ? s.prices[(booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_')]
+                                                                : (s.price || 0)}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            {services.filter(s => s.name?.toLowerCase().includes((formData.serviceName || '').toLowerCase())).length === 0 && (
+                                                <div style={{ padding: '0.75rem 1rem', color: 'var(--navy-400)', textAlign: 'center', fontSize: '0.85rem' }}>
+                                                    No services found
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="form-group">
+                                    <label>Amount (₹)</label>
+                                    <input
+                                        type="number"
+                                        value={formData.price}
+                                        onChange={e => setFormData({ ...formData, price: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Section 4: Assignment Section */}
+                        <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)' }}>
+                            <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>👥 Assign Employees</label>
+                            <div style={{ maxHeight: '150px', overflowY: 'auto', background: 'white', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--navy-200)' }}>
+                                {employees.length === 0 ? (
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--navy-400)', textAlign: 'center', padding: '0.5rem' }}>Loading employees...</p>
+                                ) : (
+                                    employees.map(emp => (
+                                        <label key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', borderBottom: '1px solid var(--navy-50)' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={assignedEmployees.includes(emp.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setAssignedEmployees([...assignedEmployees, emp.id]);
+                                                    } else {
+                                                        setAssignedEmployees(assignedEmployees.filter(id => id !== emp.id));
+                                                    }
+                                                }}
+                                            />
+                                            <div>
+                                                <span style={{ fontWeight: '600' }}>{emp.displayName}</span>
+                                                <small style={{ color: 'var(--navy-400)', marginLeft: '0.5rem' }}>({emp.role})</small>
+                                            </div>
+                                        </label>
+                                    ))
+                                )}
                             </div>
                         </div>
                     </div>
