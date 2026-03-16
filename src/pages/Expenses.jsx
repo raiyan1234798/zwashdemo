@@ -108,7 +108,6 @@ const Expenses = () => {
                 misc: 0,
                 dailyBreakdown: []
             };
-
             // Calculate daily breakdown for last 30 days
             const dailyMap = {};
             const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
@@ -117,7 +116,7 @@ const Expenses = () => {
                 const d = new Date();
                 d.setDate(d.getDate() - i);
                 const dateStr = d.toISOString().split('T')[0];
-                dailyMap[dateStr] = { expense: 0, income: 0, monthLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) };
+                dailyMap[dateStr] = { expense: 0, monthLabel: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) };
             }
 
             expensesList.forEach(exp => {
@@ -139,38 +138,8 @@ const Expenses = () => {
                 }
             });
 
-            // Fetch invoices for income
-            try {
-                const invSnapshot = await getDocs(query(collection(db, 'invoices')));
-                invSnapshot.docs.forEach(doc => {
-                    const inv = doc.data();
-                    if (inv.paymentHistory && Array.isArray(inv.paymentHistory)) {
-                        inv.paymentHistory.forEach(ph => {
-                            if (ph.date) {
-                                const dateStr = new Date(ph.date).toISOString().split('T')[0];
-                                if (dailyMap[dateStr] !== undefined) {
-                                    dailyMap[dateStr].income += Number(ph.amount) || 0;
-                                }
-                            }
-                        });
-                    } else if (inv.paidAmount > 0) {
-                        let dateStr = null;
-                        if (inv.createdAt && inv.createdAt.toDate) {
-                            dateStr = inv.createdAt.toDate().toISOString().split('T')[0];
-                        } else if (inv.createdAt) {
-                            dateStr = new Date(inv.createdAt).toISOString().split('T')[0];
-                        }
-                        if (dateStr && dailyMap[dateStr] !== undefined) {
-                            dailyMap[dateStr].income += Number(inv.paidAmount) || 0;
-                        }
-                    }
-                });
-            } catch (invErr) {
-                console.error('Error fetching invoices for income chart', invErr);
-            }
-
             statsCalc.dailyBreakdown = Object.entries(dailyMap)
-                .map(([date, data]) => ({ date, expense: data.expense, income: data.income, name: data.monthLabel }))
+                .map(([date, data]) => ({ date, expense: data.expense, name: data.monthLabel }))
                 .reverse();
 
             setStats(statsCalc);
@@ -351,9 +320,6 @@ const Expenses = () => {
                                         {hasExpense && hasExpense.expense > 0 && (
                                             <div className="cal-amount" style={{ color: '#ef4444' }}>- {formatCurrency(hasExpense.expense)}</div>
                                         )}
-                                        {hasExpense && hasExpense.income > 0 && (
-                                            <div className="cal-amount" style={{ color: '#10b981' }}>+ {formatCurrency(hasExpense.income)}</div>
-                                        )}
                                     </div>
                                 );
                             }
@@ -418,7 +384,7 @@ const Expenses = () => {
                     margin-top: 4px;
                     font-size: 0.75rem;
                     font-weight: 700;
-                    color: #059669;
+                    color: #ef4444;
                     background: white;
                     padding: 1px 6px;
                     border-radius: 4px;
@@ -426,10 +392,10 @@ const Expenses = () => {
                 }
             `}</style>
 
-            {/* Income vs Expense Chart */}
+            {/* Expense Trend Chart */}
             <div className="card" style={{ marginBottom: '1.5rem' }}>
                 <div className="card-header">
-                    <h3>📈 Income vs Expenses (Last 30 Days)</h3>
+                    <h3>📈 Monthly Expense Trend (Last 30 Days)</h3>
                 </div>
                 <div className="card-body" style={{ height: '350px', paddingBottom: '2rem' }}>
                     <ResponsiveContainer width="100%" height="100%">
@@ -442,8 +408,6 @@ const Expenses = () => {
                                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
                                 formatter={(value) => [`₹${value}`, '']}
                             />
-                            <Legend wrapperStyle={{ paddingTop: '10px' }} />
-                            <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={30} />
                             <Bar dataKey="expense" name="Expense" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={30} />
                         </BarChart>
                     </ResponsiveContainer>

@@ -32,7 +32,7 @@ const EmployeeDashboard = () => {
     const [attendanceHistory, setAttendanceHistory] = useState([]);
 
     useEffect(() => {
-        if (userProfile?.uid) {
+        if (userProfile?.id) {
             fetchEmployeeData();
         }
     }, [userProfile]);
@@ -67,19 +67,22 @@ const EmployeeDashboard = () => {
             const todayJobs = todaySnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
             // Filter detailed if 'assignedEmployee' matches (optional, if logic exists)
-            const myTodayJobs = todayJobs.filter(j => !j.assignedEmployee || j.assignedEmployee === userProfile.uid);
+            const myTodayJobs = todayJobs.filter(j => !j.assignedEmployee || j.assignedEmployee === userProfile.id);
 
-            // 2. Fetch My Attendance
+            // 2. Fetch My Attendance (Check both legacy userId and standardized employeeId)
             const attendanceRef = collection(db, 'attendance');
-            const myAttendanceQuery = query(
-                attendanceRef,
-                where('employeeId', '==', userProfile.uid),
-                where('date', '>=', monthStart),
-                orderBy('date', 'desc')
-            );
+            const [attByEmpId, attByUserId] = await Promise.all([
+                getDocs(query(attendanceRef, where('employeeId', '==', userProfile.id), where('date', '>=', monthStart))),
+                getDocs(query(attendanceRef, where('userId', '==', userProfile.id), where('date', '>=', monthStart)))
+            ]);
 
-            const attendanceSnapshot = await getDocs(myAttendanceQuery);
-            const attendanceData = attendanceSnapshot.docs.map(d => d.data());
+            // Merge and de-duplicate records
+            const attendanceMap = new Map();
+            attByEmpId.docs.forEach(d => attendanceMap.set(d.id, d.data()));
+            attByUserId.docs.forEach(d => attendanceMap.set(d.id, d.data()));
+
+            const attendanceData = Array.from(attendanceMap.values())
+                .sort((a, b) => b.date.localeCompare(a.date));
 
             setAttendanceHistory(attendanceData.slice(0, 5));
 
@@ -95,7 +98,7 @@ const EmployeeDashboard = () => {
             const monthSnapshot = await getDocs(monthBookingsQuery);
             const monthBookings = monthSnapshot.docs
                 .map(d => d.data())
-                .filter(j => j.assignedEmployee === userProfile.uid);
+                .filter(j => j.assignedEmployee === userProfile.id);
 
             const completedMonth = monthBookings.length;
             const revenueMonth = monthBookings.reduce((sum, b) => sum + (b.price || 0), 0);

@@ -865,13 +865,18 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
     const fetchAttendance = async () => {
         setLoadingData(true);
         try {
-            const attendanceQuery = query(
-                collection(db, 'attendance'),
-                where('userId', '==', employee.id),
-                orderBy('date', 'desc')
-            );
-            const snapshot = await getDocs(attendanceQuery);
-            const records = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const attendanceRef = collection(db, 'attendance');
+            const [attByUserId, attByEmpId] = await Promise.all([
+                getDocs(query(attendanceRef, where('userId', '==', employee.id))),
+                getDocs(query(attendanceRef, where('employeeId', '==', employee.id)))
+            ]);
+
+            const attendanceMap = new Map();
+            attByUserId.docs.forEach(d => attendanceMap.set(d.id, { id: d.id, ...d.data() }));
+            attByEmpId.docs.forEach(d => attendanceMap.set(d.id, { id: d.id, ...d.data() }));
+
+            const records = Array.from(attendanceMap.values());
+            records.sort((a, b) => new Date(b.date) - new Date(a.date));
             setAttendanceRecords(records.slice(0, 30)); // Last 30 records
 
             const present = records.filter(r => r.status === 'present' || r.checkIn).length;

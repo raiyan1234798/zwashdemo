@@ -1262,7 +1262,7 @@ const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
             const snapshot = await getDocs(q);
             const empAttendance = snapshot.docs
                 .map(doc => doc.data())
-                .filter(doc => doc.userId === employee.id);
+                .filter(doc => doc.userId === employee.id || doc.employeeId === employee.id);
 
             const stats = {
                 present: empAttendance.filter(a => a.status === 'present').length,

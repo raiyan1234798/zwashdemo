@@ -102,12 +102,17 @@ const EmployeeDetails = () => {
 
     const fetchAttendance = async () => {
         try {
-            const attendanceQuery = query(
-                collection(db, 'attendance'),
-                where('userId', '==', id)
-            );
-            const snapshot = await getDocs(attendanceQuery);
-            const records = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const attendanceRef = collection(db, 'attendance');
+            const [attByUserId, attByEmpId] = await Promise.all([
+                getDocs(query(attendanceRef, where('userId', '==', id))),
+                getDocs(query(attendanceRef, where('employeeId', '==', id)))
+            ]);
+
+            const attendanceMap = new Map();
+            attByUserId.docs.forEach(d => attendanceMap.set(d.id, { id: d.id, ...d.data() }));
+            attByEmpId.docs.forEach(d => attendanceMap.set(d.id, { id: d.id, ...d.data() }));
+
+            const records = Array.from(attendanceMap.values());
 
             // Sort manually to avoid Firestore composite index requirement
             records.sort((a, b) => new Date(b.date) - new Date(a.date));

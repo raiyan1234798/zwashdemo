@@ -140,6 +140,12 @@ service cloud.firestore {
       allow update, delete: if isAuthenticated() && isSenior();
     }
 
+    // 8a. Holidays
+    match /holidays/{holidayId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
     // 9. Expenses
     match /expenses/{expenseId} {
       allow read: if isAuthenticated();

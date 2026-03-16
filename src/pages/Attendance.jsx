@@ -43,7 +43,7 @@ const Attendance = () => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [showMarkModal, setShowMarkModal] = useState(false);
     const [showHolidayModal, setShowHolidayModal] = useState(false);
-    const [stats, setStats] = useState({ present: 0, absent: 0, leaves: 0, overtime: 0 });
+    const [stats, setStats] = useState({ total: 0, present: 0, absent: 0, leaves: 0, overtime: 0 });
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('all');
 
     useEffect(() => {
@@ -61,7 +61,8 @@ const Attendance = () => {
             const empData = empSnapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
                 .filter(u => {
-                    const role = (u.role || '').toLowerCase();
+                    // Use robust normalization consistent with AuthContext
+                    const role = (u.role || '').toLowerCase().replace(/[\s-]/g, '_');
                     const validRoles = ['admin', 'manager', 'senior_employee', 'employee', 'worker', 'staff'];
                     return validRoles.includes(role);
                 });
@@ -85,9 +86,14 @@ const Attendance = () => {
             const attData = attSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setAttendance(attData);
 
-            // Fetch holidays
-            const holSnapshot = await getDocs(collection(db, 'holidays'));
-            setHolidays(holSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            // Fetch holidays (Nested try-catch to prevent blocking core data)
+            try {
+                const holSnapshot = await getDocs(collection(db, 'holidays'));
+                setHolidays(holSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            } catch (holError) {
+                console.warn('Non-critical: Error fetching holiday data:', holError);
+                // Continue without holidays if fetch fails
+            }
 
             calculateStats(attData, empData);
         } catch (error) {
@@ -97,11 +103,18 @@ const Attendance = () => {
         }
     };
 
+    // Helper for consistent local date matching (YYYY-MM-DD)
+    const getTodayStr = () => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    };
+
     const calculateStats = (data, empDataToUse) => {
-        // Use local date for "Today" stats
-        const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+        const today = getTodayStr();
         const todayAtt = data.filter(a => a.date === today);
-        const totalEmployees = empDataToUse ? empDataToUse.length : employees.length;
+        // Use the passed empDataToUse if available, otherwise fallback to state
+        const employeeList = empDataToUse || employees;
+        const totalEmployees = employeeList.length;
 
         setStats({
             total: totalEmployees,
@@ -112,9 +125,10 @@ const Attendance = () => {
 
     const handleMarkAttendance = async (userId, date, status, extraData = {}) => {
         try {
-            const existing = attendance.find(a => a.userId === userId && a.date === date);
+            const existing = attendance.find(a => (a.userId === userId || a.employeeId === userId) && a.date === date);
             const data = {
-                userId,
+                userId, // Legacy field
+                employeeId: userId, // New standardized field
                 date,
                 status,
                 ...extraData,
@@ -216,7 +230,7 @@ const Attendance = () => {
 
         for (let day = 1; day <= daysInMonth; day++) {
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const isToday = new Date().toLocaleDateString('en-CA') === dateStr;
+            const isToday = getTodayStr() === dateStr;
             const isHoliday = holidays.some(h => h.date === dateStr);
             const dayAttendance = attendance.filter(a => a.date === dateStr);
 
@@ -232,7 +246,7 @@ const Attendance = () => {
                                 key={idx}
                                 className="att-dot"
                                 style={{ backgroundColor: getStatusColor(att.status) }}
-                                title={`${employees.find(e => e.id === att.userId)?.displayName}: ${att.status}`}
+                                title={`${employees.find(e => (e.id === att.userId || e.id === att.employeeId))?.displayName}: ${att.status}`}
                             />
                         ))}
                     </div>
@@ -363,7 +377,7 @@ const Attendance = () => {
                                     </thead>
                                     <tbody>
                                         {employees.map(emp => {
-                                            const empAtt = attendance.filter(a => a.userId === emp.id);
+                                            const empAtt = attendance.filter(a => a.userId === emp.id || a.employeeId === emp.id);
                                             const presentAtt = empAtt.filter(a => a.status === 'present' || a.status === 'permission');
                                             const presentDaysCount = presentAtt.length;
 
@@ -411,9 +425,12 @@ const Attendance = () => {
                             const emp = employees.find(e => e.id === selectedEmployeeId);
                             if (!emp) return <p>Employee not found</p>;
 
-                            const empAtt = attendance.filter(a => a.userId === emp.id);
+                            const empAtt = attendance.filter(a => a.userId === emp.id || a.employeeId === emp.id);
                             const presentAtt = empAtt.filter(a => a.status === 'present' || a.status === 'permission');
                             const absentDays = empAtt.filter(a => a.status === 'absent').length;
+                            const halfDays = empAtt.filter(a => a.status === 'half-day').length;
+                            const paidLeaves = empAtt.filter(a => a.status === 'paid_leave').length;
+                            const unpaidLeaves = empAtt.filter(a => a.status === 'unpaid_leave').length;
                             const permissionHrs = empAtt.reduce((sum, a) => sum + (Number(a.permissionHours) || 0), 0);
                             const overtimeHrs = empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
 
@@ -731,7 +748,11 @@ const HolidayModal = ({ holidays, onAdd, onDelete, onClose }) => {
 };
 
 const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
-    const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
+    const getTodayStr = () => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    };
+    const [selectedDate, setSelectedDate] = useState(getTodayStr());
     const [statuses, setStatuses] = useState({});
     const [overtimeEnabled, setOvertimeEnabled] = useState({}); // Separate toggle for overtime
     const [overtimeHours, setOvertimeHours] = useState({});
@@ -755,35 +776,36 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
         const existingPermissionH = {};
         const existingPermissionM = {};
         attendance.filter(a => a.date === selectedDate).forEach(a => {
-            existing[a.userId] = a.status;
+            const key = a.employeeId || a.userId;
+            existing[key] = a.status;
             if (a.overtimeHours) {
                 const h = Math.floor(Number(a.overtimeHours));
                 const m = Math.round((Number(a.overtimeHours) - h) * 60);
-                existingOtH[a.userId] = h;
-                existingOtM[a.userId] = m;
-                existingOtEnabled[a.userId] = true;
+                existingOtH[key] = h;
+                existingOtM[key] = m;
+                existingOtEnabled[key] = true;
             }
             if (a.presentHours) {
                 const h = Math.floor(Number(a.presentHours));
                 const m = Math.round((Number(a.presentHours) - h) * 60);
-                existingPresentH[a.userId] = h;
-                existingPresentM[a.userId] = m;
+                existingPresentH[key] = h;
+                existingPresentM[key] = m;
             } else if (a.status === 'present') {
-                existingPresentH[a.userId] = 8;
-                existingPresentM[a.userId] = 0;
+                existingPresentH[key] = 8;
+                existingPresentM[key] = 0;
             }
 
             if (a.permissionHours) {
                 const h = Math.floor(Number(a.permissionHours));
                 const m = Math.round((Number(a.permissionHours) - h) * 60);
-                existingPermissionH[a.userId] = h;
-                existingPermissionM[a.userId] = m;
+                existingPermissionH[key] = h;
+                existingPermissionM[key] = m;
             } else if (a.status === 'permission') {
-                existingPermissionH[a.userId] = 2;
-                existingPermissionM[a.userId] = 0;
-                if (!existingPresentH[a.userId]) {
-                    existingPresentH[a.userId] = 8;
-                    existingPresentM[a.userId] = 0;
+                existingPermissionH[key] = 2;
+                existingPermissionM[key] = 0;
+                if (!existingPresentH[key]) {
+                    existingPresentH[key] = 8;
+                    existingPresentM[key] = 0;
                 }
             }
         });
