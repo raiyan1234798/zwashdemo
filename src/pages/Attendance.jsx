@@ -45,6 +45,7 @@ const Attendance = () => {
     const [showHolidayModal, setShowHolidayModal] = useState(false);
     const [stats, setStats] = useState({ total: 0, present: 0, absent: 0, leaves: 0, overtime: 0 });
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('all');
+    const [filterType, setFilterType] = useState('all'); // 'all', 'present', 'absent', 'permission', 'overtime'
 
     useEffect(() => {
         fetchData();
@@ -434,6 +435,33 @@ const Attendance = () => {
                             const permissionHrs = empAtt.reduce((sum, a) => sum + (Number(a.permissionHours) || 0), 0);
                             const overtimeHrs = empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
 
+                            const getFilteredDates = () => {
+                                switch (filterType) {
+                                    case 'present':
+                                        return empAtt.filter(a => a.status === 'present');
+                                    case 'absent':
+                                        return empAtt.filter(a => a.status === 'absent');
+                                    case 'permission':
+                                        return empAtt.filter(a => (Number(a.permissionHours) || 0) > 0);
+                                    case 'overtime':
+                                        return empAtt.filter(a => (Number(a.overtimeHours) || 0) > 0);
+                                    default:
+                                        return empAtt.filter(a => a.status === 'present' || a.status === 'permission' || (Number(a.overtimeHours) || 0) > 0);
+                                }
+                            };
+
+                            const filteredDates = getFilteredDates().sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                            const getFilterTitle = () => {
+                                switch (filterType) {
+                                    case 'present': return 'Dates Present';
+                                    case 'absent': return 'Dates Absent';
+                                    case 'permission': return 'Permission Dates';
+                                    case 'overtime': return 'Overtime Dates';
+                                    default: return 'Exact Dates Present / Permission';
+                                }
+                            };
+
                             return (
                                 <div className="employee-analytics-card" style={{ padding: '1rem', background: '#f8fafc', border: '1px solid var(--navy-100)', borderRadius: 'var(--radius-lg)' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -445,53 +473,115 @@ const Attendance = () => {
                                     </div>
 
                                     <div className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                                        <div className="stat-card mini" style={{ background: 'white', border: '1px solid #10b981', textAlign: 'center', padding: '1rem', borderRadius: '8px' }}>
+                                        <div
+                                            className={`stat-card mini ${filterType === 'present' ? 'active' : ''}`}
+                                            style={{
+                                                background: filterType === 'present' ? '#ecfdf5' : 'white',
+                                                border: `2px solid ${filterType === 'present' ? '#10b981' : '#10b981'}`,
+                                                textAlign: 'center', padding: '1rem', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s',
+                                                boxShadow: filterType === 'present' ? '0 0 0 2px rgba(16, 185, 129, 0.2)' : 'none'
+                                            }}
+                                            onClick={() => setFilterType(filterType === 'present' ? 'all' : 'present')}
+                                        >
                                             <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Present Days</span>
-                                            <strong style={{ fontSize: '1.5rem', color: '#10b981' }}>{presentAtt.length}</strong>
+                                            <strong style={{ fontSize: '1.5rem', color: '#10b981' }}>{empAtt.filter(a => a.status === 'present' || a.status === 'permission').length}</strong>
                                         </div>
-                                        <div className="stat-card mini" style={{ background: 'white', border: '1px solid #ef4444', textAlign: 'center', padding: '1rem', borderRadius: '8px' }}>
+                                        <div
+                                            className={`stat-card mini ${filterType === 'absent' ? 'active' : ''}`}
+                                            style={{
+                                                background: filterType === 'absent' ? '#fef2f2' : 'white',
+                                                border: `2px solid ${filterType === 'absent' ? '#ef4444' : '#ef4444'}`,
+                                                textAlign: 'center', padding: '1rem', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s',
+                                                boxShadow: filterType === 'absent' ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none'
+                                            }}
+                                            onClick={() => setFilterType(filterType === 'absent' ? 'all' : 'absent')}
+                                        >
                                             <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Absent Days</span>
                                             <strong style={{ fontSize: '1.5rem', color: '#ef4444' }}>{absentDays}</strong>
                                         </div>
-                                        <div className="stat-card mini" style={{ background: 'white', border: '1px solid #0ea5e9', textAlign: 'center', padding: '1rem', borderRadius: '8px' }}>
+                                        <div
+                                            className={`stat-card mini ${filterType === 'permission' ? 'active' : ''}`}
+                                            style={{
+                                                background: filterType === 'permission' ? '#f0f9ff' : 'white',
+                                                border: `2px solid ${filterType === 'permission' ? '#0ea5e9' : '#0ea5e9'}`,
+                                                textAlign: 'center', padding: '1rem', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s',
+                                                boxShadow: filterType === 'permission' ? '0 0 0 2px rgba(14, 165, 233, 0.2)' : 'none'
+                                            }}
+                                            onClick={() => setFilterType(filterType === 'permission' ? 'all' : 'permission')}
+                                        >
                                             <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Permission</span>
                                             <strong style={{ fontSize: '1.5rem', color: '#0ea5e9' }}>{permissionHrs.toFixed(1)}h</strong>
                                         </div>
-                                        <div className="stat-card mini" style={{ background: 'white', border: '1px solid #8b5cf6', textAlign: 'center', padding: '1rem', borderRadius: '8px' }}>
+                                        <div
+                                            className={`stat-card mini ${filterType === 'overtime' ? 'active' : ''}`}
+                                            style={{
+                                                background: filterType === 'overtime' ? '#f5f3ff' : 'white',
+                                                border: `2px solid ${filterType === 'overtime' ? '#8b5cf6' : '#8b5cf6'}`,
+                                                textAlign: 'center', padding: '1rem', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s',
+                                                boxShadow: filterType === 'overtime' ? '0 0 0 2px rgba(139, 92, 246, 0.2)' : 'none'
+                                            }}
+                                            onClick={() => setFilterType(filterType === 'overtime' ? 'all' : 'overtime')}
+                                        >
                                             <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Overtime</span>
                                             <strong style={{ fontSize: '1.5rem', color: '#8b5cf6' }}>{overtimeHrs.toFixed(1)}h</strong>
                                         </div>
                                     </div>
 
                                     <div style={{ background: 'white', padding: '1.5rem', border: '1px solid var(--navy-100)', borderRadius: '8px' }}>
-                                        <h4 style={{ margin: '0 0 1rem 0', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--navy-700)' }}>
-                                            <Calendar size={18} /> Exact Dates Present / Permission
-                                        </h4>
-                                        {presentAtt.length > 0 ? (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                                            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--navy-700)' }}>
+                                                <Calendar size={18} /> {getFilterTitle()}
+                                            </h4>
+                                            {filterType !== 'all' && (
+                                                <button
+                                                    onClick={() => setFilterType('all')}
+                                                    style={{ fontSize: '0.75rem', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                                                >
+                                                    Show All
+                                                </button>
+                                            )}
+                                        </div>
+                                        {filteredDates.length > 0 ? (
                                             <div style={{
                                                 display: 'flex',
                                                 flexWrap: 'wrap',
                                                 gap: '0.5rem'
                                             }}>
-                                                {presentAtt
-                                                    .sort((a, b) => new Date(a.date) - new Date(b.date))
-                                                    .map(a => {
-                                                        const d = new Date(a.date);
-                                                        const dateStr = `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`;
-                                                        return (
-                                                            <span key={a.id} style={{
-                                                                background: a.status === 'permission' ? '#e0f2fe' : '#d1fae5',
-                                                                color: a.status === 'permission' ? '#0369a1' : '#047857',
-                                                                padding: '0.3rem 0.6rem',
-                                                                borderRadius: '4px',
-                                                                fontSize: '0.85rem',
-                                                                fontWeight: '500',
-                                                                border: `1px solid ${a.status === 'permission' ? '#bce4fe' : '#a7f3d0'}`
-                                                            }}>
-                                                                {dateStr} {a.status === 'permission' ? '(P)' : ''}
-                                                            </span>
-                                                        )
-                                                    })}
+                                                {filteredDates.map(a => {
+                                                    const d = new Date(a.date);
+                                                    const dateStr = `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`;
+                                                    const hasPermissionBadge = (Number(a.permissionHours) || 0) > 0;
+                                                    const hasOtBadge = (Number(a.overtimeHours) || 0) > 0;
+                                                    const isAbsent = a.status === 'absent';
+
+                                                    return (
+                                                        <span key={a.id} style={{
+                                                            background: isAbsent ? '#fef2f2' : (hasPermissionBadge ? '#e0f2fe' : '#d1fae5'),
+                                                            color: isAbsent ? '#991b1b' : (hasPermissionBadge ? '#0369a1' : '#047857'),
+                                                            padding: '0.3rem 0.6rem',
+                                                            borderRadius: '4px',
+                                                            fontSize: '0.85rem',
+                                                            fontWeight: '500',
+                                                            border: `1px solid ${isAbsent ? '#fecaca' : (hasPermissionBadge ? '#bce4fe' : '#a7f3d0')}`,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '0.4rem'
+                                                        }}>
+                                                            {dateStr}
+                                                            {hasPermissionBadge && (
+                                                                <span style={{ fontSize: '0.7rem', opacity: 0.8, background: 'rgba(3, 105, 161, 0.1)', padding: '1px 4px', borderRadius: '3px' }}>
+                                                                    P: {Number(a.permissionHours).toFixed(1)}h
+                                                                </span>
+                                                            )}
+                                                            {hasOtBadge && (
+                                                                <span style={{ fontSize: '0.7rem', opacity: 0.8, background: 'rgba(124, 58, 237, 0.1)', padding: '1px 4px', borderRadius: '3px', color: '#7c3aed' }}>
+                                                                    OT: {Number(a.overtimeHours).toFixed(1)}h
+                                                                </span>
+                                                            )}
+                                                            {isAbsent && <span style={{ fontSize: '0.7rem' }}>(A)</span>}
+                                                        </span>
+                                                    )
+                                                })}
                                             </div>
                                         ) : (
                                             <p style={{ margin: 0, color: 'var(--navy-400)', fontStyle: 'italic', fontSize: '0.9rem' }}>
