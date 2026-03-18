@@ -997,15 +997,21 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                 }
                 const extraData = { overtimeHours: otValue };
 
-                // Include present hours if status is present
+                // Include present hours and always explicitly write permissionHours
+                // to avoid stale values lingering in Firestore via partial updateDoc merges
                 if (status === 'present') {
                     extraData.presentHours = Number(presentHours[empId] || 0) + (Number(presentMins[empId] || 0) / 60);
+                    extraData.permissionHours = 0; // Clear any old permission hours
                 } else if (status === 'permission') {
                     const rawPresent = Number(presentHours[empId] || 0) + (Number(presentMins[empId] || 0) / 60);
                     const permHrs = Number(permissionHours[empId] || 0) + (Number(permissionMins[empId] || 0) / 60);
                     // Net worked hours = hours worked minus permission hours taken
                     extraData.presentHours = Math.max(0, rawPresent - permHrs);
                     extraData.permissionHours = permHrs;
+                } else {
+                    // For absent, half-day, paid_leave, unpaid_leave — clear permission hours
+                    extraData.permissionHours = 0;
+                    extraData.presentHours = 0;
                 }
                 await onMark(empId, selectedDate, status, extraData);
             }
