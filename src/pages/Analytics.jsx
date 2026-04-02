@@ -15,7 +15,8 @@ import {
     Table,
     Filter,
     Layers,
-    ChevronRight
+    ChevronRight,
+    MapPin
 } from 'lucide-react';
 
 const Analytics = () => {
@@ -33,7 +34,9 @@ const Analytics = () => {
         totalExpenses: 0,
         netProfit: 0,
         averageOrderValue: 0,
-        growthRate: 0
+        growthRate: 0,
+        carBookings: 0,
+        bikeBookings: 0
     });
     const [serviceBreakdown, setServiceBreakdown] = useState([]);
     const [employeePerformance, setEmployeePerformance] = useState([]);
@@ -41,6 +44,7 @@ const Analytics = () => {
     const [dailyRevenue, setDailyRevenue] = useState([]);
     const [allBookings, setAllBookings] = useState([]);
     const [employees, setEmployees] = useState({});
+    const [topLocations, setTopLocations] = useState([]);
     const [loading, setLoading] = useState(true);
 
     // Pivot Table State
@@ -132,8 +136,27 @@ const Analytics = () => {
                 .filter(e => isAllTime || (e.date >= startDate && e.date <= endDate))
                 .reduce((sum, e) => sum + (e.amount || 0), 0);
 
-            // Month Bookings Data for Other Stats
-            const monthBookings = bookingsData.filter(b => b.bookingDate >= monthStartStr);
+            // Today's Expenses
+            const todayExpenses = allExpenses
+                .filter(e => e.date === todayStr)
+                .reduce((sum, e) => sum + (e.amount || 0), 0);
+            
+            // Stats Object Updated
+            const finalStats = {
+                todayRevenue,
+                weekRevenue,
+                monthRevenue,
+                customRevenue,
+                totalExpenses: monthExpenses,
+                todayExpenses,
+                customExpenses,
+                totalBookings: monthBookings.length,
+                carBookings: monthBookings.filter(b => ['hatchback','sedan','suv','luxury_suv'].includes(b.vehicleType)).length,
+                bikeBookings: monthBookings.filter(b => ['scooter','bike','superbike'].includes(b.vehicleType)).length,
+                netProfit: monthRevenue - monthExpenses,
+                growthRate: growthRate
+            };
+            setStats(finalStats);
 
             // Service breakdown (Based on Custom Range)
             const rangeBookings = bookingsForCalculations.filter(b => isAllTime || (b.bookingDate >= startDate && b.bookingDate <= endDate));
@@ -150,6 +173,22 @@ const Analytics = () => {
                 .sort((a, b) => b.revenue - a.revenue)
                 .slice(0, 10);
             setServiceBreakdown(serviceList);
+
+            // Location Stats (Frequent Bookings)
+            const locationStats = {};
+            rangeBookings.filter(b => b.location && b.location.trim() !== '' && b.status === 'completed').forEach(b => {
+                const loc = b.location.trim();
+                const name = loc.charAt(0).toUpperCase() + loc.slice(1);
+                if (!locationStats[name]) {
+                    locationStats[name] = { name: name, count: 0, revenue: 0 };
+                }
+                locationStats[name].count++;
+                locationStats[name].revenue += Number(b.paidAmount || b.price) || 0;
+            });
+            const locationList = Object.values(locationStats)
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+            setTopLocations(locationList);
 
             // Employee performance (Dynamic Range)
             try {
@@ -247,7 +286,9 @@ const Analytics = () => {
                 totalExpenses: monthExpenses,
                 netProfit: monthRevenue - monthExpenses,
                 averageOrderValue,
-                growthRate
+                growthRate,
+                carBookings: monthBookings.filter(b => b.vehicleType?.toLowerCase() === 'car').length,
+                bikeBookings: monthBookings.filter(b => b.vehicleType?.toLowerCase() === 'bike').length
             });
 
             // Log for debugging if empty
@@ -390,6 +431,51 @@ const Analytics = () => {
                     <div className="metric-card-body">
                         <div className="metric-card-value">{stats.totalBookings}</div>
                         <div className="metric-card-label">Bookings (Month)</div>
+                    </div>
+                </div>
+
+                {/* New Card: Expenses with segments */}
+                <div className="metric-card" style={{ gridColumn: 'span 2' }}>
+                    <div className="metric-card-icon danger">
+                        <IndianRupee size={24} />
+                    </div>
+                    <div className="metric-card-body" style={{ width: '100%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div className="metric-card-value" style={{ color: '#ef4444' }}>{formatCurrency(stats.totalExpenses)}</div>
+                            <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Monthly Expenses</div>
+                            </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed #fee2e2' }}>
+                            <div>
+                                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#ef4444' }}>{formatCurrency(stats.todayExpenses || 0)}</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--navy-500)' }}>Today's Expenses</div>
+                            </div>
+                            <div>
+                                <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#ef4444' }}>{formatCurrency(stats.customExpenses || 0)}</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--navy-500)' }}>Selected Range</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="metric-card">
+                    <div className="metric-card-icon info">
+                        <Car size={24} />
+                    </div>
+                    <div className="metric-card-body">
+                        <div className="metric-card-value">{stats.carBookings}</div>
+                        <div className="metric-card-label">Car Bookings (Month)</div>
+                    </div>
+                </div>
+
+                <div className="metric-card">
+                    <div className="metric-card-icon warning">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="18" r="4"/><circle cx="19" cy="18" r="4"/><path d="M5 14L9 7 L14 7 L19 14 M9 7L13 14 M12 6L14 3 M14 7L15 11"/></svg>
+                    </div>
+                    <div className="metric-card-body">
+                        <div className="metric-card-value">{stats.bikeBookings}</div>
+                        <div className="metric-card-label">Bike Bookings (Month)</div>
                     </div>
                 </div>
             </div>
@@ -599,6 +685,29 @@ const Analytics = () => {
                                         <span>{emp.bookings} bookings</span>
                                     </div>
                                     <div className="perf-revenue">{formatCurrency(emp.revenue)}</div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* Location Performance */}
+                <div className="analytics-card">
+                    <div className="analytics-card-header">
+                        <h3><MapPin size={18} /> Top Locations ({isAllTime ? 'All Time' : `${startDate} to ${endDate}`})</h3>
+                    </div>
+                    <div className="performance-list">
+                        {topLocations.length === 0 ? (
+                            <p className="empty-text">No location data</p>
+                        ) : (
+                            topLocations.map((loc, i) => (
+                                <div key={i} className="perf-item">
+                                    <div className="perf-rank" style={{ color: 'var(--info)' }}>#{i + 1}</div>
+                                    <div className="perf-info">
+                                        <strong>{loc.name}</strong>
+                                        <span>{loc.count} bookings</span>
+                                    </div>
+                                    <div className="perf-revenue">{formatCurrency(loc.revenue)}</div>
                                 </div>
                             ))
                         )}

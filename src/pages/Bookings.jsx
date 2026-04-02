@@ -233,21 +233,19 @@ const Bookings = () => {
                 </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+            <div className="view-mode-tabs">
                 <button
-                    className={`btn ${viewMode === 'active' ? 'btn-primary' : ''}`}
-                    style={viewMode !== 'active' ? { background: '#f8f9fa', border: '1px solid #ddd', color: '#333' } : {}}
+                    className={`btn ${viewMode === 'active' ? 'active' : ''}`}
                     onClick={() => setViewMode('active')}
                 >
-                    <ClipboardList size={16} style={{ marginBottom: '-2px', marginRight: '6px' }} />
+                    <ClipboardList size={16} />
                     Active Bookings
                 </button>
                 <button
-                    className={`btn ${viewMode === 'archived' ? 'btn-primary' : ''}`}
-                    style={viewMode !== 'archived' ? { background: '#f8f9fa', border: '1px solid #ddd', color: '#333' } : { background: '#6c757d', borderColor: '#6c757d' }}
+                    className={`btn ${viewMode === 'archived' ? 'active' : ''}`}
                     onClick={() => setViewMode('archived')}
                 >
-                    <Archive size={16} style={{ marginBottom: '-2px', marginRight: '6px' }} />
+                    <Archive size={16} />
                     Archived Bookings
                 </button>
             </div>
@@ -350,6 +348,28 @@ const Bookings = () => {
                             {bookings.filter(b => b.status === 'completed').length}
                         </span>
                         <span className="stat-label">Completed</span>
+                    </div>
+                </div>
+                <div className="quick-stat-card">
+                    <div className="stat-icon blue">
+                        <CarIcon size={20} />
+                    </div>
+                    <div className="stat-info">
+                        <span className="stat-value">
+                            {bookings.filter(b => ['hatchback','sedan','suv','luxury_suv'].includes(b.vehicleType)).length}
+                        </span>
+                        <span className="stat-label">Car Bookings</span>
+                    </div>
+                </div>
+                <div className="quick-stat-card">
+                    <div className="stat-icon orange">
+                        <Droplets size={20} />
+                    </div>
+                    <div className="stat-info">
+                        <span className="stat-value">
+                            {bookings.filter(b => ['scooter','bike','superbike'].includes(b.vehicleType)).length}
+                        </span>
+                        <span className="stat-label">Bike Bookings</span>
                     </div>
                 </div>
             </div>
@@ -939,6 +959,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         carModel: '',
         licensePlate: '',
         phone: '',
+        location: '',
         bookingDate: new Date().toISOString().split('T')[0],
         startTime: ''
     });
@@ -1404,6 +1425,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                 carModel: formData.carModel,
                 licensePlate: formData.licensePlate.toUpperCase(),
                 contactPhone: formData.phone,
+                location: formData.location || '',
                 assignedEmployees: assignedEmployees,
                 assignedEmployeeName: employees.filter(e => assignedEmployees.includes(e.id)).map(e => e.displayName).join(', '),
                 status: 'in_progress',
@@ -1516,6 +1538,16 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                             <button type="button" className="btn-sm btn-outline" onClick={() => setCustomerMode('new')} title="Edit Details">Edit</button>
                                         </div>
                                     )}
+                                    {/* Location field for existing customer */}
+                                    <div className="form-group" style={{ marginTop: '0.75rem' }}>
+                                        <label>Location (Optional)</label>
+                                        <input
+                                            value={formData.location}
+                                            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                                            placeholder="Area / City (e.g. Koramangala)"
+                                            style={{ background: 'white' }}
+                                        />
+                                    </div>
                                 </div>
                             )}
 
@@ -1554,6 +1586,15 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                                     textTransform: 'uppercase',
                                                     background: 'white'
                                                 }}
+                                            />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Location (Optional)</label>
+                                            <input
+                                                value={formData.location}
+                                                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                                                placeholder="Area/City"
+                                                style={{ background: 'white' }}
                                             />
                                         </div>
                                     </div>
@@ -2564,6 +2605,7 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
         carMake: booking.carMake || '',
         carModel: booking.carModel || '',
         licensePlate: booking.licensePlate || '',
+        location: booking.location || '',
         bookingDate: booking.bookingDate || '',
         startTime: booking.startTime || '',
         serviceCategory: booking.serviceCategory || '',
@@ -2658,6 +2700,7 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                 carMake: formData.carMake,
                 carModel: formData.carModel,
                 licensePlate: formData.licensePlate.toUpperCase(),
+                location: formData.location || '',
                 bookingDate: formData.bookingDate,
                 startTime: formData.startTime,
                 serviceCategory: formData.serviceCategory,
@@ -2712,6 +2755,14 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                                         value={formData.licensePlate}
                                         onChange={e => setFormData({ ...formData, licensePlate: e.target.value })}
                                         style={{ textTransform: 'uppercase' }}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Location</label>
+                                    <input
+                                        value={formData.location}
+                                        onChange={e => setFormData({ ...formData, location: e.target.value })}
+                                        placeholder="Area/City"
                                     />
                                 </div>
                             </div>

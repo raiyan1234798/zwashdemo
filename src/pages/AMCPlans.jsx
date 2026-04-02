@@ -54,6 +54,7 @@ const AMCPlans = () => {
     const [seeding, setSeeding] = useState(false);
     const [showInvoiceModal, setShowInvoiceModal] = useState(false);
     const [invoiceSubscription, setInvoiceSubscription] = useState(null);
+    const [subFilter, setSubFilter] = useState('all');
 
     const [settings, setSettings] = useState(null);
 
@@ -379,6 +380,12 @@ _Powered by Z3Connect_`;
                                 </div>
                             ) : (
                                 <>
+                                    <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                        <select className="form-control" style={{ width: '200px' }} value={subFilter} onChange={(e) => setSubFilter(e.target.value)}>
+                                            <option value="all">All Subscriptions</option>
+                                            <option value="unpaid">Unpaid / Pending Payments</option>
+                                        </select>
+                                    </div>
                                     {/* Desktop Table View */}
                                     <div className="table-container desktop-view">
                                         <table className="data-table">
@@ -395,7 +402,14 @@ _Powered by Z3Connect_`;
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {subscriptions.map(sub => {
+                                                {subscriptions.filter(sub => {
+                                                    if (subFilter === 'unpaid') {
+                                                        const total = Number(sub.totalAmount) || 0;
+                                                        const advance = Number(sub.advancePayment) || Number(sub.amountPaid) || Number(sub.paidAmount) || 0;
+                                                        return advance < total;
+                                                    }
+                                                    return true;
+                                                }).map(sub => {
                                                     const washUsage = getServiceUsageCount(sub, 'Commando Cleaning');
                                                     return (
                                                         <tr key={sub.id}>
@@ -502,7 +516,14 @@ _Powered by Z3Connect_`;
 
                                     {/* Mobile Card View */}
                                     <div className="mobile-view">
-                                        {subscriptions.map(sub => {
+                                        {subscriptions.filter(sub => {
+                                            if (subFilter === 'unpaid') {
+                                                const total = Number(sub.totalAmount) || 0;
+                                                const advance = Number(sub.advancePayment) || Number(sub.amountPaid) || Number(sub.paidAmount) || 0;
+                                                return advance < total;
+                                            }
+                                            return true;
+                                        }).map(sub => {
                                             const washUsage = getServiceUsageCount(sub, 'Commando Cleaning');
                                             return (
                                                 <div key={sub.id} className="mobile-subscription-card">

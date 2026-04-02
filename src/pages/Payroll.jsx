@@ -28,6 +28,7 @@ const Payroll = () => {
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [companyWorkingDays, setCompanyWorkingDays] = useState(26);
     const [showConfirmModal, setShowConfirmModal] = useState(false);
 
     // Filter States
@@ -40,14 +41,31 @@ const Payroll = () => {
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [showManualEntryModal, setShowManualEntryModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState(null);
+    const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+    const [advanceData, setAdvanceData] = useState({
+        employeeId: '',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        note: ''
+    });
 
     useEffect(() => {
         fetchPayrollData();
-    }, [month]);
+    }, [month, companyWorkingDays]);
 
     const fetchPayrollData = async () => {
         try {
             setLoading(true);
+            
+            // Fetch month's advances
+            const startOfMonth = `${month}-01`;
+            const endOfMonthDate = new Date(new Date(startOfMonth).getFullYear(), new Date(startOfMonth).getMonth() + 1, 0);
+            const endOfMonth = endOfMonthDate.toISOString().split('T')[0];
+            const advancesRef = collection(db, 'advances');
+            const advancesQuery = query(advancesRef, where('date', '>=', startOfMonth), where('date', '<=', endOfMonth));
+            const advancesSnapshot = await getDocs(advancesQuery);
+            const allMonthAdvances = advancesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
             // Fetch approved employees
             const q = query(collection(db, 'adminUsers'), where('status', '==', 'approved'));
             const snapshot = await getDocs(q);
@@ -67,22 +85,51 @@ const Payroll = () => {
                 records[data.employeeId] = { id: doc.id, ...data };
             });
 
+            // Fetch attendance for overtime calculation
+            const attRef = collection(db, 'attendance');
+            const attQuery = query(attRef, where('date', '>=', startOfMonth), where('date', '<=', endOfMonth));
+            const attSnap = await getDocs(attQuery);
+            
+            const overtimeMap = {};
+            attSnap.docs.forEach(doc => {
+                const data = doc.data();
+                const empId = data.employeeId || data.userId;
+                if (!overtimeMap[empId]) overtimeMap[empId] = 0;
+                overtimeMap[empId] += Number(data.overtimeHours || 0);
+            });
+
             // Combine employee data with payroll
             const payrollData = employeeList.map(emp => {
-                const record = records[emp.id] || {
-                    baseSalary: emp.baseSalary || 15000,
-                    allowances: 0,
-                    bonus: 0,
-                    deductions: 0
-                };
+                const record = records[emp.id] || {};
+                const baseSalary = record.baseSalary || emp.baseSalary || 15000;
+                
+                // Calculate Overtime Amount
+                const otHours = overtimeMap[emp.id] || 0;
+                let calculatedOtAmount = 0;
+                if (companyWorkingDays > 0) {
+                    calculatedOtAmount = Math.round((baseSalary / (companyWorkingDays * 8)) * otHours);
+                }
+                
+                const overtimeAmount = record.overtimeAmount !== undefined ? record.overtimeAmount : calculatedOtAmount;
+                const allowances = record.allowances || 0;
+                const bonus = record.bonus || 0;
+                const deductions = record.deductions || 0;
+
+                // Calculate Month-to-date Advances for this employee
+                const empAdvances = (allMonthAdvances || []).filter(a => a.employeeId === emp.id);
+                const totalAdvances = empAdvances.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
+
                 return {
                     ...emp,
                     payrollId: record.id,
-                    baseSalary: record.baseSalary || emp.baseSalary || 15000,
-                    allowances: record.allowances || 0,
-                    bonus: record.bonus || 0,
-                    deductions: record.deductions || 0,
-                    netPay: (record.baseSalary || emp.baseSalary || 15000) + (record.allowances || 0) + (record.bonus || 0) - (record.deductions || 0),
+                    baseSalary: baseSalary,
+                    allowances: allowances,
+                    bonus: bonus,
+                    overtimeHours: otHours,
+                    overtimeAmount: overtimeAmount,
+                    deductions: deductions,
+                    advances: totalAdvances,
+                    netPay: baseSalary + allowances + bonus + overtimeAmount - deductions - totalAdvances,
                     notes: record.notes || '',
                     processedToExpenses: record.processedToExpenses || false
                 };
@@ -195,8 +242,9 @@ const Payroll = () => {
                     <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 15px; color: #334155;"><span>Basic Salary</span><span>${fmt(emp.baseSalary)}</span></div>
                     <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 15px; color: #334155;"><span>Allowances</span><span>${fmt(emp.allowances)}</span></div>
                     ${emp.bonus > 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 15px; color: #10b981;"><span>Bonus</span><span>+${fmt(emp.bonus)}</span></div>` : ''}
+                    ${emp.overtimeAmount > 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 15px; color: #8b5cf6;"><span>Overtime</span><span>+${fmt(emp.overtimeAmount)}</span></div>` : ''}
                     ${emp.deductions > 0 ? `<div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 15px; color: #ef4444;"><span>Deductions</span><span>−${fmt(emp.deductions)}</span></div>` : ''}
-                    <div style="display: flex; justify-content: space-between; padding: 15px 0 5px 0; font-size: 16px; font-weight: 600; color: #1e293b; margin-top: 10px;"><span>Gross Earnings</span><span>${fmt(gross)}</span></div>
+                    <div style="display: flex; justify-content: space-between; padding: 15px 0 5px 0; font-size: 16px; font-weight: 600; color: #1e293b; margin-top: 10px;"><span>Gross Earnings</span><span>${fmt(gross + (emp.overtimeAmount || 0))}</span></div>
                 </div>
                 <div style="background: linear-gradient(135deg, #1e3a5f, #2563eb); color: white; padding: 25px 40px; display: flex; justify-content: space-between; align-items: center;">
                     <span style="font-size: 16px; font-weight: 600;">Net Pay (Take Home)</span>
@@ -286,7 +334,7 @@ const Payroll = () => {
                 category: 'salary',
                 date: new Date().toISOString().split('T')[0],
                 paymentMode: 'bank_transfer',
-                note: `Monthly salary payment for ${monthName}. Base: ₹${emp.baseSalary}, Allowances: ₹${emp.allowances || 0}, Bonus: ₹${emp.bonus}, Deductions: ₹${emp.deductions}`,
+                note: `Monthly salary payment for ${monthName}. Base: ₹${emp.baseSalary}, Allowances: ₹${emp.allowances || 0}, Bonus: ₹${emp.bonus}, OT: ₹${emp.overtimeAmount || 0}, Deductions: ₹${emp.deductions}`,
                 employeeId: emp.id,
                 month: month,
                 isAutoGenerated: true,
@@ -306,6 +354,7 @@ const Payroll = () => {
                     baseSalary: emp.baseSalary,
                     allowances: emp.allowances || 0,
                     bonus: emp.bonus,
+                    overtimeAmount: emp.overtimeAmount || 0,
                     deductions: emp.deductions,
                     notes: emp.notes || '',
                     netPay: emp.netPay,
@@ -343,6 +392,8 @@ const Payroll = () => {
             'Base Salary': emp.baseSalary,
             Allowances: emp.allowances || 0,
             Bonus: emp.bonus,
+            'OT Hours': emp.overtimeHours || 0,
+            'OT Amount': emp.overtimeAmount || 0,
             Deductions: emp.deductions,
             'Net Pay': emp.netPay,
             Status: emp.processedToExpenses ? 'Paid' : 'Pending',
@@ -373,6 +424,120 @@ const Payroll = () => {
         const date = new Date(month + '-01');
         date.setMonth(date.getMonth() + 1);
         setMonth(date.toISOString().slice(0, 7));
+    };
+
+    const handleRecordAdvance = async (e) => {
+        if (e) e.preventDefault();
+        if (!advanceData.employeeId || !advanceData.amount || Number(advanceData.amount) <= 0) {
+            alert('Please select employee and enter valid amount');
+            return;
+        }
+
+        try {
+            setProcessing(true);
+            const emp = employees.find(e => e.id === advanceData.employeeId);
+            const amt = Number(advanceData.amount);
+
+            // 1. Save to advances collection
+            await addDoc(collection(db, 'advances'), {
+                ...advanceData,
+                amount: amt,
+                employeeName: emp?.displayName || 'Unknown',
+                createdAt: serverTimestamp()
+            });
+
+            // 2. Save as Expense immediately
+            await addDoc(collection(db, 'expenses'), {
+                title: `Advance Salary - ${emp?.displayName || 'Employee'}`,
+                amount: amt,
+                category: 'salary',
+                date: advanceData.date,
+                paymentMode: 'cash',
+                note: `Salary advance: ${advanceData.note}`,
+                employeeId: advanceData.employeeId,
+                isAdvance: true,
+                isAutoGenerated: true,
+                createdAt: serverTimestamp()
+            });
+
+            // 3. Generate Advance Slip
+            generateAdvanceSlip(emp, amt, advanceData.date, advanceData.note);
+
+            setShowAdvanceModal(false);
+            setAdvanceData({ employeeId: '', amount: '', date: new Date().toISOString().split('T')[0], note: '' });
+            fetchPayrollData();
+        } catch (error) {
+            console.error('Error recording advance:', error);
+            alert('Error recording advance');
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const generateAdvanceSlip = (emp, amount, date, note) => {
+        const doc = new jsPDF();
+        const fmt = (v) => formatCurrency(v);
+        const margin = 20;
+
+        // Header
+        doc.setFillColor(28, 43, 85);
+        doc.rect(0, 0, 210, 40, 'F');
+        doc.setFontSize(22);
+        doc.setTextColor(255, 255, 255);
+        doc.text('ADVANCE SALARY SLIP', 105, 25, { align: 'center' });
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(12);
+        let y = 55;
+
+        // Details Box
+        doc.setDrawColor(200, 200, 200);
+        doc.rect(margin, y, 170, 60);
+        
+        y += 10;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Employee Name:', margin + 10, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(emp?.displayName || 'Unknown', margin + 60, y);
+
+        y += 10;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Employee ID:', margin + 10, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(emp?.id || 'N/A', margin + 60, y);
+
+        y += 10;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Advance Date:', margin + 10, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(new Date(date).toLocaleDateString('en-IN'), margin + 60, y);
+
+        y += 10;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Amount Paid:', margin + 10, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(fmt(amount), margin + 60, y);
+        
+        y += 10;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Notes:', margin + 10, y);
+        doc.setFont('helvetica', 'normal');
+        doc.text(note || 'Salary Advance', margin + 60, y);
+
+        // Footer Note
+        y = 130;
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text('* This amount will be automatically deducted from your monthly net salary.', margin, y);
+        
+        // Signatures
+        y = 170;
+        doc.line(margin, y, margin + 50, y);
+        doc.line(140, y, 190, y);
+        doc.text('Employee Signature', margin, y + 5);
+        doc.text('Authorized Signatory', 140, y + 5);
+
+        doc.save(`AdvanceSlip_${emp?.displayName || 'Employee'}_${date}.pdf`);
     };
 
     const handleGeneratePayslips = async () => {
@@ -474,6 +639,16 @@ const Payroll = () => {
                         <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ padding: '0.4rem 0.5rem', border: 'none', background: 'transparent', fontWeight: '500', color: '#334155', outline: 'none', fontSize: '0.875rem' }} />
                         <button onClick={handleNextMonth} style={{ padding: '0.4rem 0.5rem', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', borderLeft: '1px solid #e2e8f0' }}><ChevronRight size={18} /></button>
                     </div>
+                    <div style={{ display: 'flex', alignItems: 'center', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '0.2rem 0.5rem', overflow: 'hidden' }}>
+                        <span style={{ fontSize: '0.8rem', color: '#64748b', marginRight: '0.5rem' }}>Working Days:</span>
+                        <input 
+                            type="number" 
+                            value={companyWorkingDays} 
+                            onChange={(e) => setCompanyWorkingDays(Number(e.target.value))} 
+                            style={{ width: '40px', border: 'none', background: 'transparent', fontWeight: '500', color: '#334155', outline: 'none', fontSize: '0.875rem' }} 
+                            min="1" max="31" 
+                        />
+                    </div>
                     {hasPermission('payroll', 'edit') && (
                         <button onClick={() => setShowManualEntryModal(true)} title="Manual Entry" style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '0.45rem 0.75rem', borderRadius: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer' }}>
                             <Calculator size={16} /> Entry
@@ -481,6 +656,9 @@ const Payroll = () => {
                     )}
                     <button onClick={handleGeneratePayslips} title="Generate Payslips" style={{ background: 'white', color: '#334155', border: '1px solid #e2e8f0', padding: '0.45rem 0.75rem', borderRadius: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer' }}>
                         <FileText size={16} /> Payslips
+                    </button>
+                    <button className="btn btn-primary" onClick={() => setShowAdvanceModal(true)} style={{ background: '#f59e0b', color: 'white', border: 'none', padding: '0.45rem 0.75rem', borderRadius: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+                        <PlusSquare size={16} /> Record Advance
                     </button>
                     <button onClick={exportToExcel} title="Export" style={{ background: 'white', color: '#334155', border: '1px solid #e2e8f0', padding: '0.45rem 0.75rem', borderRadius: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer' }}>
                         <Download size={16} /> Export
@@ -572,7 +750,9 @@ const Payroll = () => {
                                         <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600' }}>Base</th>
                                         <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600' }}>Allow.</th>
                                         <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#10b981' }}>Bonus</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#ef4444' }}>Deduct.</th>
+                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#8b5cf6' }}>Overtime</th>
+                                         <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#ef4444' }}>Deduct.</th>
+                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#f59e0b' }}>Advances</th>
                                         <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#0f172a' }}>Net Pay</th>
                                         <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: '600' }}>Status</th>
                                         <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: '600' }}>Actions</th>
@@ -601,7 +781,13 @@ const Payroll = () => {
                                                 <span style={{ color: emp.bonus > 0 ? '#10b981' : '#cbd5e1' }}>{emp.bonus > 0 ? '+' : ''}{formatCurrency(emp.bonus)}</span>
                                             </td>
                                             <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap', fontSize: '0.82rem' }}>
+                                                <span style={{ color: emp.overtimeAmount > 0 ? '#8b5cf6' : '#cbd5e1' }}>{emp.overtimeAmount > 0 ? '+' : ''}{formatCurrency(emp.overtimeAmount)}</span>
+                                            </td>
+                                            <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap', fontSize: '0.82rem' }}>
                                                 <span style={{ color: emp.deductions > 0 ? '#ef4444' : '#cbd5e1' }}>{emp.deductions > 0 ? '-' : ''}{formatCurrency(emp.deductions)}</span>
+                                            </td>
+                                            <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap', fontSize: '0.82rem' }}>
+                                                <span style={{ color: emp.advances > 0 ? '#ef4444' : '#cbd5e1' }}>{emp.advances > 0 ? '-' : ''}{formatCurrency(emp.advances || 0)}</span>
                                             </td>
                                             <td style={{ padding: '0.65rem 0.5rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                                 <strong style={{ color: '#0f172a', fontSize: '0.875rem' }}>{formatCurrency(emp.netPay)}</strong>
@@ -675,6 +861,7 @@ const Payroll = () => {
                                     {emp.allowances > 0 && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Allowances:</span> <strong>{formatCurrency(emp.allowances)}</strong></div>}
                                     {emp.bonus > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#10b981' }}><span>Bonus:</span> <strong>+{formatCurrency(emp.bonus)}</strong></div>}
                                     {emp.deductions > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}><span>Deductions:</span> <strong>-{formatCurrency(emp.deductions)}</strong></div>}
+                                    {emp.advances > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}><span>Advance:</span> <strong>-{formatCurrency(emp.advances)}</strong></div>}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', fontSize: '1.05rem', color: '#0f172a' }}><span><strong>Net Pay:</strong></span> <strong>{formatCurrency(emp.netPay)}</strong></div>
                                 </div>
                                 <div className="booking-card-footer" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -761,6 +948,7 @@ const Payroll = () => {
                                     Base: {formatCurrency(selectedEmployee.baseSalary)}
                                     {selectedEmployee.bonus > 0 && ` + Bonus: ${formatCurrency(selectedEmployee.bonus)}`}
                                     {selectedEmployee.deductions > 0 && ` - Ded: ${formatCurrency(selectedEmployee.deductions)}`}
+                                    {selectedEmployee.advances > 0 && ` - Adv: ${formatCurrency(selectedEmployee.advances)}`}
                                 </div>
                             </div>
                             <p style={{ color: '#666', fontSize: '0.9rem' }}>
@@ -820,6 +1008,70 @@ const Payroll = () => {
                     }}
                     hasEditPermission={hasPermission('payroll', 'edit')}
                 />
+            )}
+
+            {/* Advance Recording Modal */}
+            {showAdvanceModal && (
+                <div className="modal">
+                    <div className="modal-content" style={{ maxWidth: '450px' }}>
+                        <div className="modal-header">
+                            <h2>Record Salary Advance</h2>
+                            <button className="close-btn" onClick={() => setShowAdvanceModal(false)}><X size={20} /></button>
+                        </div>
+                        <form onSubmit={handleRecordAdvance}>
+                            <div className="modal-body" style={{ padding: '1.5rem' }}>
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}>Select Employee</label>
+                                    <select 
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+                                        value={advanceData.employeeId}
+                                        onChange={(e) => setAdvanceData({...advanceData, employeeId: e.target.value})}
+                                        required
+                                    >
+                                        <option value="">Choose employee...</option>
+                                        {employees.map(e => <option key={e.id} value={e.id}>{e.displayName}</option>)}
+                                    </select>
+                                </div>
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}>Advance Amount (₹)</label>
+                                    <input 
+                                        type="number" 
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+                                        value={advanceData.amount}
+                                        onChange={(e) => setAdvanceData({...advanceData, amount: e.target.value})}
+                                        placeholder="Enter amount"
+                                        required
+                                    />
+                                </div>
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}>Date Paid</label>
+                                    <input 
+                                        type="date" 
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}
+                                        value={advanceData.date}
+                                        onChange={(e) => setAdvanceData({...advanceData, date: e.target.value})}
+                                        required
+                                    />
+                                </div>
+                                <div style={{ marginBottom: '1rem' }}>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}>Notes</label>
+                                    <textarea 
+                                        style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #e2e8f0', minHeight: '80px' }}
+                                        value={advanceData.note}
+                                        onChange={(e) => setAdvanceData({...advanceData, note: e.target.value})}
+                                        placeholder="Reason for advance..."
+                                    />
+                                </div>
+                            </div>
+                            <div className="modal-footer" style={{ borderTop: '1px solid #e2e8f0', padding: '1rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowAdvanceModal(false)}>Cancel</button>
+                                <button type="submit" className="btn btn-primary" disabled={processing} style={{ background: '#f59e0b', border: 'none' }}>
+                                    {processing ? 'Processing...' : 'Record & Generate Slip'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             )}
 
             <style>{`
@@ -981,7 +1233,7 @@ const PayrollModal = ({ employee, month, onClose, onSuccess }) => {
                 bonus: Number(formData.bonus) || 0,
                 deductions: Number(formData.deductions) || 0,
                 notes: formData.notes || '',
-                netPay: Number(formData.baseSalary) + Number(formData.allowances) + Number(formData.bonus) - Number(formData.deductions),
+                netPay: Number(formData.baseSalary) + Number(formData.allowances) + Number(formData.bonus) - Number(formData.deductions) - (employee.advances || 0),
                 updatedAt: serverTimestamp()
             };
 
@@ -1001,7 +1253,7 @@ const PayrollModal = ({ employee, month, onClose, onSuccess }) => {
         }
     };
 
-    const netPay = Number(formData.baseSalary) + Number(formData.allowances) + Number(formData.bonus) - Number(formData.deductions);
+    const netPay = Number(formData.baseSalary) + Number(formData.allowances) + Number(formData.bonus) - Number(formData.deductions) - (employee.advances || 0);
 
     return (
         <div className="modal">
@@ -1175,6 +1427,7 @@ const EmployeePayrollHistoryModal = ({ employee, onClose, onManualEntry, hasEdit
                                         <th>Allowances</th>
                                         <th>Bonus</th>
                                         <th>Deductions</th>
+                                        <th>Advance</th>
                                         <th>Net Pay</th>
                                         <th>Status</th>
                                     </tr>
@@ -1298,8 +1551,8 @@ const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
         setSubmitting(true);
 
         try {
-            // 1. Calculate Net Pay
-            const netPay = Number(formData.baseSalary) + Number(formData.allowances) + Number(formData.bonus) - Number(formData.deductions);
+            // 1. Calculate Net Pay (accounting for advances already recorded)
+            const netPay = Number(formData.baseSalary) + Number(formData.allowances) + Number(formData.bonus) - Number(formData.deductions) - (employee.advances || 0);
             const monthName = new Date(selectedMonth + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
             // 2. Create Payroll Record
@@ -1357,7 +1610,7 @@ const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
         }
     };
 
-    const netPay = Number(formData.baseSalary) + Number(formData.allowances) + Number(formData.bonus) - Number(formData.deductions);
+    const netPay = Number(formData.baseSalary) + Number(formData.allowances) + Number(formData.bonus) - Number(formData.deductions) - (employee.advances || 0);
 
     return (
         <div className="modal">
@@ -1481,6 +1734,12 @@ const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
                                     rows="2"
                                 ></textarea>
                             </div>
+                            {employee.advances > 0 && (
+                                <div style={{ fontSize: '0.8rem', color: '#f59e0b', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <AlertCircle size={14} />
+                                    Note: Recorded advances (₹{employee.advances}) will be automatically deducted.
+                                </div>
+                            )}
                         </div>
 
                         {/* Net Pay */}

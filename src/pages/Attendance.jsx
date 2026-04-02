@@ -30,9 +30,15 @@ import {
     Mail,
     Phone,
     Briefcase,
-    Zap
+    Zap,
+    XCircle,
+    X,
+    Search,
+    Printer
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const Attendance = () => {
     const { hasPermission, userProfile, isAdmin } = useAuth();
@@ -46,10 +52,14 @@ const Attendance = () => {
     const [stats, setStats] = useState({ total: 0, present: 0, absent: 0, leaves: 0, overtime: 0 });
     const [selectedEmployeeId, setSelectedEmployeeId] = useState('all');
     const [filterType, setFilterType] = useState('all'); // 'all', 'present', 'absent', 'permission', 'overtime'
+    
+    // New state for date filtering
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
     useEffect(() => {
         fetchData();
-    }, [currentMonth]);
+    }, [currentMonth, startDate, endDate]);
 
     const fetchData = async () => {
         try {
@@ -78,10 +88,17 @@ const Attendance = () => {
             const startOfMonth = toLocalDateStr(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1));
             const endOfMonth = toLocalDateStr(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0));
 
+            // Determine the actual range to fetch: min(startOfMonth, startDate) to max(endOfMonth, endDate)
+            let qStart = startOfMonth;
+            let qEnd = endOfMonth;
+
+            if (startDate && startDate < qStart) qStart = startDate;
+            if (endDate && endDate > qEnd) qEnd = endDate;
+
             const attQuery = query(
                 collection(db, 'attendance'),
-                where('date', '>=', startOfMonth),
-                where('date', '<=', endOfMonth)
+                where('date', '>=', qStart),
+                where('date', '<=', qEnd)
             );
             const attSnapshot = await getDocs(attQuery);
             const attData = attSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -120,6 +137,7 @@ const Attendance = () => {
         setStats({
             total: totalEmployees,
             present: todayAtt.filter(a => a.status === 'present' || a.status === 'permission' || a.status === 'half-day').length,
+            absent: todayAtt.filter(a => a.status === 'absent').length,
             leaves: todayAtt.filter(a => a.status.includes('leave')).length
         });
     };
@@ -305,6 +323,15 @@ const Attendance = () => {
                         <span className="stat-label">On Leave</span>
                     </div>
                 </div>
+                <div className="quick-stat-card">
+                    <div className="stat-icon red">
+                        <XCircle size={20} />
+                    </div>
+                    <div className="stat-info">
+                        <span className="stat-value">{stats.absent || 0}</span>
+                        <span className="stat-label">Absentees Today</span>
+                    </div>
+                </div>
             </div>
 
             <div className="attendance-container">
@@ -426,7 +453,14 @@ const Attendance = () => {
                             const emp = employees.find(e => e.id === selectedEmployeeId);
                             if (!emp) return <p>Employee not found</p>;
 
-                            const empAtt = attendance.filter(a => a.userId === emp.id || a.employeeId === emp.id);
+                            const empAtt = attendance.filter(a => {
+                                const isEmp = a.userId === emp.id || a.employeeId === emp.id;
+                                if (!isEmp) return false;
+                                if (startDate && a.date < startDate) return false;
+                                if (endDate && a.date > endDate) return false;
+                                return true;
+                            });
+                            
                             const presentAtt = empAtt.filter(a => a.status === 'present' || a.status === 'permission');
                             const absentDays = empAtt.filter(a => a.status === 'absent').length;
                             const halfDays = empAtt.filter(a => a.status === 'half-day').length;
@@ -434,11 +468,12 @@ const Attendance = () => {
                             const unpaidLeaves = empAtt.filter(a => a.status === 'unpaid_leave').length;
                             const permissionHrs = empAtt.reduce((sum, a) => sum + (Number(a.permissionHours) || 0), 0);
                             const overtimeHrs = empAtt.reduce((sum, a) => sum + (Number(a.overtimeHours) || 0), 0);
+                            const totalPresentIncludesHalf = empAtt.filter(a => a.status === 'present' || a.status === 'permission' || a.status === 'half-day').length;
 
                             const getFilteredDates = () => {
                                 switch (filterType) {
                                     case 'present':
-                                        return empAtt.filter(a => a.status === 'present');
+                                        return empAtt.filter(a => a.status === 'present' || a.status === 'half-day');
                                     case 'absent':
                                         return empAtt.filter(a => a.status === 'absent');
                                     case 'permission':
@@ -446,11 +481,12 @@ const Attendance = () => {
                                     case 'overtime':
                                         return empAtt.filter(a => (Number(a.overtimeHours) || 0) > 0);
                                     default:
-                                        return empAtt.filter(a => a.status === 'present' || a.status === 'permission' || (Number(a.overtimeHours) || 0) > 0);
+                                        return empAtt.filter(a => ['present', 'absent', 'permission', 'half-day'].includes(a.status) || (Number(a.overtimeHours) || 0) > 0);
                                 }
                             };
 
-                            const filteredDates = getFilteredDates().sort((a, b) => new Date(a.date) - new Date(b.date));
+                            let filteredDates = getFilteredDates();
+                            filteredDates = filteredDates.sort((a, b) => new Date(a.date) - new Date(b.date));
 
                             const getFilterTitle = () => {
                                 switch (filterType) {
@@ -458,7 +494,7 @@ const Attendance = () => {
                                     case 'absent': return 'Dates Absent';
                                     case 'permission': return 'Permission Dates';
                                     case 'overtime': return 'Overtime Dates';
-                                    default: return 'Exact Dates Present / Permission';
+                                    default: return 'Full Attendance History';
                                 }
                             };
 
@@ -469,61 +505,86 @@ const Attendance = () => {
                                             <h3 style={{ margin: 0, color: 'var(--navy-900)' }}>{emp.displayName}'s Analytics</h3>
                                             <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: 'var(--navy-500)' }}>{emp.role}</p>
                                         </div>
-                                        <button className="btn btn-sm btn-secondary" onClick={() => setSelectedEmployeeId('all')}>Back to Overview</button>
+                                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: 'white', padding: '0.25rem', borderRadius: '6px', border: '1px solid var(--navy-200)' }}>
+                                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.8rem' }} />
+                                                <span style={{ fontSize: '0.8rem', color: 'var(--navy-400)' }}>-</span>
+                                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.8rem' }} />
+                                                {(startDate || endDate) && <button onClick={() => { setStartDate(''); setEndDate(''); }} className="btn-icon" style={{ padding: '0.1rem', height: 'auto' }}><X size={14}/></button>}
+                                            </div>
+                                            <button className="btn btn-sm btn-primary" onClick={async () => {
+                                                const container = document.getElementById('employee-analytics-content');
+                                                if (!container) return;
+                                                try {
+                                                    const canvas = await html2canvas(container, { scale: 2, useCORS: true, logging: false });
+                                                    const imgData = canvas.toDataURL('image/png');
+                                                    const pdf = new jsPDF('p', 'mm', 'a4');
+                                                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                                                    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                                                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                                                    pdf.save(`Attendance_${emp.displayName}_${new Date().toLocaleDateString()}.pdf`);
+                                                } catch (err) {
+                                                    console.error('PDF error:', err);
+                                                    alert('Could not generate PDF');
+                                                }
+                                            }}>Download PDF</button>
+                                            <button className="btn btn-sm btn-secondary" onClick={() => setSelectedEmployeeId('all')}>Back</button>
+                                        </div>
                                     </div>
 
-                                    <div className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                                    <div id="employee-analytics-content" style={{ padding: '10px', background: '#f8fafc' }}>
+                                    <div className="stats-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
                                         <div
                                             className={`stat-card mini ${filterType === 'present' ? 'active' : ''}`}
                                             style={{
                                                 background: filterType === 'present' ? '#ecfdf5' : 'white',
-                                                border: `2px solid ${filterType === 'present' ? '#10b981' : '#10b981'}`,
-                                                textAlign: 'center', padding: '1rem', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s',
-                                                boxShadow: filterType === 'present' ? '0 0 0 2px rgba(16, 185, 129, 0.2)' : 'none'
+                                                border: `2px solid #10b981`,
+                                                textAlign: 'center', padding: '1rem', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
+                                                boxShadow: filterType === 'present' ? '0 4px 12px rgba(16, 185, 129, 0.2)' : '0 2px 4px rgba(0,0,0,0.05)'
                                             }}
                                             onClick={() => setFilterType(filterType === 'present' ? 'all' : 'present')}
                                         >
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Present Days</span>
-                                            <strong style={{ fontSize: '1.5rem', color: '#10b981' }}>{empAtt.filter(a => a.status === 'present' || a.status === 'permission').length}</strong>
+                                            <span style={{ fontSize: '0.85rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Present Days</span>
+                                            <strong style={{ fontSize: '1.75rem', color: '#10b981' }}>{totalPresentIncludesHalf}</strong>
                                         </div>
                                         <div
                                             className={`stat-card mini ${filterType === 'absent' ? 'active' : ''}`}
                                             style={{
                                                 background: filterType === 'absent' ? '#fef2f2' : 'white',
-                                                border: `2px solid ${filterType === 'absent' ? '#ef4444' : '#ef4444'}`,
-                                                textAlign: 'center', padding: '1rem', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s',
-                                                boxShadow: filterType === 'absent' ? '0 0 0 2px rgba(239, 68, 68, 0.2)' : 'none'
+                                                border: `2px solid #ef4444`,
+                                                textAlign: 'center', padding: '1rem', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
+                                                boxShadow: filterType === 'absent' ? '0 4px 12px rgba(239, 68, 68, 0.2)' : '0 2px 4px rgba(0,0,0,0.05)'
                                             }}
                                             onClick={() => setFilterType(filterType === 'absent' ? 'all' : 'absent')}
                                         >
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Absent Days</span>
-                                            <strong style={{ fontSize: '1.5rem', color: '#ef4444' }}>{absentDays}</strong>
+                                            <span style={{ fontSize: '0.85rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Absent Days</span>
+                                            <strong style={{ fontSize: '1.75rem', color: '#ef4444' }}>{absentDays}</strong>
                                         </div>
                                         <div
                                             className={`stat-card mini ${filterType === 'permission' ? 'active' : ''}`}
                                             style={{
                                                 background: filterType === 'permission' ? '#f0f9ff' : 'white',
-                                                border: `2px solid ${filterType === 'permission' ? '#0ea5e9' : '#0ea5e9'}`,
-                                                textAlign: 'center', padding: '1rem', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s',
-                                                boxShadow: filterType === 'permission' ? '0 0 0 2px rgba(14, 165, 233, 0.2)' : 'none'
+                                                border: `2px solid #0ea5e9`,
+                                                textAlign: 'center', padding: '1rem', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
+                                                boxShadow: filterType === 'permission' ? '0 4px 12px rgba(14, 165, 233, 0.2)' : '0 2px 4px rgba(0,0,0,0.05)'
                                             }}
                                             onClick={() => setFilterType(filterType === 'permission' ? 'all' : 'permission')}
                                         >
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Permission</span>
-                                            <strong style={{ fontSize: '1.5rem', color: '#0ea5e9' }}>{permissionHrs.toFixed(1)}h</strong>
+                                            <span style={{ fontSize: '0.85rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Permission</span>
+                                            <strong style={{ fontSize: '1.75rem', color: '#0ea5e9' }}>{permissionHrs.toFixed(1)}h</strong>
                                         </div>
                                         <div
                                             className={`stat-card mini ${filterType === 'overtime' ? 'active' : ''}`}
                                             style={{
                                                 background: filterType === 'overtime' ? '#f5f3ff' : 'white',
-                                                border: `2px solid ${filterType === 'overtime' ? '#8b5cf6' : '#8b5cf6'}`,
-                                                textAlign: 'center', padding: '1rem', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s',
-                                                boxShadow: filterType === 'overtime' ? '0 0 0 2px rgba(139, 92, 246, 0.2)' : 'none'
+                                                border: `2px solid #8b5cf6`,
+                                                textAlign: 'center', padding: '1rem', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
+                                                boxShadow: filterType === 'overtime' ? '0 4px 12px rgba(139, 92, 246, 0.2)' : '0 2px 4px rgba(0,0,0,0.05)'
                                             }}
                                             onClick={() => setFilterType(filterType === 'overtime' ? 'all' : 'overtime')}
                                         >
-                                            <span style={{ fontSize: '0.8rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.3rem' }}>Overtime</span>
-                                            <strong style={{ fontSize: '1.5rem', color: '#8b5cf6' }}>{overtimeHrs.toFixed(1)}h</strong>
+                                            <span style={{ fontSize: '0.85rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Overtime</span>
+                                            <strong style={{ fontSize: '1.75rem', color: '#8b5cf6' }}>{overtimeHrs.toFixed(1)}h</strong>
                                         </div>
                                     </div>
 
@@ -588,6 +649,7 @@ const Attendance = () => {
                                                 No presence logged for this month.
                                             </p>
                                         )}
+                                    </div>
                                     </div>
                                 </div>
                             );
@@ -883,6 +945,9 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
             } else if (a.status === 'present') {
                 existingPresentH[key] = 8;
                 existingPresentM[key] = 0;
+            } else if (a.status === 'half-day') {
+                existingPresentH[key] = 4;
+                existingPresentM[key] = 0;
             }
 
             if (a.permissionHours) {
@@ -952,6 +1017,9 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
         if (status === 'present' && !presentHours[empId]) {
             setPresentHours({ ...presentHours, [empId]: 8 });
             setPresentMins({ ...presentMins, [empId]: 0 });
+        } else if (status === 'half-day' && !presentHours[empId]) {
+            setPresentHours({ ...presentHours, [empId]: 4 });
+            setPresentMins({ ...presentMins, [empId]: 0 });
         } else if (status === 'permission') {
             // This case is now handled via the Present + Permission toggle, 
             // but we keep the logic for backward compatibility if data has 'permission' status
@@ -968,10 +1036,10 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
 
     const handlePermissionToggle = (empId) => {
         const currentStatus = statuses[empId];
-        if (currentStatus === 'present') {
+        if (currentStatus === 'present' || currentStatus === 'half-day') {
             handleStatusChange(empId, 'permission');
         } else if (currentStatus === 'permission') {
-            handleStatusChange(empId, 'present');
+            handleStatusChange(empId, presentHours[empId] <= 4 ? 'half-day' : 'present');
         }
     };
 
@@ -999,7 +1067,7 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
 
                 // Include present hours and always explicitly write permissionHours
                 // to avoid stale values lingering in Firestore via partial updateDoc merges
-                if (status === 'present') {
+                if (status === 'present' || status === 'half-day') {
                     extraData.presentHours = Number(presentHours[empId] || 0) + (Number(presentMins[empId] || 0) / 60);
                     extraData.permissionHours = 0; // Clear any old permission hours
                 } else if (status === 'permission') {
@@ -1009,7 +1077,7 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                     extraData.presentHours = Math.max(0, rawPresent - permHrs);
                     extraData.permissionHours = permHrs;
                 } else {
-                    // For absent, half-day, paid_leave, unpaid_leave — clear permission hours
+                    // For absent, paid_leave, unpaid_leave — clear permission hours
                     extraData.permissionHours = 0;
                     extraData.presentHours = 0;
                 }
@@ -1069,8 +1137,8 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                                             className={`btn btn-sm`}
                                             onClick={() => handleStatusChange(emp.id, opt.id)}
                                             style={{
-                                                background: (statuses[emp.id] === opt.id || (statuses[emp.id] === 'permission' && opt.id === 'present')) ? opt.color : 'white',
-                                                color: (statuses[emp.id] === opt.id || (statuses[emp.id] === 'permission' && opt.id === 'present')) ? 'white' : 'var(--navy-600)',
+                                                background: (statuses[emp.id] === opt.id || (statuses[emp.id] === 'permission' && (opt.id === 'present' || opt.id === 'half-day') && presentHours[emp.id] > 0)) ? opt.color : 'white',
+                                                color: (statuses[emp.id] === opt.id || (statuses[emp.id] === 'permission' && (opt.id === 'present' || opt.id === 'half-day') && presentHours[emp.id] > 0)) ? 'white' : 'var(--navy-600)',
                                                 border: `1px solid ${opt.color}`,
                                                 flex: '1',
                                                 minWidth: '80px'
@@ -1081,8 +1149,8 @@ const MarkAttendanceModal = ({ employees, attendance, onClose, onMark }) => {
                                     ))}
                                 </div>
 
-                                {/* Hours Input for Present or Permission Status */}
-                                {(statuses[emp.id] === 'present' || statuses[emp.id] === 'permission') && (
+                                {/* Hours Input for Present, Half-day, or Permission Status */}
+                                {(statuses[emp.id] === 'present' || statuses[emp.id] === 'half-day' || statuses[emp.id] === 'permission') && (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
                                         {/* Hours Worked (for either) */}
                                         <div style={{

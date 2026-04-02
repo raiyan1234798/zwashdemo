@@ -41,9 +41,12 @@ const Dashboard = () => {
     const [todaySchedule, setTodaySchedule] = useState([]);
     const [weeklyRevenue, setWeeklyRevenue] = useState([]);
     const [lowStockItems, setLowStockItems] = useState([]);
+    const [frequentlyMovingItems, setFrequentlyMovingItems] = useState([]);
+    const [incompleteBookings, setIncompleteBookings] = useState([]);
     const [employeePerformance, setEmployeePerformance] = useState([]);
     const [loading, setLoading] = useState(true);
     const [comparison, setComparison] = useState({ revenue: 0, bookings: 0 });
+    const [showIncompleteModal, setShowIncompleteModal] = useState(false);
 
     useEffect(() => {
         fetchDashboardData();
@@ -138,12 +141,15 @@ const Dashboard = () => {
             setTodaySchedule(schedule.slice(0, 5));
 
             // Fetch metadata
-            const [customersSnap, servicesSnap, materialsSnap, empSnap] = await Promise.all([
+            const [customersSnap, servicesSnap, materialsSnap, empSnap, attendanceSnap] = await Promise.all([
                 getDocs(collection(db, 'customers')),
                 getDocs(query(collection(db, 'services'), where('isActive', '==', true))),
                 getDocs(collection(db, 'materials')),
-                getDocs(collection(db, 'adminUsers'))
+                getDocs(collection(db, 'adminUsers')),
+                getDocs(query(collection(db, 'attendance'), where('date', '==', todayStr)))
             ]);
+            
+            const absentCount = attendanceSnap.docs.filter(doc => doc.data().status === 'absent').length;
 
             // Real customer count logic (matching CRM exactly)
             const customerMap = new Map();
@@ -159,10 +165,39 @@ const Dashboard = () => {
                 if (key) customerMap.set(key, true);
             });
 
-            // Low stock
-            const lowStock = materialsSnap.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(m => m.isActive && m.currentStock <= (m.reorderLevel || 10))
+            // Incomplete Payments
+            const unpaid = allBookings.filter(b => b.status === 'completed' && (Number(b.paidAmount) || 0) < (Number(b.price) || 0));
+            setIncompleteBookings(unpaid);
+
+            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toLocaleDateString('en-CA');
+            const monthBookings = allBookings.filter(b => b.bookingDate >= monthStart && b.status === 'completed');
+
+            // Frequently moving materials & Low stock
+            const materials = materialsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const services = servicesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            
+            const serviceCounts = {};
+            monthBookings.forEach(b => {
+                serviceCounts[b.serviceId] = (serviceCounts[b.serviceId] || 0) + 1;
+            });
+            
+            materials.forEach(m => {
+                let usageScore = 0;
+                services.forEach(s => {
+                    const hasMaterial = s.materials?.some(mat => mat.materialId === m.id);
+                    if (hasMaterial) {
+                        usageScore += (serviceCounts[s.id] || 0);
+                    }
+                });
+                m.usageScore = usageScore;
+            });
+            
+            materials.sort((a, b) => b.usageScore - a.usageScore);
+            const frequentlyMoving = materials.filter(m => m.usageScore > 0).slice(0, 5);
+            setFrequentlyMovingItems(frequentlyMoving);
+
+            const lowStock = materials
+                .filter(m => m.isActive && m.currentStock <= (m.reorderLevel || 10) && m.usageScore > 0)
                 .slice(0, 3);
             setLowStockItems(lowStock);
 
@@ -170,9 +205,6 @@ const Dashboard = () => {
             const employees = empSnap.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }))
                 .filter(e => e.role === 'employee' && e.status === 'approved');
-
-            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toLocaleDateString('en-CA');
-            const monthBookings = allBookings.filter(b => b.bookingDate >= monthStart && b.status === 'completed');
 
             const perfData = employees.map(emp => {
                 const empBookings = monthBookings.filter(b => b.assignedEmployee === emp.id);
@@ -198,7 +230,9 @@ const Dashboard = () => {
                 pending, confirmed, inProgress, completed, todayRevenue,
                 totalCustomers: customerMap.size,
                 activeServices: servicesSnap.size,
-                avgRating: 4.5
+                avgRating: 4.5,
+                absentees: absentCount,
+                incompletePayments: unpaid.length
             });
 
             setComparison({ revenue: Number(revenueChange), bookings: 0 });
@@ -345,6 +379,20 @@ const Dashboard = () => {
                     <div className="stat-value">{todaySchedule.filter(b => b.status === 'completed').length}</div>
                     <div className="stat-footer">{stats.completed} Total All-time</div>
                 </div>
+                {hasPermission('employees') && (
+                    <div className="stat-card-modern" style={{ borderColor: '#ef4444' }}>
+                        <div className="stat-label">Today's Absentees</div>
+                        <div className="stat-value" style={{ color: '#ef4444' }}>{stats.absentees}</div>
+                        <div className="stat-footer">Staff missing</div>
+                    </div>
+                )}
+                {hasPermission('finance') && (
+                    <div className="stat-card-modern" style={{ borderColor: '#f97316', cursor: 'pointer' }} onClick={() => setShowIncompleteModal(true)}>
+                        <div className="stat-label">Incomplete Payments</div>
+                        <div className="stat-value" style={{ color: '#f97316' }}>{stats.incompletePayments}</div>
+                        <div className="stat-footer" style={{ textDecoration: 'underline' }}>Click to view records</div>
+                    </div>
+                )}
             </div>
 
             <div className="dashboard-section-title" style={{ marginTop: '2rem' }}>
@@ -438,7 +486,28 @@ const Dashboard = () => {
                     )}
                 </div>
 
-                {/* Low Inventory Alerts */}
+                {/* Frequently Moving Materials */}
+                {hasPermission('expenses') && frequentlyMovingItems.length > 0 && (
+                    <div className="dashboard-widget alert-widget">
+                        <div className="widget-header">
+                            <h3><TrendingUp size={18} /> Top Moving Materials</h3>
+                        </div>
+                        <div className="alert-list-modern">
+                            {frequentlyMovingItems.map(item => (
+                                <div key={item.id} className="alert-card" style={{ borderColor: '#cbd5e1' }}>
+                                    <div className="alert-icon-shell" style={{ background: '#f8fafc', color: '#0ea5e9' }}><Package size={16} /></div>
+                                    <div className="alert-content">
+                                        <h4>{item.name}</h4>
+                                        <p>Usage Score: <strong>{item.usageScore}</strong></p>
+                                    </div>
+                                    <Link to="/materials" className="reorder-link" style={{ background: '#f8fafc', color: '#0ea5e9' }}>View</Link>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Low Inventory Alerts (Only for frequently moving materials) */}
                 {hasPermission('expenses') && lowStockItems.length > 0 && (
                     <div className="dashboard-widget alert-widget">
                         <div className="widget-header">
@@ -519,6 +588,51 @@ const Dashboard = () => {
                     </table>
                 </div>
             </div>
+
+            {/* Incomplete Payments Modal */}
+            {showIncompleteModal && (
+                <div className="modal">
+                    <div className="modal-content modal-lg">
+                        <div className="modal-header">
+                            <h2>Incomplete Payments</h2>
+                            <button className="modal-close" onClick={() => setShowIncompleteModal(false)}>&times;</button>
+                        </div>
+                        <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                            {incompleteBookings.length === 0 ? (
+                                <p>No incomplete payments found.</p>
+                            ) : (
+                                <table className="modern-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Ref ID</th>
+                                            <th>Customer</th>
+                                            <th>Price</th>
+                                            <th>Paid</th>
+                                            <th>Due</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {incompleteBookings.map(b => (
+                                            <tr key={b.id}>
+                                                <td>{b.bookingReference || b.id.slice(0,8)}</td>
+                                                <td>{b.customerName || 'N/A'}</td>
+                                                <td>{formatCurrency(b.price || 0)}</td>
+                                                <td>{formatCurrency(b.paidAmount || 0)}</td>
+                                                <td style={{ color: '#ef4444', fontWeight: 'bold' }}>{formatCurrency((b.price || 0) - (b.paidAmount || 0))}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-secondary" onClick={() => setShowIncompleteModal(false)}>Close</button>
+                            <Link to="/payments" className="btn btn-primary" onClick={() => setShowIncompleteModal(false)}>Go to Payments</Link>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <style>{`
                 .dashboard-page {
                     padding: 0.5rem;

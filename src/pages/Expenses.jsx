@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { jsPDF } from 'jspdf';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import {
@@ -27,7 +28,9 @@ import {
     MoreVertical,
     Edit,
     Trash2,
-    Download
+    Download,
+    UserCog,
+    CheckCircle2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -46,11 +49,25 @@ const Expenses = () => {
     const [stats, setStats] = useState({ total: 0 });
     const [selectedDate, setSelectedDate] = useState(null);
     const [editingExpense, setEditingExpense] = useState(null);
+    const [employees, setEmployees] = useState([]);
 
     useEffect(() => {
         fetchCategories();
         fetchExpenses();
+        fetchEmployees();
     }, []);
+
+    const fetchEmployees = async () => {
+        try {
+            const usersRef = collection(db, 'adminUsers');
+            const q = query(usersRef, where('status', '==', 'approved'));
+            const snapshot = await getDocs(q);
+            const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setEmployees(list);
+        } catch (error) {
+            console.error('Error fetching employees:', error);
+        }
+    };
 
     const fetchCategories = async () => {
         try {
@@ -175,8 +192,89 @@ const Expenses = () => {
             case 'utilities': return <Zap size={18} />;
             case 'maintenance': return <Wrench size={18} />;
             case 'rent': return <Home size={18} />;
+            case 'advance salary': return <UserCog size={18} />;
             default: return <MoreVertical size={18} />;
         }
+    };
+
+    const generateAdvanceSlip = (emp, amount, date, note) => {
+        const doc = new jsPDF();
+        const margin = 20;
+        let y = 30;
+
+        // Header Background
+        doc.setFillColor(26, 31, 58); // var(--navy-900)
+        doc.rect(0, 0, 210, 40, 'F');
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(22);
+        doc.setFont('helvetica', 'bold');
+        doc.text('ADVANCE SALARY SLIP', 105, 25, { align: 'center' });
+
+        doc.setTextColor(30, 41, 59); // var(--navy-800)
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        y = 55;
+
+        // Employee Info Box
+        doc.setDrawColor(226, 232, 240); // var(--navy-200)
+        doc.setFillColor(248, 250, 252); // var(--navy-50)
+        doc.roundedRect(margin, y, 170, 45, 3, 3, 'FD');
+
+        y += 12;
+        doc.setFont('helvetica', 'bold');
+        doc.text('Employee Details:', margin + 10, y);
+        y += 8;
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Name: ${emp?.displayName || 'N/A'}`, margin + 10, y);
+        doc.text(`Employee ID: ${emp?.id?.slice(0, 8) || 'N/A'}`, margin + 100, y);
+        y += 8;
+        doc.text(`Role: ${emp?.role || 'N/A'}`, margin + 10, y);
+        doc.text(`Phone: ${emp?.phone || 'N/A'}`, margin + 100, y);
+
+        // Payment Info
+        y = 115;
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('PAYMENT DETAILS', margin, y);
+        y += 5;
+        doc.line(margin, y, 190, y);
+
+        y += 12;
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Advance Date:', margin + 10, y);
+        doc.setFont('helvetica', 'bold');
+        doc.text(date, margin + 60, y);
+
+        y += 10;
+        doc.setFont('helvetica', 'normal');
+        doc.text('Advance Amount:', margin + 10, y);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.setTextColor(16, 185, 129); // Success color
+        doc.text(`INR ${amount.toLocaleString()}`, margin + 60, y);
+
+        y += 12;
+        doc.setTextColor(30, 41, 59);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Description:', margin + 10, y);
+        doc.setFont('helvetica', 'italic');
+        doc.text(note || 'Salary Advance', margin + 60, y);
+
+        // Footer
+        y = 250;
+        doc.setDrawColor(226, 232, 240);
+        doc.line(margin, y, 190, y);
+        y += 10;
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(148, 163, 184); // Muted color
+        doc.text('This is an electronically generated slip. No signature required.', 105, y, { align: 'center' });
+        doc.text('Thank you for being a part of our team!', 105, y + 5, { align: 'center' });
+
+        doc.save(`AdvanceSlip_${emp?.displayName || 'Employee'}_${date}.pdf`);
     };
 
     const exportToExcel = () => {
@@ -568,6 +666,8 @@ const Expenses = () => {
                         fetchCategories();
                     }}
                     categories={categories}
+                    employees={employees}
+                    generateAdvanceSlip={generateAdvanceSlip}
                 />
             )}
 
@@ -777,10 +877,13 @@ const Expenses = () => {
     );
 };
 
-const ExpenseModal = ({ expense, onClose, onSuccess, categories }) => {
+const ExpenseModal = ({ expense, onClose, onSuccess, categories, employees, generateAdvanceSlip }) => {
+    const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [showNewCategory, setShowNewCategory] = useState(false);
     const [newCategory, setNewCategory] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState(expense?.category || '');
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -789,15 +892,27 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories }) => {
         const form = e.target;
         const formData = new FormData(form);
 
+        const isAdvance = selectedCategory === 'advance salary';
+        let employee = null;
+        if (isAdvance) {
+            employee = employees.find(emp => emp.id === selectedEmployeeId);
+        }
+
         const data = {
-            title: formData.get('title'),
+            title: isAdvance ? `Advance Salary - ${employee?.displayName || 'Unknown'}` : formData.get('title'),
             amount: Number(formData.get('amount')),
-            category: formData.get('category'),
+            category: selectedCategory,
             date: formData.get('date'),
             paymentMode: formData.get('paymentMode'),
             note: formData.get('note'),
             updatedAt: serverTimestamp()
         };
+
+        if (isAdvance && !selectedEmployeeId) {
+            alert('Please select an employee for the advance salary.');
+            setLoading(false);
+            return;
+        }
 
         try {
             let finalCategory = data.category;
@@ -814,17 +929,39 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories }) => {
 
             const finalData = { ...data, category: finalCategory };
 
+            let docId = '';
             if (expense) {
                 await updateDoc(doc(db, 'expenses', expense.id), finalData);
+                docId = expense.id;
             } else {
                 finalData.createdAt = serverTimestamp();
-                await addDoc(collection(db, 'expenses'), finalData);
+                const docRef = await addDoc(collection(db, 'expenses'), finalData);
+                docId = docRef.id;
+            }
+
+            // Also record in advances collection if it's an advance
+            if (isAdvance && employee) {
+                await addDoc(collection(db, 'advances'), {
+                    employeeId: employee.id,
+                    employeeName: employee.displayName,
+                    amount: finalData.amount,
+                    date: finalData.date,
+                    note: finalData.note || 'Salary Advance (Recorded in Expenses)',
+                    expenseId: docId,
+                    isAdvance: true,
+                    addedBy: user?.uid || 'admin',
+                    createdAt: serverTimestamp()
+                });
+
+                // Generate Slip
+                generateAdvanceSlip(employee, finalData.amount, finalData.date, finalData.note);
             }
 
             onSuccess();
             onClose();
         } catch (error) {
             console.error('Error saving expense:', error);
+            alert('Error saving expense. Check console for details.');
         } finally {
             setLoading(false);
         }
@@ -839,10 +976,12 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories }) => {
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
-                        <div className="form-group">
-                            <label>Title *</label>
-                            <input name="title" defaultValue={expense?.title} required placeholder="Car wash shampoo" />
-                        </div>
+                        {selectedCategory !== 'advance salary' && (
+                            <div className="form-group">
+                                <label>Title *</label>
+                                <input name="title" defaultValue={expense?.title} required placeholder="Car wash shampoo" />
+                            </div>
+                        )}
                         <div className="form-row">
                             <div className="form-group">
                                 <label>Amount (₹) *</label>
@@ -852,9 +991,16 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories }) => {
                                 <label>Category *</label>
                                 {!showNewCategory ? (
                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                        <select name="category" defaultValue={expense?.category} required style={{ flex: 1 }}>
+                                        <select
+                                            name="category"
+                                            value={selectedCategory}
+                                            onChange={(e) => setSelectedCategory(e.target.value)}
+                                            required
+                                            style={{ flex: 1 }}
+                                        >
                                             <option value="">Select Category</option>
-                                            {categories.map(cat => (
+                                            <option value="advance salary">Advance Salary</option>
+                                            {categories.filter(c => c !== 'advance salary').map(cat => (
                                                 <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
                                             ))}
                                         </select>
@@ -888,6 +1034,24 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories }) => {
                                 )}
                             </div>
                         </div>
+
+                        {selectedCategory === 'advance salary' && (
+                            <div className="form-group">
+                                <label>Select Employee *</label>
+                                <select
+                                    value={selectedEmployeeId}
+                                    onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                                    required
+                                >
+                                    <option value="">-- Choose Employee --</option>
+                                    {employees.map(emp => (
+                                        <option key={emp.id} value={emp.id}>
+                                            {emp.displayName} ({emp.role})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                         <div className="form-row">
                             <div className="form-group">
                                 <label>Date *</label>

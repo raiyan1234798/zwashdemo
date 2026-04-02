@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
+import { jsPDF } from 'jspdf';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
-import { collection, query, getDocs, orderBy, doc, getDoc, updateDoc, addDoc, deleteDoc, where, serverTimestamp } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, doc, getDoc, updateDoc, addDoc, deleteDoc, where, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { FileText, Download, Eye, Search, Printer, Receipt, MessageCircle, Copy, ExternalLink, Plus, Edit, Trash2, Archive, RotateCcw, X, Car, CheckCircle2, ShieldCheck } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import SplitPaymentSelector from '../components/SplitPaymentSelector';
@@ -23,6 +24,7 @@ const Invoices = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [exportPaymentFilter, setExportPaymentFilter] = useState('all');
+    const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
     const [settings, setSettings] = useState(null);
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [showModal, setShowModal] = useState(false);
@@ -775,8 +777,14 @@ const Invoices = () => {
         const invDate = inv.bookingDate || inv.invoiceDate;
         if (dateFilter.start && invDate < dateFilter.start) return false;
         if (dateFilter.end && invDate > dateFilter.end) return false;
+        
+        // UI Payment Status Filter
+        if (paymentStatusFilter !== 'all') {
+            const status = inv.paymentStatus || 'unpaid';
+            if (status !== paymentStatusFilter) return false;
+        }
 
-        // Payment Method Filter
+        // Export Payment Method Filter (kept for legacy/export logic)
         if (exportPaymentFilter !== 'all') {
             const methodTotals = {};
             if (inv.paymentHistory && Array.isArray(inv.paymentHistory)) {
@@ -987,6 +995,18 @@ const Invoices = () => {
                         </button>
                     )}
                 </div>
+
+                {/* UI Status Filter */}
+                <select
+                    value={paymentStatusFilter}
+                    onChange={(e) => setPaymentStatusFilter(e.target.value)}
+                    style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--navy-100)', outline: 'none', background: 'white', color: 'var(--navy-700)', fontSize: '0.9rem' }}
+                >
+                    <option value="all">All Payments</option>
+                    <option value="paid">Paid</option>
+                    <option value="unpaid">Unpaid</option>
+                    <option value="partial">Partial</option>
+                </select>
 
                 <div className="invoice-header-actions">
                     <div className="export-tools">
@@ -1836,7 +1856,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
     const [selectedAmcPlan, setSelectedAmcPlan] = useState(null);
 
     useEffect(() => {
-        const fetchServicesAndPlans = async () => {
+        const fetchInitialData = async () => {
             try {
                 // Fetch Services
                 const sQ = query(collection(db, 'services'), where('isActive', '==', true));
@@ -1850,10 +1870,10 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                 const pData = pSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setAmcPlans(pData);
             } catch (error) {
-                console.error("Error fetching services", error);
+                console.error("Error fetching initial data", error);
             }
         };
-        fetchServicesAndPlans();
+        fetchInitialData();
     }, []);
 
     const combinedList = [
@@ -1914,20 +1934,9 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
             if (paidAmount >= totalPrice && totalPrice > 0) paymentStatus = 'paid';
             else if (paidAmount > 0) paymentStatus = 'partial';
 
-            const paymentHistory = isPaymentReceived ? [{
-                date: new Date().toISOString(),
-                amount: paidAmount,
-                splits: paymentSplits.filter(s => Number(s.amount) > 0).map(s => ({ mode: s.mode, amount: Number(s.amount) })),
-                recordedBy: user?.uid || 'unknown',
-                note: 'Initial payment at invoice creation'
-            }] : [];
-
             const isAmc = selectedAmcPlan != null;
 
-            let customerId = 'unknown';
-
-            // If it's an AMC, we need a customer. Let's create or find one if possible.
-            // For simplicity, we just save the AMC subscription with the details provided in the modal.
+            // Create standard invoice for both Service and AMC
             if (isAmc) {
                 const startDate = new Date(formData.invoiceDate);
                 const expiryDate = new Date(formData.invoiceDate);
@@ -1970,7 +1979,6 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                 });
             }
 
-            // Create standard invoice for both Service and AMC
             await addDoc(collection(db, 'invoices'), {
                 ...formData,
                 invoiceNumber: sequentialInv,
@@ -1986,6 +1994,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                 isManual: true,
                 source: 'invoice'
             });
+
             onSuccess();
             onClose();
         } catch (error) {
@@ -2003,6 +2012,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                     <h2><Plus size={20} /> Create Manual Invoice</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
+
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
                         <div className="form-row">
@@ -2083,7 +2093,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                             <input
                                 value={formData.licensePlate}
                                 onChange={e => setFormData({ ...formData, licensePlate: e.target.value })}
-                                placeholder="TN-00-AA-0000"
+                                placeholder="e.g. TN 01 AB 1234"
                                 style={{ textTransform: 'uppercase' }}
                             />
                         </div>
