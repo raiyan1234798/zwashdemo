@@ -40,6 +40,13 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
+const formatDuration = (hours) => {
+    const totalHours = Number(hours) || 0;
+    const h = Math.floor(totalHours);
+    const m = Math.round((totalHours - h) * 60);
+    return `${h}h ${m}m`;
+};
+
 const Attendance = () => {
     const { hasPermission, userProfile, isAdmin } = useAuth();
     const [employees, setEmployees] = useState([]);
@@ -208,7 +215,7 @@ const Attendance = () => {
             }
 
             row['Total Present'] = totalPresent;
-            row['Total Overtime'] = totalOt.toFixed(1);
+            row['Total Overtime'] = formatDuration(totalOt);
             return row;
         });
 
@@ -441,8 +448,8 @@ const Attendance = () => {
                                                     <td data-label="Half Day">{halfDays}</td>
                                                     <td data-label="Paid Leave">{paidLeaves}</td>
                                                     <td data-label="Unpaid Leave">{unpaidLeaves}</td>
-                                                    <td data-label="Permission (Hrs)">{permissionHrs.toFixed(1)}</td>
-                                                    <td data-label="Overtime (Hrs)">{overtimeHrs.toFixed(1)}</td>
+                                                    <td data-label="Permission (Hrs)">{formatDuration(permissionHrs)}</td>
+                                                    <td data-label="Overtime (Hrs)">{formatDuration(overtimeHrs)}</td>
                                                 </tr>
                                             );
                                         })}
@@ -571,7 +578,7 @@ const Attendance = () => {
                                             onClick={() => setFilterType(filterType === 'permission' ? 'all' : 'permission')}
                                         >
                                             <span style={{ fontSize: '0.85rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Permission</span>
-                                            <strong style={{ fontSize: '1.75rem', color: '#0ea5e9' }}>{permissionHrs.toFixed(1)}h</strong>
+                                            <strong style={{ fontSize: '1.75rem', color: '#0ea5e9' }}>{formatDuration(permissionHrs)}</strong>
                                         </div>
                                         <div
                                             className={`stat-card mini ${filterType === 'overtime' ? 'active' : ''}`}
@@ -584,7 +591,7 @@ const Attendance = () => {
                                             onClick={() => setFilterType(filterType === 'overtime' ? 'all' : 'overtime')}
                                         >
                                             <span style={{ fontSize: '0.85rem', color: 'var(--navy-500)', display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>Overtime</span>
-                                            <strong style={{ fontSize: '1.75rem', color: '#8b5cf6' }}>{overtimeHrs.toFixed(1)}h</strong>
+                                            <strong style={{ fontSize: '1.75rem', color: '#8b5cf6' }}>{formatDuration(overtimeHrs)}</strong>
                                         </div>
                                     </div>
 
@@ -631,12 +638,12 @@ const Attendance = () => {
                                                             {dateStr}
                                                             {hasPermissionBadge && (
                                                                 <span style={{ fontSize: '0.7rem', opacity: 0.8, background: 'rgba(3, 105, 161, 0.1)', padding: '1px 4px', borderRadius: '3px' }}>
-                                                                    P: {Number(a.permissionHours).toFixed(1)}h
+                                                                    P: {formatDuration(a.permissionHours)}
                                                                 </span>
                                                             )}
                                                             {hasOtBadge && (
                                                                 <span style={{ fontSize: '0.7rem', opacity: 0.8, background: 'rgba(124, 58, 237, 0.1)', padding: '1px 4px', borderRadius: '3px', color: '#7c3aed' }}>
-                                                                    OT: {Number(a.overtimeHours).toFixed(1)}h
+                                                                    OT: {formatDuration(a.overtimeHours)}
                                                                 </span>
                                                             )}
                                                             {isAbsent && <span style={{ fontSize: '0.7rem' }}>(A)</span>}

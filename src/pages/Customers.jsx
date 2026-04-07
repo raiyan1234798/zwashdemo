@@ -462,7 +462,7 @@ const CustomerModal = ({ onClose, onSuccess }) => {
     };
 
     const handlePlateChange = (e) => {
-        const val = e.target.value.toUpperCase();
+        const val = e.target.value;
         setPlateValue(val);
         setPlateError(validatePlate(val));
     };
@@ -589,9 +589,8 @@ const EditCustomerModal = ({ customer, onClose, onSuccess, userProfile }) => {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        const newVal = name === 'licensePlate' ? value.toUpperCase() : value;
-        setFormData(prev => ({ ...prev, [name]: newVal }));
-        if (name === 'licensePlate') setPlateError(validatePlate(newVal));
+        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'licensePlate') setPlateError(validatePlate(value));
     };
 
     const handleSubmit = async (e) => {

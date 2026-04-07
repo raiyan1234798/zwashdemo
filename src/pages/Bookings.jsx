@@ -973,9 +973,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
     };
 
     const handlePlateChange = (val) => {
-        const upper = val.toUpperCase();
-        setFormData(prev => ({ ...prev, licensePlate: upper }));
-        setPlateError(validatePlate(upper));
+        setFormData(prev => ({ ...prev, licensePlate: val }));
+        setPlateError(validatePlate(val));
     };
 
     // Advance Payment State
