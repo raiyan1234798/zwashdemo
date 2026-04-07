@@ -22,7 +22,7 @@ import {
     getSettings,
     formatTime12Hour as formatTimeEngine
 } from '../utils/schedulingEngine';
-import { getNextInvoiceNumber } from '../utils/invoiceUtils';
+import { getNextInvoiceNumber, getNextBookingNumber } from '../utils/invoiceUtils';
 import {
     ClipboardList,
     Plus,
@@ -356,7 +356,7 @@ const Bookings = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">
-                            {bookings.filter(b => ['hatchback','sedan','suv','luxury_suv'].includes(b.vehicleType)).length}
+                            {bookings.filter(b => ['hatchback', 'sedan', 'suv', 'luxury_suv'].includes(b.vehicleType)).length}
                         </span>
                         <span className="stat-label">Car Bookings</span>
                     </div>
@@ -367,7 +367,7 @@ const Bookings = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">
-                            {bookings.filter(b => ['scooter','bike','superbike'].includes(b.vehicleType)).length}
+                            {bookings.filter(b => ['scooter', 'bike', 'superbike'].includes(b.vehicleType)).length}
                         </span>
                         <span className="stat-label">Bike Bookings</span>
                     </div>
@@ -1320,37 +1320,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
 
         setLoading(true);
 
-        // Generate service short code from first service name
-        const getServiceCode = (serviceName) => {
-            if (!serviceName) return 'XX';
-            // Map common service names to short codes
-            const codeMap = {
-                'commando clean': 'CC',
-                'commando cleaning': 'CC',
-                'quick strike wash': 'QSW',
-                "commander's finish": 'CF',
-                'bullet shield teflon armor': 'BST',
-                'gear guard interior': 'GGI',
-                'underbody armor': 'UBA',
-                "rider's regiment cleanse": 'RRC',
-                'salt mark stain remover': 'SMS',
-                'silver coating': 'SC',
-                'ac gas check': 'AGC'
-            };
-            const lowerName = serviceName.toLowerCase();
-            if (codeMap[lowerName]) return codeMap[lowerName];
-            // Generate code from first letters of words
-            return serviceName.split(' ').map(w => w[0]?.toUpperCase() || '').join('').slice(0, 3);
-        };
-
-        const dateStr = formData.bookingDate.replace(/-/g, '');
-        const serviceCode = selectedServices.length > 1
-            ? 'MX' // Multiple services
-            : getServiceCode(selectedServices[0]?.name || 'SVC');
-        const counter = Math.floor(Math.random() * 99) + 1; // Add small random to avoid duplicates
-        const bookingRef = `DC-${dateStr}-${serviceCode}${counter.toString().padStart(2, '0')}`;
-
         try {
+            const bookingRef = await getNextBookingNumber(db, formData.bookingDate);
             // Calculate payment status
             const currentPaymentTotal = paymentSplits.reduce((sum, split) => sum + (Number(split.amount) || 0), 0);
             const balanceAmt = totalPrice - currentPaymentTotal;
@@ -1624,7 +1595,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                             )}
                         </div>
 
-						{/* STEP 2: Vehicle Type Selection */}
+                        {/* STEP 2: Vehicle Type Selection */}
                         <div className="form-group" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1.5rem' }}>
                             <label style={{ fontSize: '1rem', color: 'var(--navy-800)', marginBottom: '0.75rem', display: 'block' }}>🚗 Step 2: Vehicle Type Selection</label>
                             <div className="vehicle-type-sections">
@@ -1885,103 +1856,103 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                         <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1.5rem' }}>
                             <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>📅 Step 4: Select Date & Time</label>
                             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-                            <div className="form-group" style={{ flex: 1 }}>
-                                <label>Date</label>
-                                <input
-                                    type="date"
-                                    value={formData.bookingDate}
-                                    onChange={(e) => setFormData({ ...formData, bookingDate: e.target.value })}
-                                    min={new Date().toISOString().split('T')[0]}
-                                />
-                            </div>
-                            <div className="form-group" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    Time
-                                    <button
-                                        type="button"
-                                        className="btn-link"
-                                        onClick={() => {
-                                            const currentVal = prompt("Add extra duration (minutes):", "0");
-                                            if (currentVal && !isNaN(currentVal)) {
-                                                setExtraTime(Number(currentVal));
-                                            }
-                                        }}
-                                        style={{
-                                            background: 'none', border: 'none', color: 'var(--primary)',
-                                            fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline'
-                                        }}
-                                    >
-                                        + Extra Time {extraTime > 0 ? `(${extraTime}m)` : ''}
-                                    </button>
-                                </label>
-                                <input
-                                    type="time"
-                                    value={formData.startTime}
-                                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Dynamic Available Slots - Duration Based */}
-                        <div className="slots-container" style={{ marginBottom: '1.5rem' }}>
-                            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                                Available Times {selectedServices.length > 0 && <span style={{ fontWeight: '400', color: 'var(--navy-500)' }}>({totalDuration} min service)</span>}
-                            </label>
-
-                            {selectedServices.length === 0 ? (
-                                <div style={{ padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px', textAlign: 'center', color: 'var(--navy-500)' }}>
-                                    ⬆️ Please select a service first to see available times
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label>Date</label>
+                                    <input
+                                        type="date"
+                                        value={formData.bookingDate}
+                                        onChange={(e) => setFormData({ ...formData, bookingDate: e.target.value })}
+                                        min={new Date().toISOString().split('T')[0]}
+                                    />
                                 </div>
-                            ) : slotsLoading ? (
-                                <div style={{ padding: '1rem', textAlign: 'center' }}>
-                                    <div className="loader is-small"></div>
-                                    <p style={{ marginTop: '0.5rem', color: 'var(--navy-500)' }}>Calculating available times...</p>
-                                </div>
-                            ) : availableSlots.length === 0 ? (
-                                <div style={{ padding: '1rem', background: '#fef2f2', borderRadius: '8px', textAlign: 'center', color: '#991b1b' }}>
-                                    ❌ No available time slots for this date and service duration
-                                </div>
-                            ) : (
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: '8px' }}>
-                                    {availableSlots.map((slot, index) => (
+                                <div className="form-group" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        Time
                                         <button
-                                            key={index}
                                             type="button"
-                                            disabled={!slot.available}
-                                            onClick={() => slot.available && setFormData({ ...formData, startTime: slot.time })}
-                                            style={{
-                                                padding: '0.6rem 0.4rem',
-                                                borderRadius: '8px',
-                                                border: '2px solid',
-                                                fontSize: '0.85rem',
-                                                fontWeight: '500',
-                                                cursor: slot.available ? 'pointer' : 'not-allowed',
-                                                background: !slot.available
-                                                    ? '#fee2e2' // Light red for booked
-                                                    : formData.startTime === slot.time ? 'var(--success)' : 'white',
-                                                borderColor: !slot.available
-                                                    ? '#ef4444' // Red border
-                                                    : formData.startTime === slot.time ? 'var(--success)' : 'var(--navy-200)',
-                                                color: !slot.available
-                                                    ? '#b91c1c' // Dark red text
-                                                    : formData.startTime === slot.time ? 'white' : 'var(--navy-700)',
-                                                transition: 'all 0.15s ease'
+                                            className="btn-link"
+                                            onClick={() => {
+                                                const currentVal = prompt("Add extra duration (minutes):", "0");
+                                                if (currentVal && !isNaN(currentVal)) {
+                                                    setExtraTime(Number(currentVal));
+                                                }
                                             }}
-                                            title={!slot.available ? (slot.reason || 'Unavailable') : `Blocks until ${slot.blockedUntil}`}
+                                            style={{
+                                                background: 'none', border: 'none', color: 'var(--primary)',
+                                                fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline'
+                                            }}
                                         >
-                                            {slot.display}
+                                            + Extra Time {extraTime > 0 ? `(${extraTime}m)` : ''}
                                         </button>
-                                    ))}
+                                    </label>
+                                    <input
+                                        type="time"
+                                        value={formData.startTime}
+                                        onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                                    />
                                 </div>
-                            )}
- 
-                            {selectedServices.length > 0 && availableSlots.length > 0 && (
-                                <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--navy-500)' }}>
-                                    ℹ️ Showing {availableSlots.length} available start times. Times account for service duration + buffer.
-                                </div>
-                            )}
+                            </div>
+
+                            {/* Dynamic Available Slots - Duration Based */}
+                            <div className="slots-container" style={{ marginBottom: '1.5rem' }}>
+                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                                    Available Times {selectedServices.length > 0 && <span style={{ fontWeight: '400', color: 'var(--navy-500)' }}>({totalDuration} min service)</span>}
+                                </label>
+
+                                {selectedServices.length === 0 ? (
+                                    <div style={{ padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px', textAlign: 'center', color: 'var(--navy-500)' }}>
+                                        ⬆️ Please select a service first to see available times
+                                    </div>
+                                ) : slotsLoading ? (
+                                    <div style={{ padding: '1rem', textAlign: 'center' }}>
+                                        <div className="loader is-small"></div>
+                                        <p style={{ marginTop: '0.5rem', color: 'var(--navy-500)' }}>Calculating available times...</p>
+                                    </div>
+                                ) : availableSlots.length === 0 ? (
+                                    <div style={{ padding: '1rem', background: '#fef2f2', borderRadius: '8px', textAlign: 'center', color: '#991b1b' }}>
+                                        ❌ No available time slots for this date and service duration
+                                    </div>
+                                ) : (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: '8px' }}>
+                                        {availableSlots.map((slot, index) => (
+                                            <button
+                                                key={index}
+                                                type="button"
+                                                disabled={!slot.available}
+                                                onClick={() => slot.available && setFormData({ ...formData, startTime: slot.time })}
+                                                style={{
+                                                    padding: '0.6rem 0.4rem',
+                                                    borderRadius: '8px',
+                                                    border: '2px solid',
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: '500',
+                                                    cursor: slot.available ? 'pointer' : 'not-allowed',
+                                                    background: !slot.available
+                                                        ? '#fee2e2' // Light red for booked
+                                                        : formData.startTime === slot.time ? 'var(--success)' : 'white',
+                                                    borderColor: !slot.available
+                                                        ? '#ef4444' // Red border
+                                                        : formData.startTime === slot.time ? 'var(--success)' : 'var(--navy-200)',
+                                                    color: !slot.available
+                                                        ? '#b91c1c' // Dark red text
+                                                        : formData.startTime === slot.time ? 'white' : 'var(--navy-700)',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                title={!slot.available ? (slot.reason || 'Unavailable') : `Blocks until ${slot.blockedUntil}`}
+                                            >
+                                                {slot.display}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {selectedServices.length > 0 && availableSlots.length > 0 && (
+                                    <div style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--navy-500)' }}>
+                                        ℹ️ Showing {availableSlots.length} available start times. Times account for service duration + buffer.
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
 
 
 
@@ -2729,7 +2700,7 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto', padding: '1rem' }}>
-                        
+
                         {/* Section 1: Customer & Vehicle Info */}
                         <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1rem' }}>
                             <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>👤 Customer & Vehicle Info</label>
@@ -2812,7 +2783,7 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                         {/* Section 3: Service Details */}
                         <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1rem' }}>
                             <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>⚙️ Service Details</label>
-                            
+
                             {/* Service Category with Add Option */}
                             <div className="form-group">
                                 <label>Service Category</label>
