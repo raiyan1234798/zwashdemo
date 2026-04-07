@@ -38,7 +38,8 @@ import {
     Droplets,
     CheckCircle,
     Trash2,
-    Archive
+    Archive,
+    RotateCcw
 } from 'lucide-react';
 import SplitPaymentSelector from '../components/SplitPaymentSelector';
 
@@ -153,6 +154,26 @@ const Bookings = () => {
     const handleEditBooking = (booking) => {
         setEditingBooking(booking);
         setShowEditModal(true);
+    };
+
+    const handleRestoreBooking = async (booking) => {
+        if (!window.confirm('Are you sure you want to restore this archived booking?')) {
+            return;
+        }
+        try {
+            const batch = writeBatch(db);
+            // Move back to bookings
+            const activeRef = doc(db, 'bookings', booking.id);
+            // Destructure to remove archivedAt from the active document
+            const { archivedAt, ...rest } = booking;
+            batch.set(activeRef, rest);
+            // Delete from archives
+            batch.delete(doc(db, 'archivedBookings', booking.id));
+            await batch.commit();
+            fetchBookings();
+        } catch (error) {
+            console.error('Error restoring booking:', error);
+        }
     };
 
     const handleDeleteBooking = async (booking) => {
@@ -516,6 +537,16 @@ const Bookings = () => {
                                                                     )}
                                                                 </>
                                                             )}
+                                                            {viewMode === 'archived' && (
+                                                                <button
+                                                                    className="btn-icon"
+                                                                    title="Recover/Restore"
+                                                                    onClick={() => handleRestoreBooking(booking)}
+                                                                    style={{ color: 'var(--primary)' }}
+                                                                >
+                                                                    <RotateCcw size={16} />
+                                                                </button>
+                                                            )}
                                                             {hasPermission('bookings', 'delete') && (
                                                                 <button
                                                                     className="btn-icon header-actions"
@@ -616,6 +647,11 @@ const Bookings = () => {
                                                     >
                                                         {booking.status === 'pending_confirmation' ? 'Confirm' :
                                                             booking.status === 'confirmed' ? 'Start' : 'Complete'}
+                                                    </button>
+                                                )}
+                                                {viewMode === 'archived' && (
+                                                    <button className="btn btn-sm btn-primary" onClick={() => handleRestoreBooking(booking)}>
+                                                        <RotateCcw size={14} style={{ marginRight: '4px' }} /> Restore
                                                     </button>
                                                 )}
                                                 {hasPermission('bookings', 'delete') && (

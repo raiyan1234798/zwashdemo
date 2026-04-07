@@ -110,19 +110,33 @@ const Invoices = () => {
         }
     };
 
-    // Archive an invoice (soft delete)
+    // Archive or Permanently Delete an invoice
     const archiveInvoice = async (invoice) => {
-        if (!window.confirm(`Archive invoice for ${invoice.customerName || 'this customer'}?`)) return;
-        try {
-            const collectionName = invoice.source === 'invoice' ? 'invoices' : 'bookings';
-            await updateDoc(doc(db, collectionName, invoice.id), {
-                isArchived: true,
-                archivedAt: serverTimestamp()
-            });
-            fetchInvoices();
-        } catch (error) {
-            console.error('Error archiving invoice:', error);
-            alert('Error archiving invoice');
+        if (activeTab === 'archived') {
+            // Permanent Delete
+            if (!window.confirm(`PERMANENTLY DELETE invoice #${invoice.invoiceNumber || invoice.id.slice(0, 8)} for ${invoice.customerName}? This cannot be undone.`)) return;
+            try {
+                const collectionName = invoice.source === 'invoice' ? 'invoices' : 'bookings';
+                await deleteDoc(doc(db, collectionName, invoice.id));
+                fetchInvoices();
+            } catch (error) {
+                console.error('Error deleting invoice:', error);
+                alert('Error deleting invoice');
+            }
+        } else {
+            // Soft Archive
+            if (!window.confirm(`Archive invoice for ${invoice.customerName || 'this customer'}?`)) return;
+            try {
+                const collectionName = invoice.source === 'invoice' ? 'invoices' : 'bookings';
+                await updateDoc(doc(db, collectionName, invoice.id), {
+                    isArchived: true,
+                    archivedAt: serverTimestamp()
+                });
+                fetchInvoices();
+            } catch (error) {
+                console.error('Error archiving invoice:', error);
+                alert('Error archiving invoice');
+            }
         }
     };
 
@@ -1176,6 +1190,16 @@ const Invoices = () => {
                                                                 <Edit size={14} />
                                                             </button>
                                                         )}
+                                                        {/* Restore Button (only in archived tab) */}
+                                                        {activeTab === 'archived' && (
+                                                            <button
+                                                                className="btn btn-sm btn-primary"
+                                                                onClick={() => restoreInvoice(invoice)}
+                                                                title="Restore Invoice"
+                                                            >
+                                                                <RotateCcw size={14} />
+                                                            </button>
+                                                        )}
                                                         {/* Archive/Delete Button */}
                                                         {hasPermission('bookings', 'delete') && (
                                                             <button
@@ -1268,6 +1292,16 @@ const Invoices = () => {
                                                 title="Edit"
                                             >
                                                 <Edit size={16} />
+                                            </button>
+                                        )}
+                                        {/* Restore Button (Mobile) */}
+                                        {activeTab === 'archived' && (
+                                            <button
+                                                className="btn btn-sm btn-primary"
+                                                onClick={() => restoreInvoice(invoice)}
+                                                style={{ flex: 1 }}
+                                            >
+                                                <RotateCcw size={16} /> Restore
                                             </button>
                                         )}
                                         {/* Archive Button */}
