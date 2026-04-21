@@ -95,6 +95,9 @@ const Analytics = () => {
             const bookingsData = allBookingsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setAllBookings(bookingsData);
 
+            // Month-scoped bookings (used throughout for stats cards)
+            const monthBookings = bookingsData.filter(b => b.bookingDate >= monthStartStr);
+
             // Fetch Employees for mapping
             const empSnap = await getDocs(query(collection(db, 'adminUsers'), where('status', '==', 'approved')));
             const empMap = {};
@@ -141,22 +144,6 @@ const Analytics = () => {
                 .filter(e => e.date === todayStr)
                 .reduce((sum, e) => sum + (e.amount || 0), 0);
             
-            // Stats Object Updated
-            const finalStats = {
-                todayRevenue,
-                weekRevenue,
-                monthRevenue,
-                customRevenue,
-                totalExpenses: monthExpenses,
-                todayExpenses,
-                customExpenses,
-                totalBookings: monthBookings.length,
-                carBookings: monthBookings.filter(b => ['hatchback','sedan','suv','luxury_suv'].includes(b.vehicleType)).length,
-                bikeBookings: monthBookings.filter(b => ['scooter','bike','superbike'].includes(b.vehicleType)).length,
-                netProfit: monthRevenue - monthExpenses,
-                growthRate: growthRate
-            };
-            setStats(finalStats);
 
             // Service breakdown (Based on Custom Range)
             const rangeBookings = bookingsForCalculations.filter(b => isAllTime || (b.bookingDate >= startDate && b.bookingDate <= endDate));
@@ -253,8 +240,8 @@ const Analytics = () => {
 
             // Misc Stats
             const completedCount = monthBookings.filter(b => b.status === 'completed').length;
-            const pendingBookings = monthBookings.filter(b => b.status === 'pending_confirmation' || b.status === 'confirmed').length;
-            const cancelledBookings = monthBookings.filter(b => b.status === 'cancelled').length;
+            const pendingBookingsCount = monthBookings.filter(b => b.status === 'pending_confirmation' || b.status === 'confirmed').length;
+            const cancelledBookingsCount = monthBookings.filter(b => b.status === 'cancelled').length;
 
             // Average order value
             const averageOrderValue = completedCount > 0 ? monthRevenue / completedCount : 0;
@@ -278,17 +265,19 @@ const Analytics = () => {
                 weekRevenue,
                 monthRevenue,
                 customRevenue,
+                todayExpenses,
+                customExpenses,
                 totalBookings: monthBookings.length,
                 completedBookings: completedCount,
-                pendingBookings,
-                cancelledBookings,
+                pendingBookings: pendingBookingsCount,
+                cancelledBookings: cancelledBookingsCount,
                 totalCustomers: customersSnap.size,
                 totalExpenses: monthExpenses,
                 netProfit: monthRevenue - monthExpenses,
                 averageOrderValue,
                 growthRate,
-                carBookings: monthBookings.filter(b => b.vehicleType?.toLowerCase() === 'car').length,
-                bikeBookings: monthBookings.filter(b => b.vehicleType?.toLowerCase() === 'bike').length
+                carBookings: monthBookings.filter(b => ['hatchback', 'sedan', 'suv', 'luxury_suv'].includes(b.vehicleType)).length,
+                bikeBookings: monthBookings.filter(b => ['scooter', 'bike', 'superbike'].includes(b.vehicleType)).length
             });
 
             // Log for debugging if empty

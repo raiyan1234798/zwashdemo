@@ -1409,6 +1409,13 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                 serviceName: selectedServices.map(s => s.name).join(' + '),
                 serviceCategory: selectedServices[0].category || 'Detailed Wash',
 
+                // Per-service breakdown for invoice PDF itemisation
+                serviceBreakdown: selectedServices.map(s => ({
+                    name: s.name,
+                    price: getServicePrice(s),
+                    quantity: 1
+                })),
+
                 // Totals
                 serviceDuration: totalDuration,
                 extraTime: extraTime,

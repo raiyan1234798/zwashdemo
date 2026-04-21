@@ -464,6 +464,36 @@ const Invoices = () => {
         const totalGst = cgstAmount + sgstAmount;
         const totalAmount = baseAmount + totalGst;
 
+        // Build line items — check three sources in priority order:
+        // 1. invoice.items (set by completion flow with materials)
+        // 2. invoice.serviceBreakdown (stored on new bookings, per-service price breakdown)
+        // 3. Fallback: single row using combined serviceName / price
+        const lineItems = (invoice.items && invoice.items.length > 0)
+            ? invoice.items
+            : (invoice.serviceBreakdown && invoice.serviceBreakdown.length > 0)
+                ? invoice.serviceBreakdown.map(s => ({
+                    description: s.name,
+                    quantity: s.quantity ?? 1,
+                    price: s.price ?? 0,
+                    total: (s.price ?? 0) * (s.quantity ?? 1)
+                }))
+                : [{
+                    description: invoice.serviceName || 'Service',
+                    quantity: 1,
+                    price: baseAmount,
+                    total: baseAmount
+                }];
+
+        // Render table rows HTML
+        const itemRowsHtml = lineItems.map(item => `
+            <tr>
+                <td><strong>${item.description || item.serviceName || 'Service'}</strong></td>
+                <td>${item.quantity ?? 1}</td>
+                <td class="text-right">${formatCurrency(item.price ?? item.rate ?? 0)}</td>
+                <td class="text-right"><strong>${formatCurrency(item.total ?? item.amount ?? 0)}</strong></td>
+            </tr>
+        `).join('');
+
         // Professional navy/indigo color scheme matching detailed branding
         const brandPrimary = '#1a1f3a';      // Deep navy
         const brandSecondary = '#2e3856';    // Medium navy
@@ -625,7 +655,7 @@ const Invoices = () => {
             </div>
             <div class="invoice-title">
                 <h2>${includeGST ? 'Tax Invoice' : 'Invoice'}</h2>
-                <p class="invoice-number">#${invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}</p>
+                <p class="invoice-number">#${invoice.invoiceNumber || invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}</p>
                 <p class="invoice-date">Date: ${invoice.bookingDate || invoice.invoiceDate}</p>
             </div>
         </div>
@@ -654,12 +684,7 @@ const Invoices = () => {
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td><strong>${invoice.serviceName}</strong></td>
-                    <td>1</td>
-                    <td class="text-right">${formatCurrency(baseAmount)}</td>
-                    <td class="text-right"><strong>${formatCurrency(baseAmount)}</strong></td>
-                </tr>
+                ${itemRowsHtml}
             </tbody>
         </table>
         
@@ -732,26 +757,48 @@ const Invoices = () => {
         setShowModal(true);
     };
 
-    // Generate shareable invoice link
+    // Generate shareable invoice link (points to public /invoice/:id route on this app)
     const getInvoiceLink = (invoice) => {
-        const baseUrl = window.location.origin.replace('5173', '5174'); // Customer app port
-        return `${baseUrl}/invoice/${invoice.id}`;
+        return `${window.location.origin}/invoice/${invoice.id}`;
     };
 
     // Share invoice via WhatsApp
     const shareViaWhatsApp = (invoice) => {
         const link = getInvoiceLink(invoice);
+
+        // Build per-service breakdown lines
+        let breakdownLines = '';
+        if (invoice.serviceBreakdown && invoice.serviceBreakdown.length > 1) {
+            breakdownLines = invoice.serviceBreakdown
+                .map(s => `  • ${s.name}: ${formatCurrency(s.price ?? 0)}`)
+                .join('\n');
+            breakdownLines = `\n*Services:*\n${breakdownLines}\n*Total: ${formatCurrency(invoice.price)}*`;
+        } else if (invoice.items && invoice.items.length > 1) {
+            breakdownLines = invoice.items
+                .map(i => `  • ${i.description || i.serviceName}: ${formatCurrency(i.total ?? i.amount ?? 0)}`)
+                .join('\n');
+            breakdownLines = `\n*Services:*\n${breakdownLines}\n*Total: ${formatCurrency(invoice.price)}*`;
+        } else {
+            breakdownLines = `\n*Amount:* ${formatCurrency(invoice.price)}`;
+        }
+
+        const googleReviewLink = `https://www.google.com/search?q=Detailing+Commando+Reviews&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qORCfYOrPO9_r5Xrdz6OLn964mj5mum-Qd5jzlmEC3NzGY3rc7RSf9uLDn98lKI0GK6PNYXpax3VWlULxs2zb67zJBn8xu53xcXqOxgcv5ryhvPi0bQ%3D%3D&sa=X#lrd=0x47bf03f78d9c21fb:0xd9ce5265093065b2,3,,,,`;
+
+
         const message =
-            `Hi! Here's your invoice from *${(settings?.businessName || 'Detailing Commando').trim()}*\n\n` +
-            `*Invoice:* #${invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}\n` +
-            `*Service:* ${invoice.serviceName}\n` +
-            `*Amount:* ${formatCurrency(invoice.price)}\n` +
-            `*Date:* ${invoice.bookingDate || invoice.invoiceDate}\n\n` +
-            `View your invoice online: ${link}\n\n` +
-            `Thank you for choosing *Detailing Commando*!\n\n` +
+            `Hi ${invoice.customerName ? invoice.customerName.split(' ')[0] : ''}! Here's your invoice from *${(settings?.businessName || 'Detailing Commando').trim()}*\n\n` +
+            `*Invoice:* #${invoice.invoiceNumber || invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}\n` +
+            `*Service:* ${invoice.serviceName}` +
+            breakdownLines +
+            `\n*Date:* ${invoice.bookingDate || invoice.invoiceDate}\n\n` +
+            `View your invoice online:\n${link}\n\n` +
+            `Thank you for choosing *Detailing Commando*! 🙏\n\n` +
+            `⭐ *Loved our service? Leave us a Google Review!*\n` +
+            `It takes just 30 seconds and means the world to us 😊\n` +
+            `👉 ${googleReviewLink}\n\n` +
             `_Powered by Z3Connect_`;
+
         let phone = invoice.contactPhone?.replace(/[^0-9]/g, '') || '';
-        // Add India country code if not present
         if (phone.length === 10) phone = '91' + phone;
         const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');

@@ -20,6 +20,7 @@ import Settings from './pages/Settings';
 import CRMHistory from './pages/CRMHistory';
 import AMCPlans from './pages/AMCPlans';
 import AuditLog from './pages/AuditLog';
+import PublicInvoice from './pages/PublicInvoice';
 import './styles/index.css';
 
 // Protected Route wrapper
@@ -121,6 +122,9 @@ function AppRoutes() {
           <ProtectedRoute permission="amc"><AMCPlans /></ProtectedRoute>
         } />
       </Route>
+
+      {/* Public invoice route — no auth required */}
+      <Route path="/invoice/:id" element={<PublicInvoice />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

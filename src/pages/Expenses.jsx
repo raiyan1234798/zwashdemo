@@ -47,6 +47,7 @@ const Expenses = () => {
     const [startDateFilter, setStartDateFilter] = useState('');
     const [endDateFilter, setEndDateFilter] = useState('');
     const [stats, setStats] = useState({ total: 0 });
+    const [income, setIncome] = useState({ today: 0, yesterday: 0, week: 0, month: 0, last30Days: 0 });
     const [selectedDate, setSelectedDate] = useState(null);
     const [editingExpense, setEditingExpense] = useState(null);
     const [employees, setEmployees] = useState([]);
@@ -104,12 +105,28 @@ const Expenses = () => {
             }));
             setExpenses(expensesList);
 
+            // Fetch bookings for income calculation
+            const bookingsSnap = await getDocs(collection(db, 'bookings'));
+            const bookingsList = bookingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
             // Calculate stats
             const today = new Date().toISOString().split('T')[0];
             const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
             const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
             const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+            const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
 
+            // --- Income from bookings ---
+            const sumPaid = (list) => list.reduce((s, b) => s + (Number(b.paidAmount) || 0), 0);
+            setIncome({
+                today:      sumPaid(bookingsList.filter(b => b.bookingDate === today)),
+                yesterday:  sumPaid(bookingsList.filter(b => b.bookingDate === yesterday)),
+                week:       sumPaid(bookingsList.filter(b => b.bookingDate >= weekAgo)),
+                month:      sumPaid(bookingsList.filter(b => b.bookingDate >= monthStart)),
+                last30Days: sumPaid(bookingsList.filter(b => b.bookingDate >= thirtyDaysAgo)),
+            });
+
+            // --- Expense stats ---
             const statsCalc = {
                 total: 0,
                 today: 0,
@@ -127,7 +144,6 @@ const Expenses = () => {
             };
             // Calculate daily breakdown for last 30 days
             const dailyMap = {};
-            const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
 
             for (let i = 0; i < 30; i++) {
                 const d = new Date();
@@ -333,51 +349,89 @@ const Expenses = () => {
                 </div>
             </div>
 
-            {/* Summary Cards */}
-            <div className="expense-summary-grid">
-                <div className="expense-summary-card">
-                    <div className="expense-icon total">
-                        <IndianRupee size={24} />
+            {/* Summary Cards — Income vs Expenses */}
+            <div style={{ marginBottom: '1.5rem' }}>
+
+                {/* Section header */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.5rem', paddingLeft: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '700', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <TrendingUp size={14} /> Income (Paid)
                     </div>
-                    <div className="expense-content">
-                        <span className="expense-label">Today</span>
-                        <span className="expense-value">{formatCurrency(stats.today)}</span>
-                    </div>
-                </div>
-                <div className="expense-summary-card">
-                    <div className="expense-icon utilities">
-                        <IndianRupee size={24} />
-                    </div>
-                    <div className="expense-content">
-                        <span className="expense-label">Yesterday</span>
-                        <span className="expense-value">{formatCurrency(stats.yesterday)}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '700', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        <TrendingDown size={14} /> Expenses
                     </div>
                 </div>
-                <div className="expense-summary-card">
-                    <div className="expense-icon maintenance">
-                        <IndianRupee size={24} />
+
+                {/* Paired cards grid */}
+                {[
+                    { label: 'Today',       inc: income.today,      exp: stats.today      },
+                    { label: 'Yesterday',   inc: income.yesterday,  exp: stats.yesterday  },
+                    { label: 'This Week',   inc: income.week,       exp: stats.week       },
+                    { label: 'This Month',  inc: income.month,      exp: stats.month      },
+                ].map(({ label, inc, exp }) => {
+                    const net = inc - exp;
+                    return (
+                        <div key={label} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                            {/* Income card */}
+                            <div className="expense-summary-card" style={{ borderLeft: '3px solid #10b981' }}>
+                                <div className="expense-icon" style={{ background: '#dcfce7', color: '#059669' }}>
+                                    <TrendingUp size={22} />
+                                </div>
+                                <div className="expense-content">
+                                    <span className="expense-label">{label} — Income</span>
+                                    <span className="expense-value" style={{ color: '#059669' }}>{formatCurrency(inc)}</span>
+                                </div>
+                            </div>
+                            {/* Expense card */}
+                            <div className="expense-summary-card" style={{ borderLeft: '3px solid #ef4444' }}>
+                                <div className="expense-icon" style={{ background: '#fee2e2', color: '#dc2626' }}>
+                                    <TrendingDown size={22} />
+                                </div>
+                                <div className="expense-content">
+                                    <span className="expense-label">{label} — Expenses</span>
+                                    <span className="expense-value" style={{ color: '#dc2626' }}>{formatCurrency(exp)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+
+                {/* Last 30 Days full-width net row */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+                    <div className="expense-summary-card" style={{ borderLeft: '3px solid #10b981' }}>
+                        <div className="expense-icon" style={{ background: '#dcfce7', color: '#059669' }}>
+                            <TrendingUp size={22} />
+                        </div>
+                        <div className="expense-content">
+                            <span className="expense-label">Last 30 Days — Income</span>
+                            <span className="expense-value" style={{ color: '#059669' }}>{formatCurrency(income.last30Days)}</span>
+                        </div>
                     </div>
-                    <div className="expense-content">
-                        <span className="expense-label">This Week</span>
-                        <span className="expense-value">{formatCurrency(stats.week)}</span>
+                    <div className="expense-summary-card" style={{ borderLeft: '3px solid #ef4444' }}>
+                        <div className="expense-icon" style={{ background: '#fee2e2', color: '#dc2626' }}>
+                            <TrendingDown size={22} />
+                        </div>
+                        <div className="expense-content">
+                            <span className="expense-label">Last 30 Days — Expenses</span>
+                            <span className="expense-value" style={{ color: '#dc2626' }}>{formatCurrency(stats.last30Days)}</span>
+                        </div>
                     </div>
-                </div>
-                <div className="expense-summary-card">
-                    <div className="expense-icon supplies">
-                        <IndianRupee size={24} />
-                    </div>
-                    <div className="expense-content">
-                        <span className="expense-label">This Month</span>
-                        <span className="expense-value">{formatCurrency(stats.month)}</span>
-                    </div>
-                </div>
-                <div className="expense-summary-card" style={{ gridColumn: '1 / -1', background: 'var(--navy-900)', color: 'white', borderColor: 'var(--navy-800)' }}>
-                    <div className="expense-icon" style={{ background: 'rgba(255,255,255,0.1)', color: 'white' }}>
-                        <IndianRupee size={24} />
-                    </div>
-                    <div className="expense-content">
-                        <span className="expense-label" style={{ color: 'var(--navy-200)' }}>Last 30 Days</span>
-                        <span className="expense-value">{formatCurrency(stats.last30Days)}</span>
+                    <div className="expense-summary-card" style={{
+                        background: (income.last30Days - stats.last30Days) >= 0 ? '#f0fdf4' : '#fef2f2',
+                        borderLeft: `3px solid ${(income.last30Days - stats.last30Days) >= 0 ? '#10b981' : '#ef4444'}`,
+                    }}>
+                        <div className="expense-icon" style={{
+                            background: (income.last30Days - stats.last30Days) >= 0 ? '#bbf7d0' : '#fecaca',
+                            color: (income.last30Days - stats.last30Days) >= 0 ? '#059669' : '#dc2626'
+                        }}>
+                            <IndianRupee size={22} />
+                        </div>
+                        <div className="expense-content">
+                            <span className="expense-label">Net Profit (30 Days)</span>
+                            <span className="expense-value" style={{ color: (income.last30Days - stats.last30Days) >= 0 ? '#059669' : '#dc2626' }}>
+                                {formatCurrency(income.last30Days - stats.last30Days)}
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>

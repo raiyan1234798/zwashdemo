@@ -80,8 +80,8 @@ service cloud.firestore {
 
     // 4. Bookings - Core business operation
     match /bookings/{bookingId} {
-      // All staff can read bookings
-      allow read: if isAuthenticated();
+      // Public read: customers can view their booking/invoice via shared link (no login needed)
+      allow read: if true;
       
       // Staff can create bookings (walk-ins, appointments)
       allow create: if isAuthenticated() && 
@@ -116,7 +116,8 @@ service cloud.firestore {
 
     // 7. Invoices
     match /invoices/{invoiceId} {
-      allow read: if isAuthenticated();
+      // Public read: customers can view their invoice via shared link (no login needed)
+      allow read: if true;
       
       allow create: if isAuthenticated() && 
                     (isSenior() || hasCustomPermission('invoices', 'create'));

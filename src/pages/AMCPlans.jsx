@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import {
@@ -186,10 +186,10 @@ Thank you for subscribing to our *${sub.planName}* AMC!
 *Vehicle:* *${sub.vehicleNumber}*
 *Start Date:* *${formatDate(sub.startDate)}*
 *Expiry Date:* *${formatDate(sub.expiryDate)}*
-*Total Amount:* *₹${sub.totalAmount?.toLocaleString()}*
+*Total Amount:* *â‚¹${sub.totalAmount?.toLocaleString()}*
 
 *Services Included:*
-${sub.serviceTracking?.map(s => `• ${s.serviceType}: ${s.totalAllowed} services`).join('\n')}
+${sub.serviceTracking?.map(s => `â€¢ ${s.serviceType}: ${s.totalAllowed} services`).join('\n')}
 
 We look forward to serving you!
 _Powered by Z3Connect_`;
@@ -204,39 +204,72 @@ _Powered by Z3Connect_`;
         if (!phone) return;
 
         const currentMonth = new Date().toLocaleString('default', { month: 'long' });
-        const message = `*${businessName} - Monthly Service Reminder*
+
+        const availableServices = sub.serviceTracking
+            ?.filter(s => (s.usages?.length || 0) < s.totalAllowed)
+            .map(s => {
+                const used = s.usages?.length || 0;
+                const remaining = s.totalAllowed - used;
+                return `• ${s.serviceType}: *${remaining} remaining* (${used}/${s.totalAllowed} used)`;
+            }).join('\n') || 'All services used';
+
+        const message = `*${businessName} - Monthly Service Reminder* 🔔
 
 Hi *${sub.customerName}*,
 
-This is a friendly reminder for your *${sub.planName}* AMC services for the month of *${currentMonth}*.
+This is a friendly reminder for your *${sub.planName}* AMC services for *${currentMonth}*.
 
 *Vehicle:* *${sub.vehicleNumber}*
 
-*Services Available:*
-${sub.serviceTracking?.filter(s => (s.usages?.length || 0) < s.totalAllowed).map(s => `• ${s.serviceType}`).join('\n')}
+*Services Remaining:*
+${availableServices}
 
-Please visit us soon to avail your monthly services!
+Please visit us soon to avail your services! 🚗
 _Powered by Z3Connect_`;
 
         const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };
 
-    const sendServiceCompletionMessage = (sub, serviceType) => {
+    const getOrdinal = (n) => {
+        const s = ['th', 'st', 'nd', 'rd'];
+        const v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    };
+
+    const sendServiceCompletionMessage = (sub, serviceType, washNumber) => {
         const businessName = settings?.businessName || "Detailing Commando";
         const phone = sub.customerPhone || sub.phone;
         if (!phone) return;
 
-        const message = `*${businessName} - Service Completed*
+        // Build usage summary across all service types
+        const usageSummary = sub.serviceTracking?.map(s => {
+            const used = s.usages?.length || 0;
+            const remaining = s.totalAllowed - used;
+            return `â€¢ ${s.serviceType}: ${used}/${s.totalAllowed} used (${remaining} remaining)`;
+        }).join('\n') || '';
+
+        const washLabel = washNumber ? `*${getOrdinal(washNumber)} Wash* ` : '';
+        const googleReviewLink = `https://www.google.com/search?q=Detailing+Commando+Reviews&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qORCfYOrPO9_r5Xrdz6OLn964mj5mum-Qd5jzlmEC3NzGY3rc7RSf9uLDn98lKI0GK6PNYXpax3VWlULxs2zb67zJBn8xu53xcXqOxgcv5ryhvPi0bQ%3D%3D&sa=X#lrd=0x47bf03f78d9c21fb:0xd9ce5265093065b2,3,,,,`;
+
+        const message = `*${businessName} - AMC Service Completed* âœ…
 
 Hi *${sub.customerName}*,
 
-The *${serviceType}* service for your *${sub.planName}* AMC has been completed!
+Your ${washLabel}*${serviceType}* service has been completed! ðŸš—âœ¨
 
 *Vehicle:* *${sub.vehicleNumber}*
-*Service:* *${serviceType}*
+*Date:* *${new Date().toLocaleDateString('en-IN')}*
 
-Thank you for choosing us!
+*AMC Usage Summary:*
+${usageSummary}
+
+Thank you for choosing *${businessName}*! ðŸ™
+
+â­ *Enjoyed our service? Leave us a quick Google review!*
+It takes just 30 seconds ðŸ˜Š
+ðŸ‘‰ ${googleReviewLink}
+
 _Powered by Z3Connect_`;
 
         const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
@@ -304,13 +337,13 @@ _Powered by Z3Connect_`;
                                     <div className="plan-pricing">
                                         {plan.prices ? (
                                             <div className="vehicle-prices">
-                                                <div><small>Hatchback</small><strong>₹{plan.prices.hatchback?.toLocaleString()}</strong></div>
-                                                <div><small>Sedan</small><strong>₹{plan.prices.sedan?.toLocaleString()}</strong></div>
-                                                <div><small>SUV</small><strong>₹{plan.prices.suv?.toLocaleString()}</strong></div>
-                                                <div><small>Luxury SUV</small><strong>₹{plan.prices.luxurySuv?.toLocaleString()}</strong></div>
+                                                <div><small>Hatchback</small><strong>â‚¹{plan.prices.hatchback?.toLocaleString()}</strong></div>
+                                                <div><small>Sedan</small><strong>â‚¹{plan.prices.sedan?.toLocaleString()}</strong></div>
+                                                <div><small>SUV</small><strong>â‚¹{plan.prices.suv?.toLocaleString()}</strong></div>
+                                                <div><small>Luxury SUV</small><strong>â‚¹{plan.prices.luxurySuv?.toLocaleString()}</strong></div>
                                             </div>
                                         ) : (
-                                            <span className="plan-price">₹{plan.price?.toLocaleString()}</span>
+                                            <span className="plan-price">â‚¹{plan.price?.toLocaleString()}</span>
                                         )}
                                     </div>
                                     <div className="plan-body">
@@ -1100,7 +1133,7 @@ const CreatePlanModal = ({ onClose, onSuccess }) => {
                             marginBottom: '1rem'
                         }}>
                             <label style={{ marginBottom: '0.75rem', display: 'block', fontWeight: '600' }}>
-                                Vehicle Type Pricing (₹)
+                                Vehicle Type Pricing (â‚¹)
                             </label>
                             <div className="form-row" style={{ gap: '1rem' }}>
                                 <div className="form-group">
@@ -1191,7 +1224,7 @@ const CreatePlanModal = ({ onClose, onSuccess }) => {
                                                 padding: '0.5rem'
                                             }}
                                         >
-                                            ×
+                                            Ã—
                                         </button>
                                     </div>
                                 ))}
@@ -1281,10 +1314,10 @@ Thank you for subscribing to our *${sub.planName}* AMC!
 *Vehicle:* *${sub.vehicleNumber}*
 *Start Date:* *${new Date(sub.startDate?.toDate ? sub.startDate.toDate() : sub.startDate).toLocaleDateString()}*
 *Expiry Date:* *${new Date(sub.expiryDate?.toDate ? sub.expiryDate.toDate() : sub.expiryDate).toLocaleDateString()}*
-*Total Amount:* *₹${sub.totalAmount?.toLocaleString()}*
+*Total Amount:* *â‚¹${sub.totalAmount?.toLocaleString()}*
 
 *Services Included:*
-${sub.serviceTracking?.map(s => `• ${s.serviceType}: ${s.totalAllowed} services`).join('\n')}
+${sub.serviceTracking?.map(s => `â€¢ ${s.serviceType}: ${s.totalAllowed} services`).join('\n')}
 
 We look forward to serving you!
 _Powered by Z3Connect_`;
@@ -1299,39 +1332,71 @@ _Powered by Z3Connect_`;
         if (!phone) return;
 
         const currentMonth = new Date().toLocaleString('default', { month: 'long' });
-        const message = `*${businessName} - Monthly Service Reminder*
+
+        const availableServices = sub.serviceTracking
+            ?.filter(s => (s.usages?.length || 0) < s.totalAllowed)
+            .map(s => {
+                const used = s.usages?.length || 0;
+                const remaining = s.totalAllowed - used;
+                return `• ${s.serviceType}: *${remaining} remaining* (${used}/${s.totalAllowed} used)`;
+            }).join('\n') || 'All services used';
+
+        const message = `*${businessName} - Monthly Service Reminder* 🔔
 
 Hi *${sub.customerName}*,
 
-This is a friendly reminder for your *${sub.planName}* AMC services for the month of *${currentMonth}*.
+This is a friendly reminder for your *${sub.planName}* AMC services for *${currentMonth}*.
 
 *Vehicle:* *${sub.vehicleNumber}*
 
-*Services Available:*
-${sub.serviceTracking?.filter(s => (s.usages?.length || 0) < s.totalAllowed).map(s => `• ${s.serviceType}`).join('\n')}
+*Services Remaining:*
+${availableServices}
 
-Please visit us soon to avail your monthly services!
+Please visit us soon to avail your services! 🚗
 _Powered by Z3Connect_`;
 
         const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };
 
-    const sendServiceCompletionMessage = (sub, serviceType) => {
+    const sendServiceCompletionMessage = (sub, serviceType, washNumber) => {
         const businessName = settings?.businessName || "Detailing Commando";
         const phone = sub.customerPhone;
         if (!phone) return;
 
-        const message = `*${businessName} - Service Completed*
+        const getOrdinal = (n) => {
+            const s = ['th', 'st', 'nd', 'rd'];
+            const v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        };
+
+        const usageSummary = sub.serviceTracking?.map(s => {
+            const used = s.usages?.length || 0;
+            const remaining = s.totalAllowed - used;
+            return `â€¢ ${s.serviceType}: ${used}/${s.totalAllowed} used (${remaining} remaining)`;
+        }).join('\n') || '';
+
+        const washLabel = washNumber ? `*${getOrdinal(washNumber)} Wash* ` : '';
+        const googleReviewLink = `https://www.google.com/search?q=Detailing+Commando+Reviews&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qORCfYOrPO9_r5Xrdz6OLn964mj5mum-Qd5jzlmEC3NzGY3rc7RSf9uLDn98lKI0GK6PNYXpax3VWlULxs2zb67zJBn8xu53xcXqOxgcv5ryhvPi0bQ%3D%3D&sa=X#lrd=0x47bf03f78d9c21fb:0xd9ce5265093065b2,3,,,,`;
+
+        const message = `*${businessName} - AMC Service Completed* âœ…
 
 Hi *${sub.customerName}*,
 
-Good news! We have completed your *${serviceType}* service as part of your *${sub.planName}* AMC.
+Your ${washLabel}*${serviceType}* service has been completed! ðŸš—âœ¨
 
 *Vehicle:* *${sub.vehicleNumber}*
-*Date:* *${new Date().toLocaleDateString()}*
+*Date:* *${new Date().toLocaleDateString('en-IN')}*
 
-Thank you for choosing us!
+*AMC Usage Summary:*
+${usageSummary}
+
+Thank you for choosing *${businessName}*! ðŸ™
+
+â­ *Enjoyed our service? Leave us a quick Google review!*
+It takes just 30 seconds ðŸ˜Š
+ðŸ‘‰ ${googleReviewLink}
+
 _Powered by Z3Connect_`;
 
         const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
@@ -1530,7 +1595,7 @@ _Powered by Z3Connect_`;
                                     {type === 'suv' ? 'SUV' : type === 'luxurySuv' ? 'Luxury SUV' : type}
                                     <br />
                                     <small style={{ fontWeight: 'normal', color: 'var(--primary)' }}>
-                                        ₹{plan.prices?.[type]?.toLocaleString() || plan.price}
+                                        â‚¹{plan.prices?.[type]?.toLocaleString() || plan.price}
                                     </small>
                                 </button>
                             ))}
@@ -1539,7 +1604,7 @@ _Powered by Z3Connect_`;
 
                     {/* Price Override */}
                     <div className="form-group">
-                        <label>Sale Price (₹)</label>
+                        <label>Sale Price (â‚¹)</label>
                         <input
                             type="number"
                             value={salePrice}
@@ -1556,7 +1621,7 @@ _Powered by Z3Connect_`;
                             }}
                         />
                         <div style={{ marginTop: '0.25rem', fontSize: '0.85rem', color: 'var(--navy-500)' }}>
-                            Standard Price: ₹{getPrice().toLocaleString()}
+                            Standard Price: â‚¹{getPrice().toLocaleString()}
                         </div>
                     </div>
 
@@ -1594,11 +1659,11 @@ _Powered by Z3Connect_`;
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
                             <span style={{ fontWeight: '600', color: '#166534' }}>Total Amount:</span>
-                            <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#166534' }}>₹{Number(salePrice || 0).toLocaleString()}</span>
+                            <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#166534' }}>â‚¹{Number(salePrice || 0).toLocaleString()}</span>
                         </div>
 
                         <div className="form-group" style={{ marginBottom: '0.5rem' }}>
-                            <label style={{ fontSize: '0.85rem', fontWeight: '500', color: '#166534' }}>Advance Payment (₹)</label>
+                            <label style={{ fontSize: '0.85rem', fontWeight: '500', color: '#166534' }}>Advance Payment (â‚¹)</label>
                             <input
                                 type="number"
                                 value={advancePayment}
@@ -1632,7 +1697,7 @@ _Powered by Z3Connect_`;
                                 fontSize: '1.1rem',
                                 color: (Number(salePrice || 0) - Number(advancePayment || 0)) > 0 ? '#dc2626' : '#166534'
                             }}>
-                                ₹{(Number(salePrice || 0) - Number(advancePayment || 0)).toLocaleString()}
+                                â‚¹{(Number(salePrice || 0) - Number(advancePayment || 0)).toLocaleString()}
                             </span>
                         </div>
 
@@ -1646,7 +1711,7 @@ _Powered by Z3Connect_`;
                                 color: '#92400e',
                                 textAlign: 'center'
                             }}>
-                                ⚠️ Partial payment - Balance to be collected
+                                âš ï¸ Partial payment - Balance to be collected
                             </div>
                         )}
                     </div>
@@ -1815,7 +1880,7 @@ _Powered by Z3Connect_`;
                                 {activeTab === 'existing' ? selectedCustomer.name : newCustomer.name} - {plan.name} ({vehicleType.toUpperCase()})
                                 <br />
                                 <strong style={{ color: 'var(--primary)', fontSize: '1.25rem' }}>
-                                    ₹{Number(salePrice).toLocaleString()}
+                                    â‚¹{Number(salePrice).toLocaleString()}
                                 </strong>
                             </p>
                         </div>
@@ -1934,7 +1999,7 @@ const EditSubscriptionModal = ({ subscription, plans, onClose, onSuccess }) => {
                             </select>
                         </div>
                         <div className="form-group">
-                            <label>Price (₹)</label>
+                            <label>Price (â‚¹)</label>
                             <input
                                 type="number"
                                 value={price}
@@ -2383,7 +2448,7 @@ const SubscriptionInvoiceModal = ({ subscription, onClose, onSuccess, userProfil
                             <input type="text" className="form-control" value={subscription.planName} disabled style={{ width: '100%', padding: '8px' }} />
                         </div>
                         <div className="form-group" style={{ marginBottom: '15px' }}>
-                            <label style={{ display: 'block', marginBottom: '5px' }}>Invoice Amount (₹) *</label>
+                            <label style={{ display: 'block', marginBottom: '5px' }}>Invoice Amount (â‚¹) *</label>
                             <input
                                 type="number"
                                 className="form-control"
