@@ -2201,7 +2201,7 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
             `⏰ Time: ${booking.startTime}\n` +
             `🚗 Service: ${booking.serviceName}\n` +
             `💰 Amount: ₹${booking.price}\n\n` +
-            `We look forward to seeing you!\n- Detailing Commando`;
+            `We look forward to seeing you!\n- Zwash Demo`;
         const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };

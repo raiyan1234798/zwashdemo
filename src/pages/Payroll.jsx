@@ -223,7 +223,7 @@ const Payroll = () => {
             <div id="payslip-render-${emp.id}" style="width: 800px; padding: 40px; background: white; font-family: 'Segoe UI', sans-serif; box-sizing: border-box;">
                 <div style="background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: white; padding: 30px 40px; display: flex; justify-content: space-between; align-items: center; border-radius: 12px 12px 0 0;">
                     <div>
-                        <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Detailing Commando</h1>
+                        <h1 style="margin: 0; font-size: 24px; font-weight: 700;">Zwash Demo</h1>
                         <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.85;">Professional Car Detailing Services</p>
                     </div>
                     <div style="text-align: right;">
@@ -293,7 +293,7 @@ const Payroll = () => {
             await uploadBytes(storageRef, pdfBlob);
             const downloadUrl = await getDownloadURL(storageRef);
 
-            const message = `Hi ${emp.displayName}, here is your ${monthLabel} payslip from Detailing Commando. Click here to download: ${downloadUrl}`;
+            const message = `Hi ${emp.displayName}, here is your ${monthLabel} payslip from Zwash Demo. Click here to download: ${downloadUrl}`;
 
             // Open exact WhatsApp contact link
             const rawPhone = emp.phone || emp.mobile || '';

@@ -644,9 +644,9 @@ const Invoices = () => {
     <div class="invoice-container">
         <div class="invoice-header">
             <div class="company-info">
-                <img src="/detail.svg" class="company-logo" alt="Detailing Commando Logo" />
+                <img src="/detail.png" class="company-logo" alt="Zwash Demo Logo" />
                 <div class="company-details">
-                    <h1>${settings?.businessName || 'Detailing Commando'}</h1>
+                    <h1>${settings?.businessName || 'Zwash Demo'}</h1>
                     <p>Suchindram Byp, near Ragavendra Temple</p>
                     <p>Nagercoil, Tamil Nadu 629704</p>
                     <p class="contact">📞 +91 9363911500 | ✉️ detailingcommando@gmail.com</p>
@@ -786,13 +786,13 @@ const Invoices = () => {
 
 
         const message =
-            `Hi ${invoice.customerName ? invoice.customerName.split(' ')[0] : ''}! Here's your invoice from *${(settings?.businessName || 'Detailing Commando').trim()}*\n\n` +
+            `Hi ${invoice.customerName ? invoice.customerName.split(' ')[0] : ''}! Here's your invoice from *${(settings?.businessName || 'Zwash Demo').trim()}*\n\n` +
             `*Invoice:* #${invoice.invoiceNumber || invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}\n` +
             `*Service:* ${invoice.serviceName}` +
             breakdownLines +
             `\n*Date:* ${invoice.bookingDate || invoice.invoiceDate}\n\n` +
             `View your invoice online:\n${link}\n\n` +
-            `Thank you for choosing *Detailing Commando*! 🙏\n\n` +
+            `Thank you for choosing *Zwash Demo*! 🙏\n\n` +
             `⭐ *Loved our service? Leave us a Google Review!*\n` +
             `It takes just 30 seconds and means the world to us 😊\n` +
             `👉 ${googleReviewLink}\n\n` +

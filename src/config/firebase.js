@@ -6,13 +6,13 @@ import { getStorage } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBgH56hd5TlJzJiLIFK_evt5z1y1m7l6I8",
-  authDomain: "washcomplete-7fa4d.firebaseapp.com",
-  projectId: "washcomplete-7fa4d",
-  storageBucket: "washcomplete-7fa4d.firebasestorage.app",
-  messagingSenderId: "27656144834",
-  appId: "1:27656144834:web:b98bc60cc7cf2198e7785b",
-  measurementId: "G-J0L75X4ND7"
+  apiKey: "AIzaSyCCmkNhkx9FbUtV4m2IQM-LzvM0AdV4IVo",
+  authDomain: "zwashdemo.firebaseapp.com",
+  projectId: "zwashdemo",
+  storageBucket: "zwashdemo.firebasestorage.app",
+  messagingSenderId: "233891684120",
+  appId: "1:233891684120:web:266e0ffcc84a164da0886d",
+  measurementId: "G-MLP7E4JGEJ"
 };
 
 // Initialize Firebase

@@ -205,6 +205,24 @@ export function AuthProvider({ children }) {
                     return null;
                 }
 
+                // Demo Subscription Check
+                if (profile.demoActive === false) {
+                    setError('Your demo subscription has been cancelled. Please contact the administrator.');
+                    await signOut(auth);
+                    return null;
+                }
+
+                if (profile.demoExpiryDate) {
+                    const expiryDate = new Date(profile.demoExpiryDate);
+                    // Set time to end of day
+                    expiryDate.setHours(23, 59, 59, 999);
+                    if (new Date() > expiryDate) {
+                        setError('Your demo access has expired. Please contact the administrator.');
+                        await signOut(auth);
+                        return null;
+                    }
+                }
+
                 setUserProfile(profile);
                 return profile;
             } else {

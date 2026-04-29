@@ -123,9 +123,9 @@ const PublicInvoice = () => {
                 {/* Header */}
                 <div style={styles.header}>
                     <div style={styles.companyInfo}>
-                        <img src="/detail.svg" alt="Detailing Commando" style={styles.logo} onError={e => e.target.style.display = 'none'} />
+                        <img src="/detail.png" alt="Zwash Demo" style={styles.logo} onError={e => e.target.style.display = 'none'} />
                         <div>
-                            <h1 style={styles.companyName}>Detailing Commando</h1>
+                            <h1 style={styles.companyName}>Zwash Demo</h1>
                             <p style={styles.companyDetail}>Suchindram Byp, near Ragavendra Temple</p>
                             <p style={styles.companyDetail}>Nagercoil, Tamil Nadu 629704</p>
                             <p style={{ ...styles.companyDetail, marginTop: '6px' }}>

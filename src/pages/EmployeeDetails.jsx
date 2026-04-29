@@ -29,6 +29,10 @@ const EmployeeDetails = () => {
     const [dateOfJoining, setDateOfJoining] = useState('');
     const [phone, setPhone] = useState('');
 
+    // Subscription States
+    const [demoActive, setDemoActive] = useState(true);
+    const [demoExpiryDate, setDemoExpiryDate] = useState('');
+
     // Data States
     const [kpiStats, setKpiStats] = useState({ totalBookings: 0, thisMonth: 0, completedServices: 0 });
     const [attendanceRecords, setAttendanceRecords] = useState([]);
@@ -63,6 +67,8 @@ const EmployeeDetails = () => {
                 setEmergencyContact(data.emergencyContact || '');
                 setDateOfJoining(data.dateOfJoining || '');
                 setPhone(data.phone || '');
+                setDemoActive(data.demoActive !== false); // default to true
+                setDemoExpiryDate(data.demoExpiryDate || '');
 
                 // Fetch KPIs immediately
                 fetchKPIs(data.id);
@@ -153,6 +159,8 @@ const EmployeeDetails = () => {
                 address,
                 emergencyContact,
                 dateOfJoining,
+                demoActive,
+                demoExpiryDate,
                 updatedAt: serverTimestamp()
             });
 
@@ -334,6 +342,41 @@ const EmployeeDetails = () => {
                                             <option value={ROLES.ADMIN}>Admin</option>
                                         </select>
                                         <p className="field-hint">Changing role provides default permissions. Use the Permissions tab for granular control.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Subscription Management */}
+                        {isAdmin && (
+                            <div className="card role-card">
+                                <div className="card-header">
+                                    <h3><Clock size={18} /> Demo Subscription</h3>
+                                </div>
+                                <div className="card-body">
+                                    <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                                        <input
+                                            type="checkbox"
+                                            id="demoActive"
+                                            checked={demoActive}
+                                            onChange={(e) => setDemoActive(e.target.checked)}
+                                            disabled={!isAdmin}
+                                            style={{ width: 'auto' }}
+                                        />
+                                        <label htmlFor="demoActive" style={{ margin: 0 }}>Active Demo Access</label>
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Expiry Date (Optional)</label>
+                                        <div className="input-icon">
+                                            <Calendar size={16} />
+                                            <input
+                                                type="date"
+                                                value={demoExpiryDate}
+                                                onChange={(e) => setDemoExpiryDate(e.target.value)}
+                                                disabled={!isAdmin || !demoActive}
+                                            />
+                                        </div>
+                                        <p className="field-hint">Leave blank for unlimited access. If set, access will be revoked after this date.</p>
                                     </div>
                                 </div>
                             </div>

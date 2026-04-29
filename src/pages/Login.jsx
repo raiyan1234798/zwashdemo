@@ -57,10 +57,10 @@ const Login = () => {
                         <div className="brand-logo-container">
                             <div className="brand-logo-glow"></div>
                             <div className="brand-logo" style={{ background: 'white', padding: '8px', borderRadius: '12px', display: 'flex' }}>
-                                <img src="/detail.svg" alt="Detailing Commando Logo" style={{ height: '48px', width: 'auto' }} />
+                                <img src="/detail.png" alt="Zwash Demo Logo" style={{ height: '48px', width: 'auto' }} />
                             </div>
                         </div>
-                        <h1 className="brand-title">Detailing Commando</h1>
+                        <h1 className="brand-title">Zwash Demo</h1>
                         <p className="brand-subtitle">Detailing & Wash Management System</p>
 
                         <div className="brand-features">
@@ -160,7 +160,7 @@ const Login = () => {
                         </div>
 
                         <div className="login-footer">
-                            <p>© 2024 Detailing Commando. All rights reserved.</p>
+                            <p>© 2024 Zwash Demo. All rights reserved.</p>
                         </div>
                     </div>
                 </div>
@@ -214,7 +214,7 @@ const OnboardingForm = () => {
                         <div className="brand-logo-container small">
                             <div className="brand-logo-glow"></div>
                             <div className="brand-logo" style={{ background: 'white', padding: '6px', borderRadius: '8px', display: 'flex' }}>
-                                <img src="/detail.svg" alt="Detailing Commando Logo" style={{ height: '32px', width: 'auto' }} />
+                                <img src="/detail.png" alt="Zwash Demo Logo" style={{ height: '32px', width: 'auto' }} />
                             </div>
                         </div>
                         <h2>Complete Your Profile</h2>

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import {
@@ -169,7 +169,7 @@ const AMCPlans = () => {
     };
 
     const shareViaWhatsApp = (sub) => {
-        const businessName = settings?.businessName || "Detailing Commando";
+        const businessName = settings?.businessName || "Zwash Demo";
         const phone = sub.customerPhone;
         if (!phone) {
             alert("No phone number available for this customer.");
@@ -199,7 +199,7 @@ _Powered by Z3Connect_`;
     };
 
     const sendServiceReminder = (sub) => {
-        const businessName = settings?.businessName || "Detailing Commando";
+        const businessName = settings?.businessName || "Zwash Demo";
         const phone = sub.customerPhone;
         if (!phone) return;
 
@@ -238,7 +238,7 @@ _Powered by Z3Connect_`;
     };
 
     const sendServiceCompletionMessage = (sub, serviceType, washNumber) => {
-        const businessName = settings?.businessName || "Detailing Commando";
+        const businessName = settings?.businessName || "Zwash Demo";
         const phone = sub.customerPhone || sub.phone;
         if (!phone) return;
 
@@ -1297,7 +1297,7 @@ const AssignPlanModal = ({ plan, settings, onClose, onSuccess }) => {
     }, []);
 
     const shareViaWhatsApp = (sub) => {
-        const businessName = settings?.businessName || "Detailing Commando";
+        const businessName = settings?.businessName || "Zwash Demo";
         const phone = sub.customerPhone;
         if (!phone) {
             alert("No phone number available for this customer.");
@@ -1327,7 +1327,7 @@ _Powered by Z3Connect_`;
     };
 
     const sendServiceReminder = (sub) => {
-        const businessName = settings?.businessName || "Detailing Commando";
+        const businessName = settings?.businessName || "Zwash Demo";
         const phone = sub.customerPhone;
         if (!phone) return;
 
@@ -1360,7 +1360,7 @@ _Powered by Z3Connect_`;
     };
 
     const sendServiceCompletionMessage = (sub, serviceType, washNumber) => {
-        const businessName = settings?.businessName || "Detailing Commando";
+        const businessName = settings?.businessName || "Zwash Demo";
         const phone = sub.customerPhone;
         if (!phone) return;
 
