@@ -283,7 +283,7 @@ const OnboardingForm = () => {
 
 // ─── Styles ───
 const s = {
-  page: { display: 'flex', minHeight: '100vh', width: '100%', background: '#08080f', fontFamily: "'Inter', -apple-system, sans-serif", overflow: 'hidden', position: 'relative' },
+  page: { display: 'flex', minHeight: '100vh', width: '100%', background: '#08080f', fontFamily: "'Inter', -apple-system, sans-serif", overflow: 'hidden', position: 'relative', flexDirection: 'row' },
   left: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 48px', position: 'relative', zIndex: 2, borderRight: '1px solid rgba(212,175,55,0.1)' },
   leftInner: { maxWidth: 540, width: '100%' },
   logoRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 40 },
@@ -331,9 +331,22 @@ const css = `
   .google-btn:disabled { opacity: 0.6; cursor: not-allowed; }
   .submit-btn:hover { filter: brightness(1.08); }
   @media (max-width: 860px) {
-    body > div > div:first-child { display: none !important; }
-    body > div > div:last-child { width: 100% !important; padding: 20px !important; }
+    /* Instead of hiding first child, we stack them */
+    body > div > div { flex-direction: column !important; overflow-y: auto !important; }
+    body > div > div > div:first-child { 
+      width: 100% !important; 
+      padding: 40px 20px 20px !important; 
+      border-right: none !important; 
+      border-bottom: 1px solid rgba(212,175,55,0.1) !important;
+      min-height: auto !important;
+    }
+    body > div > div > div:first-child > div { max-width: 100% !important; }
+    body > div > div > div:last-child { width: 100% !important; padding: 20px !important; }
     .login-card { padding: 32px 24px !important; }
+    /* Adjust text sizes for mobile */
+    body > div > div > div:first-child > div > div:nth-child(2) { font-size: 1.5rem !important; margin-bottom: 24px !important; }
+    /* Hide some particles on mobile to improve performance */
+    canvas { opacity: 0.5; }
   }
 `;
 

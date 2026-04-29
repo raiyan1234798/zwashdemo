@@ -102,7 +102,7 @@ const DemoAccess = () => {
             </div>
 
             {/* Stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 24 }}>
                 {[
                     { label: 'Total Companies', value: stats.total, color: '#3b82f6' },
                     { label: 'Active Access', value: stats.active, color: '#10b981' },
@@ -137,7 +137,7 @@ const DemoAccess = () => {
                         <p style={{ margin: 0 }}>No demo clients yet. Add your first company above.</p>
                     </div>
                 ) : (
-                    <div className="table-container">
+                    <div className="table-container responsive-table-wrapper">
                         <table className="data-table">
                             <thead>
                                 <tr>
@@ -236,7 +236,7 @@ const DemoAccess = () => {
                                     <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required placeholder="company@gmail.com or person@gmail.com" />
                                     <small style={{ color: 'var(--navy-400)', fontSize: '0.75rem' }}>This exact Gmail will be granted demo access when they sign in.</small>
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
                                     <div className="form-group">
                                         <label>Country</label>
                                         <input value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} placeholder="Germany, Italy, India..." />

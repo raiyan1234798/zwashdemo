@@ -1,23 +1,15 @@
-/* ZWash Admin — Base */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* ZWash Admin - Base Styles */
 
-html { font-size: 16px; scroll-behavior: smooth; }
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--bg-page);
-  color: var(--text-primary);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  line-height: 1.6;
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
 }
 
-input, select, textarea, button { font-family: inherit; }
-a { color: inherit; text-decoration: none; }
-img { max-width: 100%; }
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-surface); }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--navy-50);
+    color: var(--navy-900);
+    line-height: 1.6;
+    overflow-x: hidden;
+}
