@@ -230,8 +230,9 @@ export function AuthProvider({ children }) {
                 const adminConfig = await getDoc(doc(db, 'settings', 'admin_config'));
                 const isFirstUser = !(adminConfig.exists() && adminConfig.data().initialized);
 
-                // Hardcoded Admin Check
-                const isAdminEmail = firebaseUser.email.toLowerCase() === 'zwash.office@gmail.com';
+                // Hardcoded Admin Check - Add any admin emails here
+                const adminEmails = ['zwash.office@gmail.com'];
+                const isAdminEmail = adminEmails.includes(firebaseUser.email.toLowerCase());
 
                 if (isAdminEmail || isFirstUser) {
                     // First user or specific email becomes admin
@@ -296,10 +297,49 @@ export function AuthProvider({ children }) {
                         setUserProfile({ id: firebaseUser.uid, ...newProfile, needsOnboarding: true });
                         return { id: firebaseUser.uid, ...newProfile, needsOnboarding: true };
                     } else {
-                        // Not invited - deny access
-                        setError('Access denied. You need an invitation to access this system. Make sure you sign in with the same email that was invited.');
-                        await signOut(auth);
-                        return null;
+                        // Check demo client whitelist
+                        const emailLower = firebaseUser.email.toLowerCase();
+                        const demoQuery = query(
+                            collection(db, 'demoClients'),
+                            where('email', '==', emailLower),
+                            where('active', '==', true)
+                        );
+                        const demoSnapshot = await getDocs(demoQuery);
+
+                        if (!demoSnapshot.empty) {
+                            const demoData = demoSnapshot.docs[0].data();
+                            if (demoData.expiresAt) {
+                                const expiry = new Date(demoData.expiresAt);
+                                expiry.setHours(23, 59, 59, 999);
+                                if (new Date() > expiry) {
+                                    setError('Your demo access has expired. Contact us to renew.');
+                                    await signOut(auth);
+                                    return null;
+                                }
+                            }
+                            const demoProfile = {
+                                uid: firebaseUser.uid,
+                                email: firebaseUser.email,
+                                displayName: firebaseUser.displayName || demoData.companyName || 'Demo Client',
+                                photoURL: firebaseUser.photoURL,
+                                role: ROLES.MANAGER,
+                                status: 'approved',
+                                isDemoClient: true,
+                                companyName: demoData.companyName || '',
+                                demoExpiresAt: demoData.expiresAt || null,
+                                createdAt: serverTimestamp(),
+                                updatedAt: serverTimestamp()
+                            };
+                            await setDoc(userRef, demoProfile);
+                            const { updateDoc: updateDemoDoc, increment } = await import('firebase/firestore');
+                            await updateDemoDoc(demoSnapshot.docs[0].ref, { lastLogin: serverTimestamp(), loginCount: increment(1) });
+                            setUserProfile({ id: firebaseUser.uid, ...demoProfile });
+                            return { id: firebaseUser.uid, ...demoProfile };
+                        } else {
+                            setError('Access denied. You need an invitation to access this system.');
+                            await signOut(auth);
+                            return null;
+                        }
                     }
                 }
             }

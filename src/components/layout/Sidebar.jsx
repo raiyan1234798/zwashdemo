@@ -19,12 +19,13 @@ import {
     CalendarCheck,
     Database,
     Shield,
-    ShieldCheck
+    ShieldCheck,
+    Globe
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 const Sidebar = () => {
-    const { userProfile, logout, hasPermission } = useAuth();
+    const { userProfile, logout, hasPermission, isAdmin } = useAuth();
     const [mobileOpen, setMobileOpen] = useState(false);
     const location = useLocation();
 
@@ -37,7 +38,6 @@ const Sidebar = () => {
         { path: '/', icon: LayoutDashboard, label: 'Dashboard', permission: 'dashboard' },
         { path: '/superadmin', icon: Shield, label: 'Super Admin', permission: 'superadmin' },
         { path: '/bookings', icon: ClipboardList, label: 'Bookings', permission: 'bookings' },
-
         { path: '/calendar', icon: CalendarDays, label: 'Calendar', permission: 'bookings' },
         { path: '/services', icon: Car, label: 'Services', permission: 'services' },
         { path: '/amc-plans', icon: ShieldCheck, label: 'AMC Plans', permission: 'amc' },
@@ -54,7 +54,14 @@ const Sidebar = () => {
         { path: '/settings', icon: Settings, label: 'Settings', permission: 'settings' },
     ];
 
-    const visibleNavItems = navItems.filter(item => hasPermission(item.permission, 'view') || hasPermission(item.permission));
+    const adminOnlyItems = isAdmin ? [
+        { path: '/demo-access', icon: Globe, label: 'Demo Access', permission: null }
+    ] : [];
+
+    const visibleNavItems = [
+        ...navItems.filter(item => hasPermission(item.permission, 'view') || hasPermission(item.permission)),
+        ...adminOnlyItems
+    ];
 
     const handleLogout = async () => {
         await logout();

@@ -21,6 +21,7 @@ import CRMHistory from './pages/CRMHistory';
 import AMCPlans from './pages/AMCPlans';
 import AuditLog from './pages/AuditLog';
 import PublicInvoice from './pages/PublicInvoice';
+import DemoAccess from './pages/DemoAccess';
 import './styles/index.css';
 
 // Protected Route wrapper
@@ -120,6 +121,9 @@ function AppRoutes() {
 
         <Route path="amc-plans" element={
           <ProtectedRoute permission="amc"><AMCPlans /></ProtectedRoute>
+        } />
+        <Route path="demo-access" element={
+          <ProtectedRoute><DemoAccess /></ProtectedRoute>
         } />
       </Route>
 
