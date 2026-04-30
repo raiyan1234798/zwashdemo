@@ -2,11 +2,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-    /* Primary Colors - Emerald Green (matching customer app) */
-    --primary: #047857;
-    --primary-dark: #064e3b;
-    --primary-light: #10b981;
-    --primary-gradient: linear-gradient(135deg, #047857 0%, #065f46 100%);
+    /* Primary Colors - Enterprise Royal Blue */
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-light: #3b82f6;
+    --primary-gradient: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
 
     /* Accent - Amber (matching customer app) */
     --accent: #d97706;
@@ -49,7 +49,7 @@
     --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
     --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.12);
     --shadow-xl: 0 24px 48px rgba(0, 0, 0, 0.16);
-    --shadow-glow: 0 0 40px rgba(4, 120, 87, 0.15);
+    --shadow-glow: 0 0 40px rgba(37, 99, 235, 0.15);
 
     /* Transitions */
     --transition-fast: 0.15s ease;
