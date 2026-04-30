@@ -25,7 +25,9 @@ const Login = () => {
         
         <div style={s.leftInner}>
           <div style={s.logoRow}>
-            <img src="/detail.png" alt="Zwash" style={s.logo} />
+            <div style={s.logoContainer}>
+              <img src="/detail.png" alt="Zwash" style={s.logo} />
+            </div>
             <span style={s.logoText}>Zwash Demo</span>
           </div>
 
@@ -145,11 +147,12 @@ const OnboardingForm = () => {
 // ─── Styles ───
 const s = {
   page: { display: 'flex', minHeight: '100vh', width: '100%', fontFamily: "'Inter', sans-serif", flexDirection: 'row' },
-  left: { flex: 1.2, background: '#0f172a', position: 'relative', display: 'flex', alignItems: 'center', padding: '60px 8%', overflow: 'hidden' },
-  pattern: { position: 'absolute', inset: 0, opacity: 0.05, backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '32px 32px' },
+  left: { flex: 1.2, background: '#0a0f1d', position: 'relative', display: 'flex', alignItems: 'center', padding: '60px 8%', overflow: 'hidden' },
+  pattern: { position: 'absolute', inset: 0, opacity: 1, background: 'radial-gradient(circle at 15% 50%, rgba(37, 99, 235, 0.15), transparent 25%), radial-gradient(circle at 85% 30%, rgba(56, 189, 248, 0.1), transparent 25%), radial-gradient(circle at 50% 100%, rgba(30, 64, 175, 0.2), transparent 40%)' },
   leftInner: { position: 'relative', zIndex: 2, maxWidth: 600 },
-  logoRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 60 },
-  logo: { height: 32, filter: 'brightness(0) invert(1)' },
+  logoRow: { display: 'flex', alignItems: 'center', gap: 14, marginBottom: 60 },
+  logoContainer: { background: '#ffffff', padding: '8px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' },
+  logo: { height: 32, objectFit: 'contain' },
   logoText: { color: '#ffffff', fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em' },
   headline: { color: '#ffffff', fontSize: '3rem', fontWeight: 700, lineHeight: 1.15, marginBottom: 24, letterSpacing: '-0.03em' },
   subhead: { color: '#94a3b8', fontSize: '1.1rem', lineHeight: 1.6, marginBottom: 48, maxWidth: '90%' },
@@ -158,8 +161,8 @@ const s = {
   featIconWrap: { width: 48, height: 48, borderRadius: 12, background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   featTitle: { color: '#ffffff', fontSize: '1.1rem', fontWeight: 600, margin: '0 0 4px 0' },
   featDesc: { color: '#94a3b8', fontSize: '0.95rem', margin: 0, lineHeight: 1.5 },
-  right: { flex: 1, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' },
-  card: { width: '100%', maxWidth: 440, background: '#ffffff', borderRadius: 24, padding: '48px 40px', boxShadow: '0 20px 40px -15px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' },
+  right: { flex: 1, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', position: 'relative' },
+  card: { width: '100%', maxWidth: 440, background: '#ffffff', borderRadius: 24, padding: '48px 40px', boxShadow: '0 20px 40px -10px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(226, 232, 240, 0.8)', position: 'relative', zIndex: 1 },
   cardHeader: { marginBottom: 32, textAlign: 'center' },
   cardTitle: { fontSize: '1.75rem', fontWeight: 700, color: '#0f172a', margin: '0 0 8px', letterSpacing: '-0.02em' },
   cardSub: { fontSize: '0.95rem', color: '#64748b', margin: 0 },
