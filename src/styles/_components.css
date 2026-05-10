@@ -189,8 +189,8 @@
     content: '';
     position: absolute;
     top: 0;
-    left: 0;
-    right: 0;
+    inset-inline-start: 0;
+    inset-inline-end: 0;
     height: 3px;
     background: var(--primary-gradient);
     opacity: 0;
@@ -291,7 +291,7 @@
 
 .search-box svg {
     position: absolute;
-    left: 1rem;
+    inset-inline-start: 1rem;
     top: 50%;
     transform: translateY(-50%);
     color: var(--navy-400);
@@ -299,7 +299,8 @@
 
 .search-box input {
     width: 100%;
-    padding: 0.875rem 1rem 0.875rem 2.75rem;
+    padding-block: 0.875rem;
+    padding-inline: 2.75rem 1rem;
     border: 2px solid var(--navy-200);
     border-radius: var(--radius-md);
     font-size: 0.9rem;
@@ -314,14 +315,20 @@
 }
 
 .filter-select {
-    padding: 0.875rem 2.5rem 0.875rem 1rem;
+    padding-block: 0.875rem;
+    padding-inline: 1rem 2.5rem;
     border: 2px solid var(--navy-200);
     border-radius: var(--radius-md);
     font-size: 0.9rem;
-    background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 1rem center;
+    background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat;
+    background-position: calc(100% - 1rem) center;
     cursor: pointer;
     transition: var(--transition-fast);
     appearance: none;
+}
+
+[dir="rtl"] .filter-select {
+    background-position: 1rem center;
 }
 
 .filter-select:focus {
@@ -340,7 +347,7 @@
 }
 
 .data-table th {
-    text-align: left;
+    text-align: start;
     padding: 1rem 1.25rem;
     font-size: 0.75rem;
     font-weight: 600;

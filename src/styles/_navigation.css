@@ -49,12 +49,16 @@
         transform: translateX(-100%);
     }
 
+    [dir="rtl"] .sidebar {
+        transform: translateX(100%);
+    }
+
     .sidebar.mobile-open {
         transform: translateX(0);
     }
 
     .main-content {
-        margin-left: 0;
+        margin-inline-start: 0;
         padding: 1rem;
         padding-top: calc(60px + 1rem);
         padding-bottom: 6rem;

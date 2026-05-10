@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import {
     signInWithPopup,
+    signInWithRedirect,
+    getRedirectResult,
     signOut,
     onAuthStateChanged,
     signInWithEmailAndPassword,
@@ -14,6 +16,7 @@ import {
     query,
     where,
     getDocs,
+    updateDoc,
     serverTimestamp,
     onSnapshot
 } from 'firebase/firestore';
@@ -23,13 +26,55 @@ const AuthContext = createContext(null);
 
 // User roles with permissions
 export const ROLES = {
-    ADMIN: 'admin', // Shop Admin
+    SUPER_ADMIN: 'superadmin',
+    ADMIN: 'admin', // Company Admin
     MANAGER: 'manager',
     SENIOR_EMPLOYEE: 'senior_employee',
     EMPLOYEE: 'employee'
 };
 
+export const PLANS = {
+    BASIC: 'basic',
+    STANDARD: 'standard',
+    PREMIUM: 'premium'
+};
+
+// Plan feature access
+export const PLAN_FEATURES = {
+    [PLANS.BASIC]: ['dashboard', 'bookings', 'calendar', 'services', 'customers', 'settings'],
+    [PLANS.STANDARD]: ['dashboard', 'bookings', 'calendar', 'services', 'customers', 'settings', 'invoices', 'expenses', 'analytics', 'amc', 'inspections'],
+    [PLANS.PREMIUM]: ['dashboard', 'bookings', 'calendar', 'services', 'customers', 'settings', 'invoices', 'expenses', 'analytics', 'amc', 'payroll', 'attendance', 'materials', 'crm', 'audit', 'inspections']
+};
+
+// Plan-based USER LIMITS (excluding the admin themselves)
+export const PLAN_USER_LIMITS = {
+    [PLANS.BASIC]: 5,       // Basic: up to 5 users (admin + 4 staff)
+    [PLANS.STANDARD]: 15,   // Standard: up to 15 users
+    [PLANS.PREMIUM]: 50     // Premium: up to 50 users
+};
+
 export const PERMISSIONS = {
+    [ROLES.SUPER_ADMIN]: {
+        dashboard: { view: true, create: true, edit: true, delete: true },
+        bookings: { view: true, create: true, edit: true, delete: true },
+        services: { view: true, create: true, edit: true, delete: true },
+        customers: { view: true, create: true, edit: true, delete: true },
+        employees: { view: true, create: true, edit: true, delete: true },
+        expenses: { view: true, create: true, edit: true, delete: true },
+        invoices: { view: true, create: true, edit: true, delete: true },
+        payroll: { view: true, create: true, edit: true, delete: true },
+        analytics: { view: true, create: true, edit: true, delete: true },
+        finance: { view: true, create: true, edit: true, delete: true },
+        settings: { view: true, create: true, edit: true, delete: true },
+        attendance: { view: true, create: true, edit: true, delete: true },
+        audit: { view: true, create: true, edit: true, delete: true },
+        materials: { view: true, create: true, edit: true, delete: true },
+        crm: { view: true, create: true, edit: true, delete: true },
+        amc: { view: true, create: true, edit: true, delete: true },
+        calendar: { view: true, create: true, edit: true, delete: true },
+        inspections: { view: true, create: true, edit: true, delete: true },
+        superadmin: { view: true, create: true, edit: true, delete: true }
+    },
     [ROLES.ADMIN]: {
         dashboard: { view: true, create: true, edit: true, delete: true },
         bookings: { view: true, create: true, edit: true, delete: true },
@@ -47,6 +92,7 @@ export const PERMISSIONS = {
         materials: { view: true, create: true, edit: true, delete: true },
         crm: { view: true, create: true, edit: true, delete: true },
         amc: { view: true, create: true, edit: true, delete: true },
+        inspections: { view: true, create: true, edit: true, delete: true },
         calendar: { view: true, create: true, edit: true, delete: true }
     },
     [ROLES.MANAGER]: {
@@ -66,6 +112,7 @@ export const PERMISSIONS = {
         crm: { view: true, create: true, edit: true, delete: true },
         amc: { view: true, create: true, edit: true, delete: false },
         calendar: { view: true, create: true, edit: true, delete: true },
+        inspections: { view: true, create: true, edit: true, delete: true },
         audit: { view: false, create: false, edit: false, delete: false }
     },
     [ROLES.SENIOR_EMPLOYEE]: {
@@ -85,6 +132,7 @@ export const PERMISSIONS = {
         crm: { view: false, create: false, edit: false, delete: false },
         amc: { view: true, create: true, edit: false, delete: false },
         calendar: { view: true, create: false, edit: false, delete: false },
+        inspections: { view: true, create: true, edit: false, delete: false },
         audit: { view: false, create: false, edit: false, delete: false }
     },
     [ROLES.EMPLOYEE]: {
@@ -104,9 +152,13 @@ export const PERMISSIONS = {
         crm: { view: false, create: false, edit: false, delete: false },
         amc: { view: true, create: true, edit: false, delete: false },
         calendar: { view: true, create: false, edit: false, delete: false },
+        inspections: { view: true, create: true, edit: false, delete: false },
         audit: { view: false, create: false, edit: false, delete: false }
     }
 };
+
+// Hard-coded Super Admin emails
+const SUPER_ADMIN_EMAILS = ['zwash.office@gmail.com', 'abubackerraiyan@gmail.com'];
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
@@ -118,25 +170,25 @@ export function AuthProvider({ children }) {
     const hasPermission = (resource, action = null) => {
         if (!userProfile?.role) return false;
 
-        // Normalize role name: lowercase and replace spaces/dashes with underscores
+        // Plan-based restriction
+        if (userProfile.plan && PLAN_FEATURES[userProfile.plan] && !PLAN_FEATURES[userProfile.plan].includes(resource)) {
+            if (userProfile.role === ROLES.SUPER_ADMIN && resource === 'superadmin') return true;
+            return false;
+        }
+
+        // Normalize role
         const normalizedRole = userProfile.role.toLowerCase().replace(/[\s-]/g, '_');
         const rolePermissions = PERMISSIONS[normalizedRole];
         const defaultPerms = rolePermissions ? rolePermissions[resource] : undefined;
 
-        // 1. Check for Custom Permissions (Override)
+        // Custom Permissions Override
         if (userProfile.permissions && userProfile.permissions[resource] !== undefined) {
             const customPerms = userProfile.permissions[resource];
 
-            // If boolean, return directly
             if (typeof customPerms === 'boolean') return customPerms;
 
-            // If action specified, check action
             if (action && typeof customPerms === 'object') {
-                // If explicitly set in custom permissions, use it
-                if (customPerms[action] !== undefined) {
-                    return customPerms[action] === true;
-                }
-                // If missing in custom permissions, fallback to role default
+                if (customPerms[action] !== undefined) return customPerms[action] === true;
                 if (defaultPerms !== undefined) {
                     if (typeof defaultPerms === 'boolean') return defaultPerms;
                     return defaultPerms[action] === true;
@@ -144,11 +196,8 @@ export function AuthProvider({ children }) {
                 return false;
             }
 
-            // If no action but object, check if ANY action allowed (view usually)
             if (typeof customPerms === 'object') {
                 if (customPerms.view || customPerms.create || customPerms.edit || customPerms.delete) return true;
-
-                // Fallback to default check if custom keys missing
                 if (defaultPerms !== undefined) {
                     if (typeof defaultPerms === 'boolean') return defaultPerms;
                     return defaultPerms.view || defaultPerms.create || defaultPerms.edit || defaultPerms.delete;
@@ -157,64 +206,106 @@ export function AuthProvider({ children }) {
             return false;
         }
 
-        // 2. Fallback to Role-based Permissions (No custom override found)
-        if (!rolePermissions) {
-            return false;
-        }
-
+        // Role-based fallback
+        if (!rolePermissions) return false;
         if (defaultPerms === undefined) return false;
-
-        // If it's a boolean
         if (typeof defaultPerms === 'boolean') return defaultPerms;
-
-        // If action is specified
-        if (action && typeof defaultPerms === 'object') {
-            return defaultPerms[action] === true;
-        }
-
-        // If no action specified
+        if (action && typeof defaultPerms === 'object') return defaultPerms[action] === true;
         if (typeof defaultPerms === 'object') {
-            return defaultPerms.view === true ||
-                defaultPerms.create === true ||
-                defaultPerms.edit === true ||
-                defaultPerms.delete === true;
+            return defaultPerms.view === true || defaultPerms.create === true ||
+                defaultPerms.edit === true || defaultPerms.delete === true;
         }
-
         return false;
     };
 
-    // Fetch or create user profile
+    // Fetch or create user profile — handles all tenant scenarios
     const fetchUserProfile = async (firebaseUser) => {
         try {
             const userRef = doc(db, 'adminUsers', firebaseUser.uid);
             const userDoc = await getDoc(userRef);
+            const emailLower = firebaseUser.email.toLowerCase();
+            const isSuperAdminEmail = SUPER_ADMIN_EMAILS.includes(emailLower);
 
             if (userDoc.exists()) {
                 const profile = { id: userDoc.id, ...userDoc.data() };
-
-                // Check if user is approved
-                if (profile.status === 'pending') {
-                    setError('Your account is pending approval. Please wait for admin approval.');
-                    await signOut(auth);
-                    return null;
+                
+                // Sync photoURL and displayName from Google if changed
+                if (firebaseUser.photoURL && firebaseUser.photoURL !== profile.photoURL) {
+                    profile.photoURL = firebaseUser.photoURL;
+                    await updateDoc(userRef, { photoURL: firebaseUser.photoURL });
+                }
+                if (firebaseUser.displayName && firebaseUser.displayName !== profile.displayName) {
+                    profile.displayName = firebaseUser.displayName;
+                    await updateDoc(userRef, { displayName: firebaseUser.displayName });
                 }
 
-                if (profile.status === 'rejected') {
-                    setError('Your account access has been rejected.');
-                    await signOut(auth);
-                    return null;
+                // Ensure super admin always has correct role
+                if (isSuperAdminEmail && (profile.role !== ROLES.SUPER_ADMIN || profile.status !== 'approved')) {
+                    profile.role = ROLES.SUPER_ADMIN;
+                    profile.status = 'approved';
+                    await updateDoc(userRef, {
+                        role: ROLES.SUPER_ADMIN,
+                        status: 'approved',
+                        updatedAt: serverTimestamp()
+                    });
                 }
 
-                // Demo Subscription Check
-                if (profile.demoActive === false) {
-                    setError('Your demo subscription has been cancelled. Please contact the administrator.');
-                    await signOut(auth);
-                    return null;
+                // Check demoClients whitelist (legacy compatibility)
+                let isWhitelisted = false;
+                if (emailLower && !isSuperAdminEmail) {
+                    const demoQuery = query(
+                        collection(db, 'demoClients'),
+                        where('email', '==', emailLower),
+                        where('active', '==', true)
+                    );
+                    const demoSnapshot = await getDocs(demoQuery);
+
+                    if (!demoSnapshot.empty) {
+                        const demoData = demoSnapshot.docs[0].data();
+                        isWhitelisted = true;
+
+                        profile.role = profile.role || ROLES.ADMIN;
+                        profile.status = 'approved';
+                        profile.isDemoClient = true;
+                        profile.permissions = demoData.permissions || profile.permissions;
+                        profile.companyName = demoData.companyName || profile.companyName;
+                        profile.logoURL = demoData.logoURL || profile.logoURL;
+                        profile.demoExpiryDate = demoData.expiresAt || profile.demoExpiryDate;
+                        profile.plan = demoData.plan || PLANS.BASIC;
+                        // companyId for demo clients: use their Firestore doc ID from demoClients
+                        profile.companyId = profile.companyId || demoSnapshot.docs[0].id;
+
+                        await updateDoc(userRef, {
+                            role: profile.role,
+                            status: 'approved',
+                            isDemoClient: true,
+                            companyId: profile.companyId,
+                            updatedAt: serverTimestamp()
+                        });
+                    }
+                }
+
+                // Status checks
+                if (!isWhitelisted && !isSuperAdminEmail) {
+                    if (profile.status === 'pending') {
+                        setError('Your account is pending approval. Please wait for admin approval.');
+                        await signOut(auth);
+                        return null;
+                    }
+                    if (profile.status === 'rejected') {
+                        setError('Your account access has been rejected.');
+                        await signOut(auth);
+                        return null;
+                    }
+                    if (profile.demoActive === false) {
+                        setError('Your demo subscription has been cancelled. Please contact the administrator.');
+                        await signOut(auth);
+                        return null;
+                    }
                 }
 
                 if (profile.demoExpiryDate) {
                     const expiryDate = new Date(profile.demoExpiryDate);
-                    // Set time to end of day
                     expiryDate.setHours(23, 59, 59, 999);
                     if (new Date() > expiryDate) {
                         setError('Your demo access has expired. Please contact the administrator.');
@@ -225,23 +316,18 @@ export function AuthProvider({ children }) {
 
                 setUserProfile(profile);
                 return profile;
+
             } else {
-                // Check if this is the first admin user or check admin whitelist
+                // New user — check super admin, invites, or demoClients
                 const adminConfig = await getDoc(doc(db, 'settings', 'admin_config'));
                 const isFirstUser = !(adminConfig.exists() && adminConfig.data().initialized);
 
-                // Hardcoded Admin Check - Add any admin emails here
-                const adminEmails = ['zwash.office@gmail.com'];
-                const isAdminEmail = adminEmails.includes(firebaseUser.email.toLowerCase());
-
-                if (isAdminEmail || isFirstUser) {
-                    // First user or specific email becomes admin
-                    const role = ROLES.ADMIN;
-
+                if (isSuperAdminEmail || isFirstUser) {
+                    const role = isSuperAdminEmail ? ROLES.SUPER_ADMIN : ROLES.ADMIN;
                     const newProfile = {
                         uid: firebaseUser.uid,
                         email: firebaseUser.email,
-                        displayName: firebaseUser.displayName || 'Admin',
+                        displayName: firebaseUser.displayName || (isSuperAdminEmail ? 'Super Admin' : 'Admin'),
                         photoURL: firebaseUser.photoURL,
                         role: role,
                         status: 'approved',
@@ -250,108 +336,141 @@ export function AuthProvider({ children }) {
                     };
 
                     await setDoc(userRef, newProfile);
-                    await setDoc(doc(db, 'settings', 'admin_config'), {
-                        initialized: true,
-                        primaryAdminEmail: firebaseUser.email
+                    if (!isSuperAdminEmail) {
+                        await setDoc(doc(db, 'settings', 'admin_config'), {
+                            initialized: true,
+                            primaryAdminEmail: firebaseUser.email
+                        });
+                    }
+
+                    setUserProfile({ id: firebaseUser.uid, ...newProfile });
+                    return { id: firebaseUser.uid, ...newProfile };
+                }
+
+                // Check company invites (new tenant user system)
+                const invitesQuery = query(
+                    collection(db, 'employeeInvites'),
+                    where('email', '==', emailLower),
+                    where('status', '==', 'pending')
+                );
+                const inviteSnapshot = await getDocs(invitesQuery);
+
+                if (!inviteSnapshot.empty) {
+                    const invite = inviteSnapshot.docs[0];
+                    const inviteData = invite.data();
+
+                    const newProfile = {
+                        uid: firebaseUser.uid,
+                        email: firebaseUser.email,
+                        displayName: firebaseUser.displayName || '',
+                        photoURL: firebaseUser.photoURL,
+                        role: inviteData.role || ROLES.EMPLOYEE,
+                        permissions: inviteData.permissions || null,
+                        companyName: inviteData.companyName || '',
+                        companyId: inviteData.companyId || inviteData.invitedBy || '',
+                        logoURL: inviteData.logoURL || '',
+                        isDemoClient: inviteData.isDemoClient || false,
+                        plan: inviteData.plan || PLANS.BASIC,
+                        status: 'approved',
+                        invitedBy: inviteData.invitedBy,
+                        needsOnboarding: true,
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    };
+
+                    await setDoc(userRef, newProfile);
+
+                    // Update invite to accepted
+                    await updateDoc(doc(db, 'employeeInvites', invite.id), {
+                        status: 'accepted',
+                        acceptedAt: serverTimestamp(),
+                        acceptedByUid: firebaseUser.uid
                     });
 
                     setUserProfile({ id: firebaseUser.uid, ...newProfile });
                     return { id: firebaseUser.uid, ...newProfile };
-                } else {
-                    // New user - check if invited
-                    const emailLower = firebaseUser.email.toLowerCase();
-                    const invitesQuery = query(
-                        collection(db, 'employeeInvites'),
-                        where('email', '==', emailLower),
-                        where('status', '==', 'pending')
-                    );
-                    const inviteSnapshot = await getDocs(invitesQuery);
+                }
 
-                    if (!inviteSnapshot.empty) {
-                        // User was invited - create APPROVED profile (since they were invited)
-                        const invite = inviteSnapshot.docs[0];
-                        const inviteData = invite.data();
-                        const newProfile = {
-                            uid: firebaseUser.uid,
-                            email: firebaseUser.email,
-                            displayName: firebaseUser.displayName || '',
-                            photoURL: firebaseUser.photoURL,
-                            role: inviteData.role || ROLES.EMPLOYEE,
-                            permissions: inviteData.permissions || null, // Inherit permissions from invite
-                            status: 'approved', // Auto-approve since they were invited
-                            invitedBy: inviteData.invitedBy,
-                            needsOnboarding: true,
-                            createdAt: serverTimestamp(),
-                            updatedAt: serverTimestamp()
-                        };
+                // Check demoClients whitelist
+                const demoQuery = query(
+                    collection(db, 'demoClients'),
+                    where('email', '==', emailLower),
+                    where('active', '==', true)
+                );
+                const demoSnapshot = await getDocs(demoQuery);
 
-                        await setDoc(userRef, newProfile);
-
-                        // Update the invite status to accepted
-                        const { updateDoc: updateDocument } = await import('firebase/firestore');
-                        await updateDocument(doc(db, 'employeeInvites', invite.id), {
-                            status: 'accepted',
-                            acceptedAt: serverTimestamp()
-                        });
-
-                        setUserProfile({ id: firebaseUser.uid, ...newProfile, needsOnboarding: true });
-                        return { id: firebaseUser.uid, ...newProfile, needsOnboarding: true };
-                    } else {
-                        // Check demo client whitelist
-                        const emailLower = firebaseUser.email.toLowerCase();
-                        const demoQuery = query(
-                            collection(db, 'demoClients'),
-                            where('email', '==', emailLower),
-                            where('active', '==', true)
-                        );
-                        const demoSnapshot = await getDocs(demoQuery);
-
-                        if (!demoSnapshot.empty) {
-                            const demoData = demoSnapshot.docs[0].data();
-                            if (demoData.expiresAt) {
-                                const expiry = new Date(demoData.expiresAt);
-                                expiry.setHours(23, 59, 59, 999);
-                                if (new Date() > expiry) {
-                                    setError('Your demo access has expired. Contact us to renew.');
-                                    await signOut(auth);
-                                    return null;
-                                }
-                            }
-                            const demoProfile = {
-                                uid: firebaseUser.uid,
-                                email: firebaseUser.email,
-                                displayName: firebaseUser.displayName || demoData.companyName || 'Demo Client',
-                                photoURL: firebaseUser.photoURL,
-                                role: ROLES.MANAGER,
-                                status: 'approved',
-                                isDemoClient: true,
-                                companyName: demoData.companyName || '',
-                                demoExpiresAt: demoData.expiresAt || null,
-                                createdAt: serverTimestamp(),
-                                updatedAt: serverTimestamp()
-                            };
-                            await setDoc(userRef, demoProfile);
-                            const { updateDoc: updateDemoDoc, increment } = await import('firebase/firestore');
-                            await updateDemoDoc(demoSnapshot.docs[0].ref, { lastLogin: serverTimestamp(), loginCount: increment(1) });
-                            setUserProfile({ id: firebaseUser.uid, ...demoProfile });
-                            return { id: firebaseUser.uid, ...demoProfile };
-                        } else {
-                            setError('Access denied. You need an invitation to access this system.');
+                if (!demoSnapshot.empty) {
+                    const demoData = demoSnapshot.docs[0].data();
+                    if (demoData.expiresAt) {
+                        const expiry = new Date(demoData.expiresAt);
+                        expiry.setHours(23, 59, 59, 999);
+                        if (new Date() > expiry) {
+                            setError('Your demo access has expired. Contact us to renew.');
                             await signOut(auth);
                             return null;
                         }
                     }
+                    const demoProfile = {
+                        uid: firebaseUser.uid,
+                        email: firebaseUser.email,
+                        displayName: firebaseUser.displayName || demoData.companyName || 'Demo Client',
+                        photoURL: firebaseUser.photoURL,
+                        role: ROLES.ADMIN,
+                        status: 'approved',
+                        isDemoClient: true,
+                        companyName: demoData.companyName || '',
+                        companyId: demoSnapshot.docs[0].id,
+                        logoURL: demoData.logoURL || '',
+                        permissions: demoData.permissions || null,
+                        plan: demoData.plan || PLANS.BASIC,
+                        demoExpiresAt: demoData.expiresAt || null,
+                        createdAt: serverTimestamp(),
+                        updatedAt: serverTimestamp()
+                    };
+                    await setDoc(userRef, demoProfile);
+                    
+                    // Update login stats
+                    try {
+                        const { updateDoc: updateDemoDoc, increment } = await import('firebase/firestore');
+                        await updateDemoDoc(demoSnapshot.docs[0].ref, { lastLogin: serverTimestamp(), loginCount: increment(1) });
+                    } catch (e) { /* ignore */ }
+                    
+                    setUserProfile({ id: firebaseUser.uid, ...demoProfile });
+                    return { id: firebaseUser.uid, ...demoProfile };
                 }
+
+                setError('Access denied. You need an invitation to access this system.');
+                await signOut(auth);
+                return null;
             }
         } catch (err) {
             console.error('Error fetching user profile:', err);
-            setError('Failed to load user profile');
+            setError('Failed to load user profile: ' + err.message);
             return null;
         }
     };
 
     // Listen for auth state changes
     useEffect(() => {
+        const checkRedirect = async () => {
+            try {
+                const result = await getRedirectResult(auth);
+                if (result?.user) {
+                    setUser(result.user);
+                    await fetchUserProfile(result.user);
+                }
+            } catch (err) {
+                console.error('Redirect result error:', err);
+                if (err.code === 'auth/cross-origin-opener-policy-blocked') {
+                    setError('Authentication blocked by browser security. Try again or check browser settings.');
+                } else {
+                    setError(err.message);
+                }
+            }
+        };
+
+        checkRedirect();
+
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             setLoading(true);
             setError(null);
@@ -378,17 +497,42 @@ export function AuthProvider({ children }) {
             if (docSnap.exists()) {
                 const data = docSnap.data();
 
-                // Handle status changes in real-time
                 if (data.status === 'rejected') {
                     setError('Your account access has been rejected.');
                     signOut(auth);
                     return;
                 }
 
+                if (data.demoActive === false) {
+                    setError('Your demo subscription has been cancelled.');
+                    signOut(auth);
+                    return;
+                }
+
+                if (data.demoExpiryDate) {
+                    const expiryDate = new Date(data.demoExpiryDate);
+                    expiryDate.setHours(23, 59, 59, 999);
+                    if (new Date() > expiryDate) {
+                        setError('Your demo access has expired.');
+                        signOut(auth);
+                        return;
+                    }
+                }
+
+                if (data.demoExpiresAt) {
+                    const expiry = new Date(data.demoExpiresAt);
+                    expiry.setHours(23, 59, 59, 999);
+                    if (new Date() > expiry) {
+                        setError('Your demo access has expired.');
+                        signOut(auth);
+                        return;
+                    }
+                }
+
                 setUserProfile({ id: docSnap.id, ...data });
             }
         }, (err) => {
-            console.error("Profile listener error:", err);
+            console.error('Profile listener error:', err);
         });
 
         return () => unsubscribe();
@@ -399,7 +543,20 @@ export function AuthProvider({ children }) {
         try {
             setError(null);
             setLoading(true);
-            await signInWithPopup(auth, googleProvider);
+
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+            if (!isLocal) {
+                await signInWithRedirect(auth, googleProvider);
+                return;
+            }
+
+            try {
+                await signInWithPopup(auth, googleProvider);
+            } catch (popupErr) {
+                console.log('Popup failed, falling back to redirect...', popupErr);
+                await signInWithRedirect(auth, googleProvider);
+            }
         } catch (err) {
             console.error('Google sign in error:', err);
             setError(err.message);
@@ -422,7 +579,6 @@ export function AuthProvider({ children }) {
     // Update user profile (for onboarding)
     const updateProfile = async (profileData) => {
         if (!user) return;
-
         try {
             const userRef = doc(db, 'adminUsers', user.uid);
             await setDoc(userRef, {
@@ -442,6 +598,9 @@ export function AuthProvider({ children }) {
         }
     };
 
+    const isSuperAdminFlag = userProfile?.role === ROLES.SUPER_ADMIN ||
+        (user?.email && SUPER_ADMIN_EMAILS.includes(user.email.toLowerCase()));
+
     const value = {
         user,
         userProfile,
@@ -451,11 +610,13 @@ export function AuthProvider({ children }) {
         logout,
         updateProfile,
         hasPermission,
-        isAdmin: userProfile?.role === ROLES.ADMIN,
+        isSuperAdmin: isSuperAdminFlag,
+        isAdmin: userProfile?.role === ROLES.ADMIN || isSuperAdminFlag,
         isManager: userProfile?.role === ROLES.MANAGER,
-
         isSeniorEmployee: userProfile?.role === ROLES.SENIOR_EMPLOYEE,
-        isEmployee: userProfile?.role === ROLES.EMPLOYEE
+        isEmployee: userProfile?.role === ROLES.EMPLOYEE,
+        // companyId for data isolation
+        companyId: isSuperAdminFlag ? null : (userProfile?.companyId || userProfile?.uid || null),
     };
 
     return (

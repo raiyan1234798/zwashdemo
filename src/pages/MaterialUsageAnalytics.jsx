@@ -11,7 +11,7 @@ import {
     Beaker,
     FileText,
     Download,
-    IndianRupee
+    Wallet
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -28,9 +28,13 @@ import {
     Cell,
     Tooltip as RechartsTooltip
 } from 'recharts';
+import { useTranslation } from 'react-i18next';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 const MaterialUsageAnalytics = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
+    const { currentCurrency, currency: currentCurrencyCode, formatCurrency: globalFormatCurrency } = useCurrency();
     const [materials, setMaterials] = useState([]);
     const [services, setServices] = useState([]);
     const [bookings, setBookings] = useState([]);
@@ -70,11 +74,7 @@ const MaterialUsageAnalytics = () => {
     };
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0
-        }).format(amount || 0);
+        return globalFormatCurrency(amount || 0);
     };
 
     const getCategoryIcon = (category) => {
@@ -205,23 +205,23 @@ const MaterialUsageAnalytics = () => {
         // Service Cost Sheet
         const serviceData = serviceAnalytics.map(s => ({
             'Service Name': s.name,
-            'Service Price (₹)': s.price,
-            'Material Cost (₹)': s.materialCost,
-            'Profit (₹)': s.profit,
+            [`Service Price (${currentCurrency.symbol})`]: s.price,
+            [`Material Cost (${currentCurrency.symbol})`]: s.materialCost,
+            [`Profit (${currentCurrency.symbol})`]: s.profit,
             'Profit Margin (%)': s.profitMargin,
             'Completed Bookings': s.bookingsCount,
-            'Total Revenue (₹)': s.totalRevenue,
-            'Total Material Cost (₹)': s.totalMaterialCost
+            [`Total Revenue (${currentCurrency.symbol})`]: s.totalRevenue,
+            [`Total Material Cost (${currentCurrency.symbol})`]: s.totalMaterialCost
         }));
 
         // Material Usage Sheet
         const materialData = materialSummary.map(m => ({
             'Material Name': m.name,
             'Category': m.category,
-            'Cost Per Unit (₹)': m.costPerUnit,
+            [`Cost Per Unit (${currentCurrency.symbol})`]: m.costPerUnit,
             'Unit': m.unit,
             'Total Quantity Used': m.totalQuantity,
-            'Total Cost (₹)': m.totalCost,
+            [`Total Cost (${currentCurrency.symbol})`]: m.totalCost,
             'Used In Services': m.usedInServices.map(s => s.serviceName).join(', ')
         }));
 
@@ -265,7 +265,7 @@ const MaterialUsageAnalytics = () => {
     }, {});
 
     const pieChartData = Object.entries(categoryDataMap).map(([name, value]) => ({
-        name: name.charAt(0).toUpperCase() + name.slice(1),
+        name: t(name) || name.charAt(0).toUpperCase() + name.slice(1),
         value
     })).sort((a, b) => b.value - a.value);
 
@@ -289,35 +289,37 @@ const MaterialUsageAnalytics = () => {
                     <ArrowLeft size={20} />
                 </button>
                 <div className="header-content">
-                    <h1><BarChart3 size={28} /> Material Usage Analytics</h1>
-                    <p>Complete analytics of products used in each service</p>
+                    <h1><BarChart3 size={28} /> {t('material_usage_analytics_title')}</h1>
+                    <p>{t('material_usage_subtitle')}</p>
                 </div>
                 <button className="btn btn-primary" onClick={exportToExcel}>
-                    <Download size={18} /> Export
+                    <Download size={18} /> {t('export')}
                 </button>
             </div>
 
             {/* Summary Stats */}
             <div className="analytics-stats">
                 <div className="stat-card blue">
-                    <IndianRupee size={24} />
+                    <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#3b82f6' }}>
+                        {currentCurrency.symbol}
+                    </div>
                     <div>
                         <span className="value">{formatCurrency(totalRevenue)}</span>
-                        <span className="label">Total Revenue</span>
+                        <span className="label">{t('total_revenue')}</span>
                     </div>
                 </div>
                 <div className="stat-card orange">
                     <Package size={24} />
                     <div>
                         <span className="value">{formatCurrency(totalMaterialCost)}</span>
-                        <span className="label">Total Material Cost</span>
+                        <span className="label">{t('total_material_cost')}</span>
                     </div>
                 </div>
                 <div className="stat-card green">
                     <BarChart3 size={24} />
                     <div>
                         <span className="value">{formatCurrency(totalProfit)}</span>
-                        <span className="label">Total Profit</span>
+                        <span className="label">{t('total_profit')}</span>
                     </div>
                 </div>
             </div>
@@ -326,9 +328,9 @@ const MaterialUsageAnalytics = () => {
             <div className="analytics-charts">
                 <div className="chart-card">
                     <div className="chart-header">
-                        <h3><BarChart3 size={18} /> Material Cost per Service (Top 8)</h3>
+                        <h3><BarChart3 size={18} /> {t('material_cost_per_service')}</h3>
                     </div>
-                    <div className="chart-body" style={{ height: '300px' }}>
+                    <div className="chart-body" style={{ height: '300px', minHeight: '300px' }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={barChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -340,7 +342,7 @@ const MaterialUsageAnalytics = () => {
                                     tick={{ fontSize: 11, fill: '#64748b' }}
                                 />
                                 <YAxis
-                                    tickFormatter={(val) => `₹${val}`}
+                                    tickFormatter={(val) => formatCurrency(val)}
                                     tick={{ fontSize: 11, fill: '#64748b' }}
                                 />
                                 <Tooltip
@@ -348,7 +350,7 @@ const MaterialUsageAnalytics = () => {
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                 />
                                 <Legend verticalAlign="top" height={36} />
-                                <Bar dataKey="cost" name="Material Cost" fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={24} />
+                                <Bar dataKey="cost" name={t('material_cost')} fill="#f59e0b" radius={[4, 4, 0, 0]} barSize={24} />
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
@@ -356,9 +358,9 @@ const MaterialUsageAnalytics = () => {
 
                 <div className="chart-card">
                     <div className="chart-header">
-                        <h3><PieChart size={18} /> Cost Distribution by Category</h3>
+                        <h3><PieChart size={18} /> {t('cost_distribution_category')}</h3>
                     </div>
-                    <div className="chart-body" style={{ height: '300px' }}>
+                    <div className="chart-body" style={{ height: '300px', minHeight: '300px' }}>
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
@@ -392,7 +394,7 @@ const MaterialUsageAnalytics = () => {
                     onChange={(e) => setSelectedService(e.target.value)}
                     className="filter-select"
                 >
-                    <option value="all">All Services</option>
+                    <option value="all">{t('all_services')}</option>
                     {services.map(s => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
@@ -401,7 +403,7 @@ const MaterialUsageAnalytics = () => {
 
             {/* Service-wise Analytics */}
             <div className="analytics-section">
-                <h2><Car size={20} /> Service-wise Cost Breakdown</h2>
+                <h2><Car size={20} /> {t('service_wise_breakdown')}</h2>
                 <div className="service-cards">
                     {filteredServices.map(service => (
                         <div key={service.id} className="service-card">
@@ -411,26 +413,26 @@ const MaterialUsageAnalytics = () => {
                             </div>
                             <div className="service-stats">
                                 <div className="stat">
-                                    <span className="label">Material Cost</span>
+                                    <span className="label">{t('material_cost')}</span>
                                     <span className="value cost">{formatCurrency(service.materialCost)}</span>
                                 </div>
                                 <div className="stat">
-                                    <span className="label">Profit</span>
+                                    <span className="label">{t('profit')}</span>
                                     <span className="value profit">{formatCurrency(service.profit)}</span>
                                 </div>
                                 <div className="stat">
-                                    <span className="label">Margin</span>
+                                    <span className="label">{t('margin_label')}</span>
                                     <span className="value margin">{service.profitMargin}%</span>
                                 </div>
                                 <div className="stat">
-                                    <span className="label">Completed</span>
+                                    <span className="label">{t('completed')}</span>
                                     <span className="value bookings">{service.bookingsCount}</span>
                                 </div>
                             </div>
 
                             {service.materials.length > 0 && (
                                 <div className="materials-breakdown">
-                                    <h4>Materials Used</h4>
+                                    <h4>{t('materials_used')}</h4>
                                     <div className="materials-list">
                                         {service.materials.map((mat, idx) => (
                                             <div key={idx} className="material-row">
@@ -447,7 +449,7 @@ const MaterialUsageAnalytics = () => {
                                                     <span className="name">{mat.name}</span>
                                                 </div>
                                                 <div className="material-qty">
-                                                    {mat.quantity} {mat.unit}
+                                                    {mat.quantity} {t(mat.unit) || mat.unit}
                                                 </div>
                                                 <div className="material-cost">
                                                     {formatCurrency(mat.totalCost)}
@@ -464,17 +466,17 @@ const MaterialUsageAnalytics = () => {
 
             {/* Material Usage Summary */}
             <div className="analytics-section">
-                <h2><Package size={20} /> Material Usage Summary</h2>
+                <h2><Package size={20} /> {t('material_usage_summary')}</h2>
                 <div className="material-summary-table">
                     <table>
                         <thead>
                             <tr>
-                                <th>Material</th>
-                                <th>Category</th>
-                                <th>Cost/Unit</th>
-                                <th>Total Used</th>
-                                <th>Total Cost</th>
-                                <th>Used In</th>
+                                <th>{t('material')}</th>
+                                <th>{t('category_label')}</th>
+                                <th>{t('cost_unit')}</th>
+                                <th>{t('total_used')}</th>
+                                <th>{t('total_cost')}</th>
+                                <th>{t('used_in')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -494,9 +496,9 @@ const MaterialUsageAnalytics = () => {
                                             {material.name}
                                         </div>
                                     </td>
-                                    <td className="capitalize">{material.category}</td>
+                                    <td className="capitalize">{t(material.category) || material.category}</td>
                                     <td>{formatCurrency(material.costPerUnit)}</td>
-                                    <td>{material.totalQuantity.toFixed(2)} {material.unit}</td>
+                                    <td>{material.totalQuantity.toFixed(2)} {t(material.unit) || material.unit}</td>
                                     <td className="cost">{formatCurrency(material.totalCost)}</td>
                                     <td>
                                         <div className="services-tags">

@@ -376,7 +376,7 @@
         font-size: 15px;
         font-weight: 500;
         transition: all 0.2s ease;
-        border-left: 3px solid transparent;
+        border-inline-start: 3px solid transparent;
     }
 
     .more-menu-item:active {
@@ -386,7 +386,7 @@
     .more-menu-item.active {
         color: var(--primary);
         background: rgba(4, 120, 87, 0.08);
-        border-left-color: var(--primary);
+        border-inline-start-color: var(--primary);
     }
 
     .more-menu-item svg:first-child {
@@ -510,7 +510,7 @@
         padding: 0.65rem;
         flex-direction: row;
         align-items: center;
-        text-align: left;
+        text-align: start;
         gap: 0.65rem;
     }
 

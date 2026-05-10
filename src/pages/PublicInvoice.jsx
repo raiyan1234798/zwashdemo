@@ -6,19 +6,20 @@ import { doc, getDoc } from 'firebase/firestore';
 const PublicInvoice = () => {
     const { id } = useParams();
     const [invoice, setInvoice] = useState(null);
+    const [settings, setSettings] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        fetchInvoice();
+        fetchInvoiceAndSettings();
     }, [id]);
 
-    const fetchInvoice = async () => {
+    const fetchInvoiceAndSettings = async () => {
         try {
             setLoading(true);
+
             // Try invoices collection first, then bookings
             let data = null;
-
             const invoiceRef = doc(db, 'invoices', id);
             const invoiceSnap = await getDoc(invoiceRef);
             if (invoiceSnap.exists()) {
@@ -35,9 +36,37 @@ const PublicInvoice = () => {
                 setError('Invoice not found.');
             } else {
                 setInvoice(data);
+                
+                // Fetch creator's profile to find their company (demoClientId)
+                const creatorUid = data.adminUid || data.createdBy || data.employeeId;
+                if (creatorUid) {
+                    const userDocSnap = await getDoc(doc(db, 'users', creatorUid));
+                    if (userDocSnap.exists()) {
+                        const userData = userDocSnap.data();
+                        
+                        // If user belongs to a demo tenant, fetch tenant branding
+                        if (userData.demoClientId) {
+                            const demoClientSnap = await getDoc(doc(db, 'demoClients', userData.demoClientId));
+                            if (demoClientSnap.exists()) {
+                                const clientData = demoClientSnap.data();
+                                setSettings(prev => ({
+                                    ...prev,
+                                    businessName: clientData.name,
+                                    logoURL: clientData.logoURL
+                                }));
+                            }
+                        }
+                    }
+
+                    // Also check for specific shop settings as fallback/supplement
+                    const shopSettingsSnap = await getDoc(doc(db, 'settings', creatorUid));
+                    if (shopSettingsSnap.exists()) {
+                        setSettings(prev => ({ ...prev, ...shopSettingsSnap.data() }));
+                    }
+                }
             }
         } catch (err) {
-            console.error('Error fetching invoice:', err);
+            console.error('Error fetching data:', err);
             setError('Unable to load invoice. Please try again.');
         } finally {
             setLoading(false);
@@ -123,13 +152,12 @@ const PublicInvoice = () => {
                 {/* Header */}
                 <div style={styles.header}>
                     <div style={styles.companyInfo}>
-                        <img src="/detail.png" alt="Zwash Demo" style={styles.logo} onError={e => e.target.style.display = 'none'} />
+                        <img src={settings?.logoURL || "/logo.png"} alt="Logo" style={styles.logo} onError={e => e.target.style.display = 'none'} />
                         <div>
-                            <h1 style={styles.companyName}>Zwash Demo</h1>
-                            <p style={styles.companyDetail}>Suchindram Byp, near Ragavendra Temple</p>
-                            <p style={styles.companyDetail}>Nagercoil, Tamil Nadu 629704</p>
+                            <h1 style={styles.companyName}>{settings?.businessName || 'Zwash ERP'}</h1>
+                            <p style={styles.companyDetail}>{settings?.address || 'Business Address'}</p>
                             <p style={{ ...styles.companyDetail, marginTop: '6px' }}>
-                                📞 +91 9363911500 &nbsp;|&nbsp; ✉️ detailingcommando@gmail.com
+                                📞 {settings?.phone || '+0 (000) 000-0000'} &nbsp;|&nbsp; ✉️ {settings?.email || 'contact@business.com'}
                             </p>
                         </div>
                     </div>
@@ -151,14 +179,12 @@ const PublicInvoice = () => {
                     <div style={styles.detailBox}>
                         <p style={styles.sectionLabel}>BILL TO</p>
                         <p style={styles.customerName}>{invoice.customerName || 'Walk-in Customer'}</p>
-                        <p style={styles.detailText}>Phone: {invoice.contactPhone || 'N/A'}</p>
                     </div>
                     <div style={styles.detailBox}>
                         <p style={styles.sectionLabel}>VEHICLE INFO</p>
                         <p style={{ ...styles.customerName, color: '#1a1f3a' }}>
-                            {invoice.carMake || ''} {invoice.carModel || ''}
+                            {invoice.carMake || 'Demo'} {invoice.carModel || 'Vehicle'}
                         </p>
-                        {invoice.licensePlate && <p style={styles.detailText}>Plate: {invoice.licensePlate}</p>}
                         {invoice.startTime && (
                             <p style={styles.detailText}>Service Time: {formatTime12Hour(invoice.startTime)}</p>
                         )}
@@ -225,6 +251,30 @@ const PublicInvoice = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Support & Enquiries */}
+                {(settings?.supportPhone || settings?.paymentPhone || settings?.enquiryPhone) && (
+                    <div style={styles.supportSection}>
+                        <h3 style={styles.supportTitle}>Need Help or Have Questions?</h3>
+                        <div style={styles.supportButtons}>
+                            {settings?.enquiryPhone && (
+                                <a href={`https://wa.me/${settings.enquiryPhone.replace(/\D/g, '')}?text=Hi, I have an enquiry about my booking #${invoice.invoiceNumber || invoice.id.slice(0, 8)}`} target="_blank" rel="noopener noreferrer" style={{ ...styles.supportBtn, background: '#075e54' }}>
+                                    General Enquiry
+                                </a>
+                            )}
+                            {settings?.paymentPhone && (
+                                <a href={`https://wa.me/${settings.paymentPhone.replace(/\D/g, '')}?text=Hi, I have a question regarding payment for invoice #${invoice.invoiceNumber || invoice.id.slice(0, 8)}`} target="_blank" rel="noopener noreferrer" style={{ ...styles.supportBtn, background: '#128c7e' }}>
+                                    Payment Support
+                                </a>
+                            )}
+                            {settings?.supportPhone && (
+                                <a href={`https://wa.me/${settings.supportPhone.replace(/\D/g, '')}?text=Hi, I would like to report a complaint regarding service #${invoice.invoiceNumber || invoice.id.slice(0, 8)}`} target="_blank" rel="noopener noreferrer" style={{ ...styles.supportBtn, background: '#ef4444' }}>
+                                    Report Complaint
+                                </a>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Footer */}
                 <div style={styles.footer}>
@@ -436,6 +486,34 @@ const styles = {
         fontSize: '11px',
         color: '#94a3b8',
         margin: 0
+    },
+    supportSection: {
+        marginTop: '30px',
+        padding: '20px',
+        background: '#f1f5f9',
+        borderRadius: '8px',
+        textAlign: 'center'
+    },
+    supportTitle: {
+        fontSize: '15px',
+        fontWeight: '700',
+        color: '#1a1f3a',
+        marginBottom: '15px'
+    },
+    supportButtons: {
+        display: 'flex',
+        gap: '10px',
+        justifyContent: 'center',
+        flexWrap: 'wrap'
+    },
+    supportBtn: {
+        padding: '10px 16px',
+        borderRadius: '6px',
+        color: 'white',
+        textDecoration: 'none',
+        fontSize: '13px',
+        fontWeight: '600',
+        transition: 'opacity 0.2s'
     }
 };
 

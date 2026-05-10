@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Shield, ArrowRight, Building2, TrendingUp, Users, Zap, Globe, CheckCircle } from 'lucide-react';
+import { Shield, ArrowRight, Building2, TrendingUp, Users, Zap, Globe, CheckCircle, Lock, Layout } from 'lucide-react';
 
 /* ── Animated counter hook ── */
 const useCounter = (target, duration = 2000) => {
@@ -31,8 +31,8 @@ const Login = () => {
   const navigate = useNavigate();
   const [btnHover, setBtnHover] = useState(false);
 
-  const [countBiz, refBiz] = useCounter(500, 1800);
-  const [countCountries, refCountries] = useCounter(12, 1400);
+  const [countBiz, refBiz] = useCounter(1200, 1800);
+  const [countCountries, refCountries] = useCounter(24, 1400);
   const [countUptime, refUptime] = useCounter(99, 1600);
 
   useEffect(() => {
@@ -45,181 +45,202 @@ const Login = () => {
     <div className="login-page" style={s.page}>
       <style>{css}</style>
 
-      {/* ── Left Panel ── */}
-      <div className="login-left" style={s.left}>
-        {/* Animated gradient orbs */}
-        <div className="orb orb-1" />
-        <div className="orb orb-2" />
-        <div className="orb orb-3" />
-        {/* Grid overlay */}
-        <div style={s.gridOverlay} />
+      {/* ── Left Side: Visual Experience ── */}
+      <div className="login-visual" style={s.visualSide}>
+        <div className="visual-bg" style={s.visualBg} />
+        <div style={s.visualOverlay} />
+        
+        {/* Animated Orbs for Depth */}
+        <div className="orb orb-primary" />
+        <div className="orb orb-secondary" />
 
-        <div style={s.leftInner}>
-          {/* Logo */}
-          <div style={s.logoRow}>
-            <div style={s.logoContainer}>
-              <img src="/detail.png" alt="Zwash" style={s.logo} />
+        <div style={s.visualContent}>
+          <div style={s.logoWrapper}>
+            <div style={s.logoIcon}>
+              <img src="/logo.png" alt="Zwash" style={s.logoImg} />
             </div>
-            <div>
-              <div style={s.logoText}>ZWASH</div>
-              <div style={s.logoSub}>Enterprise Platform</div>
+            <div style={s.logoTextGroup}>
+              <p style={s.brandTagline}>ENTERPRISE GRADE CAR CARE</p>
             </div>
           </div>
 
-          {/* Headline */}
-          <h1 className="login-headline" style={s.headline}>
-            The Operating System for <span style={s.headlineAccent}>Premium Car Care</span>
-          </h1>
-          <p style={s.subhead}>
-            Trusted by leading automotive care brands worldwide. Manage bookings, staff, inventory, and analytics — all from one powerful dashboard.
-          </p>
-
-          {/* Stats bar */}
-          <div className="stats-bar" style={s.statsBar}>
-            <div ref={refCountries} style={s.statItem}>
-              <div style={s.statNum}>{countCountries}+</div>
-              <div style={s.statLabel}>Countries</div>
-            </div>
-            <div style={s.statDivider} />
-            <div ref={refBiz} style={s.statItem}>
-              <div style={s.statNum}>{countBiz}+</div>
-              <div style={s.statLabel}>Businesses</div>
-            </div>
-            <div style={s.statDivider} />
-            <div ref={refUptime} style={s.statItem}>
-              <div style={s.statNum}>{countUptime}.9%</div>
-              <div style={s.statLabel}>Uptime</div>
-            </div>
+          <div style={s.heroSection}>
+            <h2 className="hero-text" style={s.heroText}>
+              Elevate Your <span className="text-gradient">Detailing Empire</span>
+            </h2>
+            <p style={s.heroSubtext}>
+              The world's most advanced operating system for premium car wash and detailing businesses. 
+              Seamlessly manage operations, staff, and revenue with precision.
+            </p>
           </div>
 
-          {/* Feature pills */}
-          <div style={s.featureList}>
-            {[
-              { icon: Building2, text: 'Multi-Location Management' },
-              { icon: TrendingUp, text: 'Revenue Analytics' },
-              { icon: Users, text: 'Team & Payroll' },
-              { icon: Zap, text: 'Real-time Scheduling' },
-              { icon: Globe, text: 'Global Deployment' },
-              { icon: Shield, text: 'Enterprise Security' },
-            ].map((f, i) => (
-              <div key={i} className="feat-pill" style={s.featPill}>
-                <f.icon size={14} style={{ color: '#60a5fa', flexShrink: 0 }} />
-                <span>{f.text}</span>
-              </div>
-            ))}
+          <div className="stats-container" style={s.statsContainer}>
+            <div ref={refCountries} className="stat-card" style={s.statCard}>
+              <div style={s.statValue}>{countCountries}+</div>
+              <div style={s.statLabel}>Global Markets</div>
+            </div>
+            <div ref={refBiz} className="stat-card" style={s.statCard}>
+              <div style={s.statValue}>{countBiz}+</div>
+              <div style={s.statLabel}>Active Studios</div>
+            </div>
+            <div ref={refUptime} className="stat-card" style={s.statCard}>
+              <div style={s.statValue}>{countUptime}.9%</div>
+              <div style={s.statLabel}>System Uptime</div>
+            </div>
+          </div>
+          
+          <div style={s.trustPills}>
+            <div className="trust-pill" style={s.trustPill}>
+              <Shield size={14} /> SOC2 Type II Certified
+            </div>
+            <div className="trust-pill" style={s.trustPill}>
+              <Lock size={14} /> 256-bit Encryption
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── Right Panel ── */}
-      <div className="login-right" style={s.right}>
-        <div className="login-card" style={s.card}>
-          {/* Card logo */}
-          <div style={s.cardLogo}>
-            <img src="/detail.png" alt="Zwash" style={{ height: 36, objectFit: 'contain' }} />
-          </div>
-
-          <div style={s.cardHeader}>
-            <h2 style={s.cardTitle}>Welcome back</h2>
-            <p style={s.cardSub}>Sign in to access your Zwash dashboard</p>
-          </div>
-
-          {error && (
-            <div style={s.errorBox}>
-              <span style={{ fontSize: 16 }}>⚠</span>
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Google Sign-in Button */}
-          <button
-            style={{ ...s.googleBtn, ...(btnHover ? s.googleBtnHover : {}) }}
-            onClick={signInWithGoogle}
-            disabled={loading}
-            onMouseEnter={() => setBtnHover(true)}
-            onMouseLeave={() => setBtnHover(false)}
-            className="google-btn"
-          >
-            {loading ? (
-              <div style={s.spinner} className="spinner" />
-            ) : (
-              <svg width="22" height="22" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-            )}
-            <span style={{ flex: 1, textAlign: 'left' }}>{loading ? 'Authenticating…' : 'Continue with Google'}</span>
-            {!loading && <ArrowRight size={18} style={{ color: '#94a3b8' }} />}
-          </button>
-
-          {/* Divider */}
-          <div style={s.divider}>
-            <div style={s.dividerLine} />
-            <span style={s.dividerText}>Secure Access</span>
-            <div style={s.dividerLine} />
-          </div>
-
-          {/* Trust badges */}
-          <div style={s.trustRow}>
-            {[
-              { icon: Shield, text: 'SSL Encrypted' },
-              { icon: CheckCircle, text: 'SOC 2 Ready' },
-              { icon: Globe, text: 'GDPR Compliant' },
-            ].map((t, i) => (
-              <div key={i} style={s.trustItem}>
-                <t.icon size={13} style={{ color: '#3b82f6' }} />
-                <span>{t.text}</span>
+      {/* ── Right Side: Authentication ── */}
+      <div className="login-auth" style={s.authSide}>
+        <div className="login-card-wrapper" style={s.cardWrapper}>
+          <div className="login-card" style={s.card}>
+            <div style={s.cardHeader}>
+              <div style={s.mobileLogo}>
+                 <img src="/logo.png" alt="Zwash" style={{ height: 40 }} />
               </div>
-            ))}
+              <h3 style={s.cardTitle}>Welcome Back</h3>
+              <p style={s.cardSubtitle}>Access your executive dashboard</p>
+            </div>
+
+            {error && (
+              <div className="error-alert" style={s.errorAlert}>
+                <span style={s.errorIcon}>!</span>
+                <div style={s.errorContent}>
+                  <div style={{ fontWeight: 600 }}>Access Denied</div>
+                  <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>{error}</div>
+                </div>
+              </div>
+            )}
+
+            <div style={s.authActions}>
+              <button
+                className="google-auth-btn"
+                style={{ ...s.googleBtn, ...(btnHover ? s.googleBtnHover : {}) }}
+                onMouseEnter={() => setBtnHover(true)}
+                onMouseLeave={() => setBtnHover(false)}
+                onClick={signInWithGoogle}
+                disabled={loading}
+              >
+                {loading ? (
+                  <div className="spinner-small" />
+                ) : (
+                  <svg width="24" height="24" viewBox="0 0 24 24" style={{ marginRight: 12 }}>
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                )}
+                <span>{loading ? 'Verifying Identity...' : 'Continue with Google Workspace'}</span>
+              </button>
+
+              <div style={s.dividerContainer}>
+                <div style={s.dividerLine} />
+                <span style={s.dividerText}>SECURE ENTERPRISE LOGIN</span>
+                <div style={s.dividerLine} />
+              </div>
+
+              <div style={s.featuresGrid}>
+                {[
+                  { icon: Zap, label: 'Real-time Sync' },
+                  { icon: Layout, label: 'Multi-Shop' },
+                  { icon: TrendingUp, label: 'AI Analytics' },
+                  { icon: Users, label: 'Team Portal' },
+                ].map((item, i) => (
+                  <div key={i} className="feature-item" style={s.featureItem}>
+                    <item.icon size={16} style={{ color: '#3b82f6' }} />
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={s.cardFooter}>
+              <p style={s.footerText}>
+                Enterprise solution by <strong>Zwash Technologies</strong>
+              </p>
+              <div style={s.footerLinks}>
+                <a href="#" style={s.footerLink}>Support</a>
+                <span style={s.footerDot}>•</span>
+                <a href="#" style={s.footerLink}>Security Policy</a>
+              </div>
+            </div>
           </div>
-
-          <p style={s.termsText}>
-            By continuing, you agree to our <a href="#" style={s.link}>Terms</a> & <a href="#" style={s.link}>Privacy Policy</a>.
-          </p>
+          
+          <div style={s.copyrightMobile}>
+            © 2025 Zwash. All rights reserved.
+          </div>
         </div>
-
-        {/* Bottom copyright */}
-        <div style={s.copyright}>© 2025 Zwash Technologies · Enterprise Car Wash Software</div>
       </div>
     </div>
   );
 };
 
-// ─── Onboarding ───
+// ─── Onboarding Form ───
 const OnboardingForm = () => {
   const { userProfile, updateProfile, logout } = useAuth();
   const navigate = useNavigate();
+  const [submitting, setSubmitting] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitting(true);
     const fd = new FormData(e.target);
     try {
-      await updateProfile({ displayName: fd.get('displayName'), phone: fd.get('phone'), address: fd.get('address') || '' });
+      await updateProfile({ 
+        displayName: fd.get('displayName'), 
+        phone: fd.get('phone'), 
+        address: fd.get('address') || '' 
+      });
       navigate('/');
-    } catch {}
+    } catch (err) {
+      alert("Error updating profile. Please try again.");
+    }
+    setSubmitting(false);
   };
+
   return (
-    <div className="login-page" style={{ ...s.page, justifyContent: 'center', background: '#f1f5f9' }}>
+    <div className="onboarding-page" style={s.onboardingPage}>
       <style>{css}</style>
-      <div className="login-card" style={{ ...s.card, maxWidth: 440, width: '100%', margin: '0 20px', padding: '44px 36px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ ...s.cardLogo, marginBottom: 16 }}>
-            <img src="/detail.png" alt="Zwash" style={{ height: 40, objectFit: 'contain' }} />
-          </div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#0f172a', margin: '0 0 8px' }}>Complete Your Profile</h2>
-          <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0, lineHeight: 1.5 }}>Just a few details to get you started</p>
+      <div className="onboarding-card" style={s.onboardingCard}>
+        <div style={s.onboardingHeader}>
+            <img src="/logo.png" alt="Zwash" style={{ height: 48, marginBottom: 16 }} />
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', margin: '0 0 8px' }}>Finalize Setup</h2>
+            <p style={{ color: '#64748b', fontSize: '0.95rem', margin: 0 }}>Complete your professional profile to begin.</p>
         </div>
-        <form onSubmit={handleSubmit}>
-          {[['displayName', 'Full Name', 'text', true, userProfile?.displayName], ['phone', 'Phone Number', 'tel', true, ''], ['address', 'Address (Optional)', 'text', false, '']].map(([name, label, type, req, def]) => (
-            <div key={name} style={{ marginBottom: 20 }}>
-              <label style={s.inputLabel}>{label}</label>
-              <input name={name} type={type} required={req} defaultValue={def} style={s.input} placeholder={label} />
-            </div>
-          ))}
-          <button type="submit" style={s.submitBtn} className="submit-btn">Complete Setup</button>
+        
+        <form onSubmit={handleSubmit} style={s.onboardingForm}>
+          <div style={s.inputGroup}>
+            <label style={s.label}>Legal Full Name</label>
+            <input name="displayName" type="text" required defaultValue={userProfile?.displayName} style={s.input} placeholder="John Doe" />
+          </div>
+          <div style={s.inputGroup}>
+            <label style={s.label}>Business Contact Number</label>
+            <input name="phone" type="tel" required style={s.input} placeholder="+1 (555) 000-0000" />
+          </div>
+          <div style={s.inputGroup}>
+            <label style={s.label}>Operating Address</label>
+            <input name="address" type="text" style={s.input} placeholder="123 Business Ave, Suite 100" />
+          </div>
+          
+          <button type="submit" disabled={submitting} className="onboarding-btn" style={s.onboardingBtn}>
+            {submitting ? 'Updating Profile...' : 'Launch Dashboard'}
+          </button>
         </form>
-        <button onClick={logout} style={s.logoutLink}>← Use a different account</button>
+        
+        <button onClick={logout} style={s.switchAccountBtn}>
+          ← Use a different account
+        </button>
       </div>
     </div>
   );
@@ -227,121 +248,470 @@ const OnboardingForm = () => {
 
 // ─── Styles ───
 const s = {
-  page: { display: 'flex', minHeight: '100vh', width: '100%', fontFamily: "'Inter', sans-serif", flexDirection: 'row' },
-
-  // LEFT
-  left: { flex: 1.15, background: '#060b18', position: 'relative', display: 'flex', alignItems: 'center', padding: '60px 7%', overflow: 'hidden' },
-  gridOverlay: { position: 'absolute', inset: 0, opacity: 0.04, backgroundImage: 'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)', backgroundSize: '60px 60px', pointerEvents: 'none' },
-  leftInner: { position: 'relative', zIndex: 2, maxWidth: 560 },
-  logoRow: { display: 'flex', alignItems: 'center', gap: 14, marginBottom: 52 },
-  logoContainer: { background: '#ffffff', padding: 10, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 24px rgba(0,0,0,0.15), 0 0 0 1px rgba(255,255,255,0.1)' },
-  logo: { height: 34, objectFit: 'contain' },
-  logoText: { color: '#ffffff', fontSize: '1.3rem', fontWeight: 800, letterSpacing: '0.08em' },
-  logoSub: { color: '#64748b', fontSize: '0.75rem', fontWeight: 500, letterSpacing: '0.04em', marginTop: 2 },
-  headline: { color: '#ffffff', fontSize: '2.75rem', fontWeight: 700, lineHeight: 1.15, marginBottom: 20, letterSpacing: '-0.03em' },
-  headlineAccent: { background: 'linear-gradient(135deg, #60a5fa, #818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' },
-  subhead: { color: '#94a3b8', fontSize: '1.05rem', lineHeight: 1.7, marginBottom: 40, maxWidth: '95%' },
-
-  // Stats bar
-  statsBar: { display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: '20px 28px', gap: 0, marginBottom: 40 },
-  statItem: { flex: 1, textAlign: 'center' },
-  statNum: { fontSize: '1.5rem', fontWeight: 700, color: '#ffffff', marginBottom: 4 },
-  statLabel: { fontSize: '0.75rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 },
-  statDivider: { width: 1, height: 36, background: 'rgba(255,255,255,0.08)', flexShrink: 0 },
-
-  // Feature pills
-  featureList: { display: 'flex', flexWrap: 'wrap', gap: 10 },
-  featPill: { display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 40, padding: '8px 16px', fontSize: '0.82rem', color: '#cbd5e1', fontWeight: 500 },
-
-  // RIGHT
-  right: { flex: 1, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', position: 'relative', flexDirection: 'column' },
-  card: { width: '100%', maxWidth: 440, background: '#ffffff', borderRadius: 24, padding: '44px 36px', boxShadow: '0 25px 50px -12px rgba(15,23,42,0.08)', border: '1px solid #e2e8f0', position: 'relative', zIndex: 1 },
-  cardLogo: { width: 56, height: 56, borderRadius: 16, background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' },
-  cardHeader: { marginBottom: 32, textAlign: 'center' },
-  cardTitle: { fontSize: '1.65rem', fontWeight: 700, color: '#0f172a', margin: '0 0 8px', letterSpacing: '-0.02em' },
-  cardSub: { fontSize: '0.92rem', color: '#64748b', margin: 0 },
-  errorBox: { display: 'flex', alignItems: 'flex-start', gap: 10, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '12px 16px', marginBottom: 20, color: '#ef4444', fontSize: '0.85rem', fontWeight: 500 },
-  googleBtn: { display: 'flex', alignItems: 'center', gap: 14, width: '100%', padding: '15px 20px', background: '#ffffff', border: '2px solid #e2e8f0', borderRadius: 14, color: '#0f172a', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.25s ease', marginBottom: 24 },
-  googleBtnHover: { borderColor: '#3b82f6', background: '#f8fafc', transform: 'translateY(-2px)', boxShadow: '0 8px 20px rgba(59,130,246,0.12)' },
-  spinner: { width: 22, height: 22, border: '2.5px solid #e2e8f0', borderTop: '2.5px solid #3b82f6', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
-  divider: { display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 },
-  dividerLine: { flex: 1, height: 1, background: '#e2e8f0' },
-  dividerText: { fontSize: '0.72rem', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em' },
-  trustRow: { display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 20, flexWrap: 'wrap' },
-  trustItem: { display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: '#64748b', fontWeight: 500 },
-  termsText: { textAlign: 'center', fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.5, margin: 0 },
-  link: { color: '#3b82f6', textDecoration: 'none', fontWeight: 500 },
-  copyright: { position: 'absolute', bottom: 24, left: 0, right: 0, textAlign: 'center', fontSize: '0.75rem', color: '#94a3b8' },
-
-  // Form inputs
-  inputLabel: { display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: 8 },
-  input: { width: '100%', padding: '12px 16px', background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 12, color: '#0f172a', fontSize: '1rem', outline: 'none', transition: 'all 0.2s', boxSizing: 'border-box' },
-  submitBtn: { width: '100%', padding: '14px', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', border: 'none', borderRadius: 12, color: '#ffffff', fontWeight: 600, fontSize: '1rem', cursor: 'pointer', marginTop: 12, transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(37,99,235,0.25)' },
-  logoutLink: { display: 'block', margin: '20px auto 0', background: 'none', border: 'none', color: '#64748b', fontSize: '0.9rem', fontWeight: 500, cursor: 'pointer' },
+  page: { 
+    display: 'flex', 
+    minHeight: '100vh', 
+    width: '100%', 
+    background: '#020617',
+    fontFamily: "'Inter', sans-serif",
+    overflow: 'hidden'
+  },
+  
+  // Visual Side (Left)
+  visualSide: {
+    flex: 1.4,
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '60px 8%',
+    overflow: 'hidden',
+    color: '#ffffff'
+  },
+  visualBg: {
+    position: 'absolute',
+    inset: 0,
+    backgroundImage: 'url("/login-bg.png")',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    transition: 'transform 20s linear',
+  },
+  visualOverlay: {
+    position: 'absolute',
+    inset: 0,
+    background: 'linear-gradient(to right, rgba(2,6,23,0.95) 0%, rgba(2,6,23,0.4) 50%, rgba(2,6,23,0.8) 100%)',
+    zIndex: 1
+  },
+  visualContent: {
+    position: 'relative',
+    zIndex: 10,
+    maxWidth: 680
+  },
+  logoWrapper: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 64
+  },
+  logoIcon: {
+    background: '#ffffff',
+    padding: 12,
+    borderRadius: 16,
+    boxShadow: '0 0 40px rgba(255,255,255,0.1)'
+  },
+  logoImg: {
+    height: 48,
+    width: 'auto'
+  },
+  logoTextGroup: {
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  brandTitle: {
+    fontSize: '1.5rem',
+    fontWeight: 900,
+    letterSpacing: '0.15em',
+    margin: 0,
+    lineHeight: 1
+  },
+  brandTagline: {
+    fontSize: '0.65rem',
+    fontWeight: 600,
+    color: '#94a3b8',
+    letterSpacing: '0.2em',
+    margin: '4px 0 0'
+  },
+  heroSection: {
+    marginBottom: 64
+  },
+  heroText: {
+    fontSize: '4.5rem',
+    fontWeight: 800,
+    lineHeight: 1.05,
+    letterSpacing: '-0.04em',
+    marginBottom: 24
+  },
+  heroSubtext: {
+    fontSize: '1.2rem',
+    color: '#94a3b8',
+    lineHeight: 1.6,
+    maxWidth: 540
+  },
+  statsContainer: {
+    display: 'flex',
+    gap: 32,
+    marginBottom: 48
+  },
+  statCard: {
+    flex: 1,
+    background: 'rgba(255,255,255,0.03)',
+    backdropFilter: 'blur(12px)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 20,
+    padding: '24px',
+    transition: 'transform 0.3s ease, border-color 0.3s ease'
+  },
+  statValue: {
+    fontSize: '1.75rem',
+    fontWeight: 800,
+    color: '#ffffff',
+    marginBottom: 4
+  },
+  statLabel: {
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em'
+  },
+  trustPills: {
+    display: 'flex',
+    gap: 16
+  },
+  trustPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    color: '#94a3b8',
+    background: 'rgba(255,255,255,0.05)',
+    padding: '8px 16px',
+    borderRadius: 100,
+    border: '1px solid rgba(255,255,255,0.1)'
+  },
+  
+  // Auth Side (Right)
+  authSide: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '40px',
+    position: 'relative',
+    background: '#020617'
+  },
+  cardWrapper: {
+    width: '100%',
+    maxWidth: 480,
+    zIndex: 20
+  },
+  card: {
+    background: '#ffffff',
+    borderRadius: 32,
+    padding: '48px 40px',
+    boxShadow: '0 50px 100px -20px rgba(0,0,0,0.5)',
+    color: '#0f172a'
+  },
+  cardHeader: {
+    textAlign: 'center',
+    marginBottom: 40
+  },
+  mobileLogo: {
+    display: 'none',
+    justifyContent: 'center',
+    marginBottom: 24
+  },
+  cardTitle: {
+    fontSize: '2rem',
+    fontWeight: 800,
+    letterSpacing: '-0.02em',
+    margin: '0 0 8px'
+  },
+  cardSubtitle: {
+    fontSize: '1rem',
+    color: '#64748b'
+  },
+  errorAlert: {
+    background: '#fff1f2',
+    border: '1px solid #ffe4e6',
+    borderRadius: 16,
+    padding: '16px',
+    marginBottom: 32,
+    display: 'flex',
+    gap: 12,
+    alignItems: 'flex-start',
+    color: '#e11d48'
+  },
+  errorIcon: {
+    width: 20,
+    height: 20,
+    background: '#e11d48',
+    color: '#fff',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '12px',
+    fontWeight: 900,
+    flexShrink: 0
+  },
+  errorContent: {
+    fontSize: '0.9rem'
+  },
+  authActions: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 24
+  },
+  googleBtn: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '16px 24px',
+    background: '#ffffff',
+    border: '2px solid #e2e8f0',
+    borderRadius: 16,
+    fontSize: '1rem',
+    fontWeight: 700,
+    color: '#0f172a',
+    cursor: 'pointer',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+  },
+  googleBtnHover: {
+    background: '#f8fafc',
+    borderColor: '#3b82f6',
+    transform: 'translateY(-2px)',
+    boxShadow: '0 12px 24px -6px rgba(59,130,246,0.15)'
+  },
+  dividerContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 16
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    background: '#e2e8f0'
+  },
+  dividerText: {
+    fontSize: '0.65rem',
+    fontWeight: 800,
+    color: '#94a3b8',
+    letterSpacing: '0.1em'
+  },
+  featuresGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 12
+  },
+  featureItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    color: '#475569',
+    background: '#f8fafc',
+    padding: '12px 16px',
+    borderRadius: 12
+  },
+  cardFooter: {
+    marginTop: 48,
+    textAlign: 'center',
+    borderTop: '1px solid #f1f5f9',
+    paddingTop: 32
+  },
+  footerText: {
+    fontSize: '0.85rem',
+    color: '#64748b',
+    margin: '0 0 12px'
+  },
+  footerLinks: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: 12,
+    alignItems: 'center'
+  },
+  footerLink: {
+    fontSize: '0.8rem',
+    color: '#3b82f6',
+    textDecoration: 'none',
+    fontWeight: 600
+  },
+  footerDot: {
+    color: '#cbd5e1'
+  },
+  copyrightMobile: {
+    textAlign: 'center',
+    marginTop: 32,
+    fontSize: '0.8rem',
+    color: '#475569',
+    display: 'none'
+  },
+  
+  // Onboarding
+  onboardingPage: {
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#f8fafc',
+    padding: 20
+  },
+  onboardingCard: {
+    background: '#ffffff',
+    width: '100%',
+    maxWidth: 480,
+    borderRadius: 32,
+    padding: '48px',
+    boxShadow: '0 40px 80px -15px rgba(0,0,0,0.1)',
+    textAlign: 'center'
+  },
+  onboardingHeader: {
+    marginBottom: 40
+  },
+  onboardingForm: {
+    textAlign: 'left'
+  },
+  inputGroup: {
+    marginBottom: 24
+  },
+  label: {
+    display: 'block',
+    fontSize: '0.85rem',
+    fontWeight: 700,
+    color: '#334155',
+    marginBottom: 8
+  },
+  input: {
+    width: '100%',
+    padding: '14px 18px',
+    background: '#f1f5f9',
+    border: '2px solid transparent',
+    borderRadius: 14,
+    fontSize: '1rem',
+    color: '#0f172a',
+    transition: 'all 0.2s',
+    outline: 'none'
+  },
+  onboardingBtn: {
+    width: '100%',
+    padding: '16px',
+    background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: 16,
+    fontSize: '1.05rem',
+    fontWeight: 700,
+    cursor: 'pointer',
+    marginTop: 12,
+    boxShadow: '0 10px 20px -5px rgba(59,130,246,0.3)'
+  },
+  switchAccountBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#64748b',
+    fontSize: '0.9rem',
+    fontWeight: 600,
+    marginTop: 32,
+    cursor: 'pointer'
+  }
 };
 
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  
   * { box-sizing: border-box; margin: 0; }
-  body { margin: 0; }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes float1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(30px,-40px) scale(1.1); } }
-  @keyframes float2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-20px,30px) scale(1.15); } }
-  @keyframes float3 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(15px,25px) scale(1.05); } }
-
-  /* Animated gradient orbs */
+  
+  .text-gradient {
+    background: linear-gradient(135deg, #3b82f6 0%, #818cf8 50%, #ffffff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
   .orb {
     position: absolute;
     border-radius: 50%;
-    filter: blur(80px);
+    filter: blur(100px);
+    z-index: 2;
     pointer-events: none;
-    z-index: 1;
+    opacity: 0.5;
   }
-  .orb-1 {
-    width: 400px; height: 400px;
-    background: radial-gradient(circle, rgba(37,99,235,0.25), transparent 70%);
-    top: 10%; left: 5%;
-    animation: float1 8s ease-in-out infinite;
+  
+  .orb-primary {
+    width: 500px;
+    height: 500px;
+    background: rgba(59, 130, 246, 0.2);
+    top: -100px;
+    left: -100px;
+    animation: float 15s infinite alternate ease-in-out;
   }
-  .orb-2 {
-    width: 300px; height: 300px;
-    background: radial-gradient(circle, rgba(129,140,248,0.2), transparent 70%);
-    bottom: 15%; right: 10%;
-    animation: float2 10s ease-in-out infinite;
+  
+  .orb-secondary {
+    width: 400px;
+    height: 400px;
+    background: rgba(99, 102, 241, 0.15);
+    bottom: -50px;
+    right: 10%;
+    animation: float 18s infinite alternate-reverse ease-in-out;
   }
-  .orb-3 {
-    width: 250px; height: 250px;
-    background: radial-gradient(circle, rgba(56,189,248,0.15), transparent 70%);
-    top: 60%; left: 40%;
-    animation: float3 12s ease-in-out infinite;
+  
+  @keyframes float {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(100px, 50px) scale(1.1); }
+  }
+  
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  .spinner-small {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(0,0,0,0.1);
+    border-top: 3px solid #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 12px;
+  }
+  
+  .stat-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.05);
+  }
+  
+  input:focus {
+    border-color: #3b82f6;
+    background: #ffffff;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+  }
+  
+  .onboarding-btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-2px);
+  }
+  
+  .google-auth-btn:active {
+    transform: scale(0.98);
   }
 
-  .login-card { animation: fadeUp 0.6s ease both; }
-  .login-headline { animation: fadeUp 0.6s ease 0.1s both; }
-  .stats-bar { animation: fadeUp 0.6s ease 0.2s both; }
+  @media (max-width: 1200px) {
+    .hero-text { font-size: 3.5rem !important; }
+  }
 
-  .feat-pill { transition: all 0.2s ease; }
-  .feat-pill:hover { background: rgba(59,130,246,0.1) !important; border-color: rgba(59,130,246,0.3) !important; color: #93c5fd !important; }
-
-  .google-btn:disabled { opacity: 0.7; cursor: not-allowed; }
-  .google-btn:active:not(:disabled) { transform: scale(0.98) !important; }
-  .submit-btn:hover { filter: brightness(1.1); box-shadow: 0 6px 20px rgba(37,99,235,0.3) !important; }
-  input:focus { border-color: #3b82f6 !important; background: #ffffff !important; box-shadow: 0 0 0 3px rgba(59,130,246,0.08); }
-
-  /* Responsive */
   @media (max-width: 1024px) {
-    .login-page { flex-direction: column !important; }
-    .login-left { flex: none !important; padding: 48px 24px 36px !important; }
-    .login-left h1 { font-size: 2rem !important; }
-    .login-right { flex: none !important; padding: 24px 20px 40px !important; min-height: auto !important; }
-    .login-card { max-width: 100% !important; }
+    .login-page { flex-direction: column; overflow: auto; }
+    .visual-bg { transform: none !important; }
+    .login-visual { flex: none; padding: 60px 40px !important; min-height: 400px; }
+    .hero-text { font-size: 2.75rem !important; }
+    .stats-container { flex-wrap: wrap; }
+    .authSide { flex: none; padding: 40px 20px; }
+    .mobileLogo { display: flex !important; }
+    .copyrightMobile { display: block !important; }
+    .visualOverlay {
+       background: linear-gradient(to bottom, rgba(2,6,23,0.7) 0%, rgba(2,6,23,0.95) 100%) !important;
+    }
   }
-  @media (max-width: 480px) {
-    .login-left h1 { font-size: 1.6rem !important; }
-    .stats-bar { flex-direction: column !important; gap: 12px !important; padding: 16px !important; }
-    .stats-bar > div:nth-child(2), .stats-bar > div:nth-child(4) { display: none; }
+  
+  @media (max-width: 640px) {
+     .hero-text { font-size: 2.25rem !important; }
+     .heroSubtext { font-size: 1rem !important; }
+     .login-card { padding: 32px 24px !important; border-radius: 24px !important; }
+     .stat-card { padding: 16px !important; }
+     .statValue { font-size: 1.25rem !important; }
+     .featuresGrid { grid-template-columns: 1fr; }
   }
 `;
 

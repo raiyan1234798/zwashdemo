@@ -37,17 +37,26 @@ const ManagerDashboard = () => {
     const [staffAttendance, setStaffAttendance] = useState([]);
 
     useEffect(() => {
-        fetchManagerData();
-    }, []);
+        if (userProfile?.companyId) {
+            fetchManagerData();
+        }
+    }, [userProfile?.companyId]);
 
     const fetchManagerData = async () => {
         try {
             setLoading(true);
+            const companyId = userProfile?.companyId;
+            if (!companyId) return;
+
             const todayStr = new Date().toISOString().split('T')[0];
 
             // 1. Fetch Today's Bookings
             const bookingsRef = collection(db, 'bookings');
-            const todayQuery = query(bookingsRef, where('bookingDate', '==', todayStr));
+            const todayQuery = query(
+                bookingsRef, 
+                where('companyId', '==', companyId),
+                where('bookingDate', '==', todayStr)
+            );
             const todaySnapshot = await getDocs(todayQuery);
             const bookings = todaySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
@@ -63,13 +72,22 @@ const ManagerDashboard = () => {
 
             // 2. Fetch Staff Attendance Today
             const attendanceRef = collection(db, 'attendance');
-            const attendanceQuery = query(attendanceRef, where('date', '==', todayStr));
+            const attendanceQuery = query(
+                attendanceRef, 
+                where('companyId', '==', companyId),
+                where('date', '==', todayStr)
+            );
             const attSnapshot = await getDocs(attendanceQuery);
             const attendanceRecords = attSnapshot.docs.map(d => d.data());
 
             // Fetch total active employees
             const usersRef = collection(db, 'adminUsers');
-            const usersSnapshot = await getDocs(query(usersRef, where('role', '==', 'employee'), where('status', '==', 'approved')));
+            const usersSnapshot = await getDocs(query(
+                usersRef, 
+                where('companyId', '==', companyId),
+                where('role', '==', 'employee'), 
+                where('status', '==', 'approved')
+            ));
             const totalStaff = usersSnapshot.size;
             const staffPresent = attendanceRecords.filter(a => a.status === 'present' || a.status === 'half-day').length;
 
@@ -78,7 +96,7 @@ const ManagerDashboard = () => {
             // 3. Low Stock Items
             try {
                 const materialsRef = collection(db, 'materials');
-                const matSnapshot = await getDocs(materialsRef);
+                const matSnapshot = await getDocs(query(materialsRef, where('companyId', '==', companyId)));
                 const lowStock = matSnapshot.docs
                     .map(doc => ({ id: doc.id, ...doc.data() }))
                     .filter(m => m.isActive && m.currentStock <= (m.reorderLevel || 10))

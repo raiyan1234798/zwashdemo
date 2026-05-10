@@ -7,7 +7,7 @@
     display: none;
     position: fixed;
     bottom: 1rem;
-    left: 1rem;
+    inset-inline-start: 1rem;
     z-index: 2000;
     width: 52px;
     height: 52px;
@@ -80,6 +80,10 @@
         width: 280px;
     }
 
+    [dir="rtl"] .sidebar {
+        transform: translateX(100%);
+    }
+
     /* Show sidebar when active */
     .sidebar.mobile-open {
         transform: translateX(0);
@@ -87,7 +91,7 @@
 
     /* Remove sidebar margin from main content */
     .main-content {
-        margin-left: 0 !important;
+        margin-inline-start: 0 !important;
         width: 100% !important;
         padding: 1rem !important;
         padding-top: calc(60px + 1rem) !important;
@@ -617,7 +621,7 @@
         border: none;
         align-items: center;
         justify-content: space-between;
-        text-align: right;
+        text-align: end;
     }
 
     .subscriptions-section .data-table td:first-child {
@@ -625,7 +629,7 @@
         padding-bottom: 0.5rem;
         margin-bottom: 0.5rem;
         display: block;
-        text-align: left;
+        text-align: start;
     }
 
     .subscriptions-section .data-table td:first-child strong {

@@ -14,6 +14,16 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data;
     }
 
+    // Get user's company ID
+    function getCompanyId() {
+      return getUserData().companyId;
+    }
+
+    // Check if user is a superadmin
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserData().role == 'superadmin';
+    }
+
     // Check if user is admin
     function isAdmin() {
       return isAuthenticated() && getUserData().role == 'admin';
@@ -44,8 +54,8 @@ service cloud.firestore {
 
     // 1. Users / Employees Collection
     match /adminUsers/{userId} {
-      // All authenticated users can read employee list (for dropdowns, assignments)
-      allow read: if isAuthenticated();
+      // Users can read their own profile or users in their company
+      allow read: if isAuthenticated() && (request.auth.uid == userId || resource.data.companyId == getCompanyId() || isSuperAdmin());
       
       // Admins can do everything
       allow write: if isAdmin();
@@ -65,6 +75,19 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.auth.uid == userId;
     }
 
+    // 1a. Demo Clients / Company Tenants
+    // Public read: needed for the public landing page and per-tenant booking pages
+    match /demoClients/{clientId} {
+      allow read: if true;  // public landing page needs this
+      allow write: if isSuperAdmin();
+    }
+
+    // 1b. Platform Enquiries (SuperAdmin only)
+    match /platformEnquiries/{enquiryId} {
+      allow read, write: if isSuperAdmin();
+      allow create: if true; // Public can create enquiries
+    }
+
     // 2. Employee Invites
     match /employeeInvites/{inviteId} {
       allow read: if isAuthenticated();
@@ -80,8 +103,17 @@ service cloud.firestore {
 
     // 4. Bookings - Core business operation
     match /bookings/{bookingId} {
-      // Public read: customers can view their booking/invoice via shared link (no login needed)
+      // Public read: customers can view their booking/invoice via shared link
       allow read: if true;
+      
+      // Staff read: only for their own company
+      allow read: if isAuthenticated() && (resource.data.companyId == getCompanyId() || isSuperAdmin());
+      
+      // Public booking creation: customers booking via public booking page (no auth)
+      // Only allow if source is 'public_booking' and required fields are present
+      allow create: if request.resource.data.source == 'public_booking'
+                    && request.resource.data.companyId != null
+                    && request.resource.data.customerName != null;
       
       // Staff can create bookings (walk-ins, appointments)
       allow create: if isAuthenticated() && 
@@ -96,13 +128,13 @@ service cloud.firestore {
 
     // 5. Archived Bookings
     match /archivedBookings/{bookingId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (resource.data.companyId == getCompanyId() || isSuperAdmin());
       allow write: if isSenior();
     }
 
     // 6. Customers
     match /customers/{customerId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (resource.data.companyId == getCompanyId() || isSuperAdmin());
       
       allow create: if isAuthenticated() && 
                     (isSenior() || hasCustomPermission('customers', 'create'));
@@ -112,6 +144,14 @@ service cloud.firestore {
       
       // Delete is restricted
       allow delete: if isAdmin() || hasCustomPermission('customers', 'delete');
+    }
+
+    // 6a. Inspections
+    match /inspections/{inspectionId} {
+      allow read: if isAuthenticated() && (resource.data.companyId == getCompanyId() || isSuperAdmin());
+      allow create: if isAuthenticated() && (isSenior() || hasCustomPermission('inspections', 'create'));
+      allow update: if isAuthenticated() && (isSenior() || hasCustomPermission('inspections', 'edit'));
+      allow delete: if isAdmin() || hasCustomPermission('inspections', 'delete');
     }
 
     // 7. Invoices
@@ -149,7 +189,7 @@ service cloud.firestore {
 
     // 9. Expenses
     match /expenses/{expenseId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (resource.data.companyId == getCompanyId() || isSuperAdmin());
       
       allow create: if isSenior() || hasCustomPermission('expenses', 'create');
       
@@ -160,7 +200,7 @@ service cloud.firestore {
 
     // 10. Materials / Inventory
     match /materials/{materialId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (resource.data.companyId == getCompanyId() || isSuperAdmin());
       
       // Staff can update stock (usage deduction)
       allow update: if isAuthenticated();
@@ -177,7 +217,7 @@ service cloud.firestore {
 
     // 12. Services Catalog
     match /services/{serviceId} {
-      allow read: if isAuthenticated();
+      allow read: if isAuthenticated() && (resource.data.companyId == getCompanyId() || isSuperAdmin());
       
       allow create: if isSenior() || hasCustomPermission('services', 'create');
       

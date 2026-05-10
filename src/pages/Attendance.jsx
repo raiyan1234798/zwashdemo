@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import { db } from '../config/firebase';
 import {
     collection,
@@ -48,6 +49,7 @@ const formatDuration = (hours) => {
 };
 
 const Attendance = () => {
+    const { t } = useTranslation();
     const { hasPermission, userProfile, isAdmin } = useAuth();
     const [employees, setEmployees] = useState([]);
     const [attendance, setAttendance] = useState([]);
@@ -71,9 +73,13 @@ const Attendance = () => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            // Fetch employees from adminUsers collection
+            const companyId = userProfile?.companyId;
+            if (!companyId) { setLoading(false); return; }
+
+            // Fetch employees from adminUsers collection (tenant isolated)
             const empSnapshot = await getDocs(query(
                 collection(db, 'adminUsers'),
+                where('companyId', '==', companyId),
                 where('status', '==', 'approved')
             ));
             const empData = empSnapshot.docs
@@ -104,6 +110,7 @@ const Attendance = () => {
 
             const attQuery = query(
                 collection(db, 'attendance'),
+                where('companyId', '==', companyId),
                 where('date', '>=', qStart),
                 where('date', '<=', qEnd)
             );
@@ -113,7 +120,7 @@ const Attendance = () => {
 
             // Fetch holidays (Nested try-catch to prevent blocking core data)
             try {
-                const holSnapshot = await getDocs(collection(db, 'holidays'));
+                const holSnapshot = await getDocs(query(collection(db, 'holidays'), where('companyId', '==', companyId)));
                 setHolidays(holSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             } catch (holError) {
                 console.warn('Non-critical: Error fetching holiday data:', holError);
@@ -158,6 +165,7 @@ const Attendance = () => {
                 date,
                 status,
                 ...extraData,
+                companyId: userProfile?.companyId,
                 updatedAt: serverTimestamp(),
                 updatedBy: userProfile?.displayName || 'Admin'
             };
@@ -181,6 +189,7 @@ const Attendance = () => {
             await addDoc(collection(db, 'holidays'), {
                 date,
                 name,
+                companyId: userProfile?.companyId,
                 createdAt: serverTimestamp()
             });
             fetchData();
@@ -264,7 +273,7 @@ const Attendance = () => {
                 <div key={day} className={`calendar-day ${isToday ? 'today' : ''} ${isHoliday ? 'holiday' : ''}`}>
                     <div className="day-header">
                         <span className="day-number">{day}</span>
-                        {isHoliday && <span style={{ fontSize: '0.6rem', color: '#8b5cf6', fontWeight: 'bold' }}>HOLIDAY</span>}
+                        {isHoliday && <span style={{ fontSize: '0.6rem', color: '#8b5cf6', fontWeight: 'bold' }}>{t('holiday')}</span>}
                     </div>
                     <div className="day-dots">
                         {dayAttendance.map((att, idx) => (
@@ -286,16 +295,16 @@ const Attendance = () => {
         <div className="attendance-page">
             <div className="page-header">
                 <div>
-                    <h1><Calendar size={28} /> Attendance</h1>
-                    <p className="subtitle">Track employee attendance</p>
+                    <h1><Calendar size={28} /> {t('attendance')}</h1>
+                    <p className="subtitle">{t('track_employee_attendance')}</p>
                 </div>
                 <div className="header-actions">
                     <button className="btn btn-secondary" onClick={() => setShowHolidayModal(true)}>
-                        Manage Holidays
+                        {t('manage_holidays')}
                     </button>
                     {hasPermission('attendance', 'create') && (
                         <button className="btn btn-primary" onClick={() => setShowMarkModal(true)}>
-                            <Plus size={18} /> Mark Attendance
+                            <Plus size={18} /> {t('mark_attendance')}
                         </button>
                     )}
                 </div>
@@ -309,7 +318,7 @@ const Attendance = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{stats.total || 0}</span>
-                        <span className="stat-label">Total Employees</span>
+                        <span className="stat-label">{t('total_employees')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -318,7 +327,7 @@ const Attendance = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{stats.present || 0}</span>
-                        <span className="stat-label">Present Today</span>
+                        <span className="stat-label">{t('present_today')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -327,7 +336,7 @@ const Attendance = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{stats.leaves || 0}</span>
-                        <span className="stat-label">On Leave</span>
+                        <span className="stat-label">{t('on_leave')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -336,7 +345,7 @@ const Attendance = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{stats.absent || 0}</span>
-                        <span className="stat-label">Absentees Today</span>
+                        <span className="stat-label">{t('absentees_today')}</span>
                     </div>
                 </div>
             </div>
@@ -356,20 +365,20 @@ const Attendance = () => {
                         ) : (
                             <div className="calendar-grid-wrapper">
                                 <div className="calendar-grid-header">
-                                    <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                                    <span>{t('sun')}</span><span>{t('mon')}</span><span>{t('tue')}</span><span>{t('wed')}</span><span>{t('thu')}</span><span>{t('fri')}</span><span>{t('sat')}</span>
                                 </div>
                                 <div className="calendar-days-grid">
                                     {renderCalendarDays()}
                                 </div>
                                 <div className="calendar-legend">
-                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#10b981' }}></span> Present</div>
-                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#0ea5e9' }}></span> Permission</div>
-                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#ef4444' }}></span> Absent</div>
-                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#f59e0b' }}></span> Half-day</div>
-                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#3b82f6' }}></span> Paid Leave</div>
-                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#fca5a5' }}></span> Unpaid Leave</div>
-                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#8b5cf6' }}></span> Overtime</div>
-                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#ddd6fe' }}></span> Holiday</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#10b981' }}></span> {t('present')}</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#0ea5e9' }}></span> {t('permission')}</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#ef4444' }}></span> {t('absent')}</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#f59e0b' }}></span> {t('half_day')}</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#3b82f6' }}></span> {t('paid_leave')}</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#fca5a5' }}></span> {t('unpaid_leave')}</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#8b5cf6' }}></span> {t('overtime')}</div>
+                                    <div className="legend-item"><span className="dot" style={{ backgroundColor: '#ddd6fe' }}></span> {t('holiday')}</div>
                                 </div>
                             </div>
                         )}
@@ -379,7 +388,7 @@ const Attendance = () => {
                 {/* Monthly Summary Table */}
                 <div className="card summary-card" style={{ marginTop: '2rem' }}>
                     <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                        <h2 style={{ margin: 0 }}>Monthly Summary</h2>
+                        <h2 style={{ margin: 0 }}>{t('monthly_summary')}</h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <label style={{ fontWeight: '500', color: 'var(--navy-600)', fontSize: '0.85rem' }}>View:</label>
                             <select
@@ -387,7 +396,7 @@ const Attendance = () => {
                                 onChange={(e) => setSelectedEmployeeId(e.target.value)}
                                 style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid var(--navy-200)', background: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
                             >
-                                <option value="all">Overall Analytics</option>
+                                <option value="all">{t('overall_analytics')}</option>
                                 {employees.map(emp => (
                                     <option key={emp.id} value={emp.id}>{emp.displayName}</option>
                                 ))}

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import {
@@ -37,9 +38,12 @@ import {
 } from 'lucide-react';
 import SplitPaymentSelector from '../components/SplitPaymentSelector';
 import { getNextInvoiceNumber } from '../utils/invoiceUtils';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 const AMCPlans = () => {
+    const { t } = useTranslation();
     const { hasPermission, userProfile, isAdmin } = useAuth();
+    const { formatCurrency, currentCurrency } = useCurrency();
     const [activeTab, setActiveTab] = useState('plans');
     const [plans, setPlans] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -82,7 +86,11 @@ const AMCPlans = () => {
     const fetchPlans = async () => {
         try {
             setLoading(true);
-            const q = query(collection(db, 'amc_plans'), where('isActive', '==', true));
+            const q = query(
+                collection(db, 'amc_plans'), 
+                where('isActive', '==', true),
+                where('companyId', '==', userProfile?.companyId)
+            );
             const snapshot = await getDocs(q);
             setPlans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         } catch (error) {
@@ -95,7 +103,10 @@ const AMCPlans = () => {
     const fetchSubscriptions = async () => {
         try {
             setLoading(true);
-            const q = query(collection(db, 'customer_amc_subscriptions'));
+            const q = query(
+                collection(db, 'customer_amc_subscriptions'),
+                where('companyId', '==', userProfile?.companyId)
+            );
             const snapshot = await getDocs(q);
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             // Sort client-side to avoid index issues, with null safety
@@ -169,7 +180,7 @@ const AMCPlans = () => {
     };
 
     const shareViaWhatsApp = (sub) => {
-        const businessName = settings?.businessName || "Zwash Demo";
+        const businessName = settings?.businessName || "Business";
         const phone = sub.customerPhone;
         if (!phone) {
             alert("No phone number available for this customer.");
@@ -186,20 +197,20 @@ Thank you for subscribing to our *${sub.planName}* AMC!
 *Vehicle:* *${sub.vehicleNumber}*
 *Start Date:* *${formatDate(sub.startDate)}*
 *Expiry Date:* *${formatDate(sub.expiryDate)}*
-*Total Amount:* *â‚¹${sub.totalAmount?.toLocaleString()}*
+*Total Amount:* *${currentCurrency.symbol}${sub.totalAmount?.toLocaleString()}*
 
 *Services Included:*
 ${sub.serviceTracking?.map(s => `â€¢ ${s.serviceType}: ${s.totalAllowed} services`).join('\n')}
 
 We look forward to serving you!
-_Powered by Z3Connect_`;
+_Powered by Zwash_`;
 
         const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };
 
     const sendServiceReminder = (sub) => {
-        const businessName = settings?.businessName || "Zwash Demo";
+        const businessName = settings?.businessName || "Business";
         const phone = sub.customerPhone;
         if (!phone) return;
 
@@ -225,7 +236,7 @@ This is a friendly reminder for your *${sub.planName}* AMC services for *${curre
 ${availableServices}
 
 Please visit us soon to avail your services! 🚗
-_Powered by Z3Connect_`;
+_Powered by Zwash_`;
 
         const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
@@ -238,7 +249,7 @@ _Powered by Z3Connect_`;
     };
 
     const sendServiceCompletionMessage = (sub, serviceType, washNumber) => {
-        const businessName = settings?.businessName || "Zwash Demo";
+        const businessName = settings?.businessName || "Business";
         const phone = sub.customerPhone || sub.phone;
         if (!phone) return;
 
@@ -250,7 +261,7 @@ _Powered by Z3Connect_`;
         }).join('\n') || '';
 
         const washLabel = washNumber ? `*${getOrdinal(washNumber)} Wash* ` : '';
-        const googleReviewLink = `https://www.google.com/search?q=Detailing+Commando+Reviews&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qORCfYOrPO9_r5Xrdz6OLn964mj5mum-Qd5jzlmEC3NzGY3rc7RSf9uLDn98lKI0GK6PNYXpax3VWlULxs2zb67zJBn8xu53xcXqOxgcv5ryhvPi0bQ%3D%3D&sa=X#lrd=0x47bf03f78d9c21fb:0xd9ce5265093065b2,3,,,,`;
+        const googleReviewLink = `#`;
 
         const message = `*${businessName} - AMC Service Completed* âœ…
 
@@ -270,7 +281,7 @@ Thank you for choosing *${businessName}*! ðŸ™
 It takes just 30 seconds ðŸ˜Š
 ðŸ‘‰ ${googleReviewLink}
 
-_Powered by Z3Connect_`;
+_Powered by Zwash_`;
 
         const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
@@ -280,8 +291,8 @@ _Powered by Z3Connect_`;
         <div className="amc-page">
             <div className="page-header">
                 <div>
-                    <h1><ShieldCheck size={28} /> AMC Management</h1>
-                    <p className="subtitle">Manage annual maintenance contracts</p>
+                    <h1><ShieldCheck size={28} /> {t('amc_management_title')}</h1>
+                    <p className="subtitle">{t('amc_subtitle')}</p>
                 </div>
                 <div className="header-actions">
                     <div className="tab-group">
@@ -289,13 +300,13 @@ _Powered by Z3Connect_`;
                             className={`tab-btn ${activeTab === 'plans' ? 'active' : ''}`}
                             onClick={() => setActiveTab('plans')}
                         >
-                            <ShieldCheck size={16} /> Packages
+                            <ShieldCheck size={16} /> {t('packages')}
                         </button>
                         <button
                             className={`tab-btn ${activeTab === 'subscriptions' ? 'active' : ''}`}
                             onClick={() => setActiveTab('subscriptions')}
                         >
-                            <UserCheck size={16} /> Subscriptions
+                            <UserCheck size={16} /> {t('subscriptions')}
                         </button>
                     </div>
                 </div>
@@ -304,11 +315,11 @@ _Powered by Z3Connect_`;
             {activeTab === 'plans' ? (
                 <div className="plans-section">
                     <div className="section-header">
-                        <h3>Available Packages</h3>
+                        <h3>{t('available_packages')}</h3>
                         {hasPermission('amc', 'create') && (
                             <div className="section-actions">
                                 <button className="btn btn-primary" onClick={() => setShowPlanModal(true)}>
-                                    <Plus size={18} /> <span>Create New Plan</span>
+                                    <Plus size={18} /> <span>{t('create_new_plan')}</span>
                                 </button>
                             </div>
                         )}
@@ -320,9 +331,9 @@ _Powered by Z3Connect_`;
                         ) : plans.length === 0 ? (
                             <div className="empty-state">
                                 <ShieldCheck size={48} />
-                                <p>No active AMC plans found</p>
+                                <p>{t('no_amc_plans_found')}</p>
                                 <p style={{ color: 'var(--navy-400)', marginTop: '0.5rem' }}>
-                                    Create Compact or Premium packages to get started
+                                    {t('create_compact_premium')}
                                 </p>
                             </div>
                         ) : (
@@ -343,13 +354,13 @@ _Powered by Z3Connect_`;
                                                 <div><small>Luxury SUV</small><strong>â‚¹{plan.prices.luxurySuv?.toLocaleString()}</strong></div>
                                             </div>
                                         ) : (
-                                            <span className="plan-price">â‚¹{plan.price?.toLocaleString()}</span>
+                                            <span className="plan-price">{currentCurrency.symbol}{plan.price?.toLocaleString()}</span>
                                         )}
                                     </div>
                                     <div className="plan-body">
                                         <div className="plan-feature">
                                             <Calendar size={16} />
-                                            <span>{plan.validityMonths} Months Validity</span>
+                                            <span>{plan.validityMonths} {t('months_validity')}</span>
                                         </div>
                                         {plan.services?.map((service, idx) => (
                                             <div key={idx} className="plan-feature service-item">
@@ -360,7 +371,7 @@ _Powered by Z3Connect_`;
                                         {!plan.services && plan.serviceCount && (
                                             <div className="plan-feature">
                                                 <Check size={16} />
-                                                <span>{plan.serviceCount} Washes Included</span>
+                                                <span>{plan.serviceCount} {t('washes_included')}</span>
                                             </div>
                                         )}
                                         {plan.description && <p className="plan-desc">{plan.description}</p>}
@@ -373,7 +384,7 @@ _Powered by Z3Connect_`;
                                                     onClick={() => { setSelectedPlan(plan); setShowPlanModal(true); }}
                                                     style={{ flex: 1 }}
                                                 >
-                                                    <Edit size={14} /> Edit
+                                                    <Edit size={14} /> {t('edit')}
                                                 </button>
                                             )}
                                             {hasPermission('amc', 'delete') && (
@@ -382,7 +393,7 @@ _Powered by Z3Connect_`;
                                                     onClick={() => handleDeletePlan(plan.id)}
                                                     style={{ flex: 1 }}
                                                 >
-                                                    <Trash2 size={14} /> Delete
+                                                    <Trash2 size={14} /> {t('delete')}
                                                 </button>
                                             )}
                                         </div>
@@ -391,7 +402,7 @@ _Powered by Z3Connect_`;
                                                 className="btn btn-outline-primary w-100"
                                                 onClick={() => { setSelectedPlan(plan); setShowAssignModal(true); }}
                                             >
-                                                Assign to Customer
+                                                {t('assign_to_customer')}
                                             </button>
                                         )}
                                     </div>
@@ -409,14 +420,14 @@ _Powered by Z3Connect_`;
                             ) : subscriptions.length === 0 ? (
                                 <div className="empty-state">
                                     <Users size={48} />
-                                    <p>No active subscriptions</p>
+                                    <p>{t('no_subscriptions_found')}</p>
                                 </div>
                             ) : (
                                 <>
                                     <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                         <select className="form-control" style={{ width: '200px' }} value={subFilter} onChange={(e) => setSubFilter(e.target.value)}>
-                                            <option value="all">All Subscriptions</option>
-                                            <option value="unpaid">Unpaid / Pending Payments</option>
+                                            <option value="all">{t('all_subscriptions')}</option>
+                                            <option value="unpaid">{t('unpaid_pending_payments')}</option>
                                         </select>
                                     </div>
                                     {/* Desktop Table View */}
@@ -424,14 +435,14 @@ _Powered by Z3Connect_`;
                                         <table className="data-table">
                                             <thead>
                                                 <tr>
-                                                    <th>Customer</th>
-                                                    <th>Plan</th>
-                                                    <th>Vehicle</th>
-                                                    <th>Start Date</th>
-                                                    <th>Expiry</th>
-                                                    <th>Services Used</th>
-                                                    <th>Status</th>
-                                                    <th>Actions</th>
+                                                    <th>{t('customer')}</th>
+                                                    <th>{t('plan')}</th>
+                                                    <th>{t('vehicle')}</th>
+                                                    <th>{t('start_date')}</th>
+                                                    <th>{t('expiry')}</th>
+                                                    <th>{t('services_used')}</th>
+                                                    <th>{t('status')}</th>
+                                                    <th>{t('actions')}</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -443,7 +454,7 @@ _Powered by Z3Connect_`;
                                                     }
                                                     return true;
                                                 }).map(sub => {
-                                                    const washUsage = getServiceUsageCount(sub, 'Commando Cleaning');
+                                                    const washUsage = getServiceUsageCount(sub, sub.serviceTracking?.[0]?.serviceType || 'Service');
                                                     return (
                                                         <tr key={sub.id}>
                                                             <td>
@@ -468,7 +479,7 @@ _Powered by Z3Connect_`;
                                                             <td>
                                                                 <div className="usage-bar-wrapper">
                                                                     <div className="usage-text">
-                                                                        {washUsage.used} / {washUsage.total} washes
+                                                                        {washUsage.used} / {washUsage.total} {t('washes')}
                                                                     </div>
                                                                     <div className="usage-progress">
                                                                         <div
@@ -488,35 +499,35 @@ _Powered by Z3Connect_`;
                                                                     <button
                                                                         className="btn btn-sm btn-primary"
                                                                         onClick={() => { setSelectedSubscription(sub); setShowTrackingModal(true); }}
-                                                                        title="Track Services"
+                                                                        title={t('track_services')}
                                                                         style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                                                                     >
-                                                                        <Eye size={14} /> Track
+                                                                        <Eye size={14} /> {t('track')}
                                                                     </button>
                                                                     <button
                                                                         className="btn btn-sm"
                                                                         style={{ background: '#25D366', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}
                                                                         onClick={() => shareViaWhatsApp(sub)}
-                                                                        title="Share via WhatsApp"
+                                                                        title={t('share_whatsapp')}
                                                                     >
-                                                                        <MessageCircle size={14} /> WhatsApp
+                                                                        <MessageCircle size={14} /> {t('whatsapp')}
                                                                     </button>
                                                                     <button
                                                                         className="btn btn-sm"
                                                                         style={{ background: '#0ea5e9', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}
                                                                         onClick={() => sendServiceReminder(sub)}
-                                                                        title="Send Monthly Reminder"
+                                                                        title={t('send_reminder')}
                                                                     >
-                                                                        <RotateCcw size={14} /> Reminder
+                                                                        <RotateCcw size={14} /> {t('reminder')}
                                                                     </button>
                                                                     {hasPermission('bookings', 'create') && (
                                                                         <button
                                                                             className="btn btn-sm"
                                                                             style={{ background: '#10b981', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}
                                                                             onClick={() => { setInvoiceSubscription(sub); setShowInvoiceModal(true); }}
-                                                                            title="Create Invoice"
+                                                                            title={t('create_invoice')}
                                                                         >
-                                                                            <FileText size={14} /> Invoice
+                                                                            <FileText size={14} /> {t('invoice')}
                                                                         </button>
                                                                     )}
                                                                     {hasPermission('services', 'edit') && (
@@ -597,7 +608,7 @@ _Powered by Z3Connect_`;
 
                                                     <div className="usage-section" style={{ marginTop: '12px', padding: '10px', background: 'var(--navy-50)', borderRadius: '8px' }}>
                                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
-                                                            <span>Service Usage</span>
+                                                            <span>{t('services_used')}</span>
                                                             <strong>{washUsage.used} / {washUsage.total} washes</strong>
                                                         </div>
                                                         <div className="usage-progress" style={{ height: '6px', background: 'var(--navy-100)', borderRadius: '8px' }}>
@@ -1011,6 +1022,9 @@ _Powered by Z3Connect_`;
 };
 
 const CreatePlanModal = ({ onClose, onSuccess }) => {
+    const { t } = useTranslation();
+    const { userProfile } = useAuth();
+    const { currentCurrency } = useCurrency();
     const [loading, setLoading] = useState(false);
     const [planType, setPlanType] = useState('compact');
     const [vehiclePrices, setVehiclePrices] = useState({ hatchback: '', sedan: '', suv: '', luxurySuv: '' });
@@ -1062,13 +1076,15 @@ const CreatePlanModal = ({ onClose, onSuccess }) => {
                 services: services.filter(s => s.name.trim()),
                 description: formData.get('description'),
                 isActive: true,
+                companyId: userProfile?.companyId,
                 createdAt: serverTimestamp()
             });
+            alert(t('plan_created', 'Plan created successfully!'));
             onSuccess();
             onClose();
         } catch (error) {
             console.error(error);
-            alert('Error creating plan: ' + error.message);
+            alert(t('error_creating_plan', 'Error creating plan') + ': ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -1249,6 +1265,9 @@ const CreatePlanModal = ({ onClose, onSuccess }) => {
 };
 
 const AssignPlanModal = ({ plan, settings, onClose, onSuccess }) => {
+    const { t } = useTranslation();
+    const { userProfile } = useAuth();
+    const { formatCurrency, currentCurrency } = useCurrency();
     const [activeTab, setActiveTab] = useState('existing'); // existing | new
     const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', vehicleNumber: '' });
     const [searchTerm, setSearchTerm] = useState('');
@@ -1297,7 +1316,7 @@ const AssignPlanModal = ({ plan, settings, onClose, onSuccess }) => {
     }, []);
 
     const shareViaWhatsApp = (sub) => {
-        const businessName = settings?.businessName || "Zwash Demo";
+        const businessName = settings?.businessName || "Business";
         const phone = sub.customerPhone;
         if (!phone) {
             alert("No phone number available for this customer.");
@@ -1320,14 +1339,14 @@ Thank you for subscribing to our *${sub.planName}* AMC!
 ${sub.serviceTracking?.map(s => `â€¢ ${s.serviceType}: ${s.totalAllowed} services`).join('\n')}
 
 We look forward to serving you!
-_Powered by Z3Connect_`;
+_Powered by Zwash_`;
 
         const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };
 
     const sendServiceReminder = (sub) => {
-        const businessName = settings?.businessName || "Zwash Demo";
+        const businessName = settings?.businessName || "Business";
         const phone = sub.customerPhone;
         if (!phone) return;
 
@@ -1353,14 +1372,14 @@ This is a friendly reminder for your *${sub.planName}* AMC services for *${curre
 ${availableServices}
 
 Please visit us soon to avail your services! 🚗
-_Powered by Z3Connect_`;
+_Powered by Zwash_`;
 
         const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };
 
     const sendServiceCompletionMessage = (sub, serviceType, washNumber) => {
-        const businessName = settings?.businessName || "Zwash Demo";
+        const businessName = settings?.businessName || "Business";
         const phone = sub.customerPhone;
         if (!phone) return;
 
@@ -1377,7 +1396,7 @@ _Powered by Z3Connect_`;
         }).join('\n') || '';
 
         const washLabel = washNumber ? `*${getOrdinal(washNumber)} Wash* ` : '';
-        const googleReviewLink = `https://www.google.com/search?q=Detailing+Commando+Reviews&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qORCfYOrPO9_r5Xrdz6OLn964mj5mum-Qd5jzlmEC3NzGY3rc7RSf9uLDn98lKI0GK6PNYXpax3VWlULxs2zb67zJBn8xu53xcXqOxgcv5ryhvPi0bQ%3D%3D&sa=X#lrd=0x47bf03f78d9c21fb:0xd9ce5265093065b2,3,,,,`;
+        const googleReviewLink = `#`;
 
         const message = `*${businessName} - AMC Service Completed* âœ…
 
@@ -1397,7 +1416,7 @@ Thank you for choosing *${businessName}*! ðŸ™
 It takes just 30 seconds ðŸ˜Š
 ðŸ‘‰ ${googleReviewLink}
 
-_Powered by Z3Connect_`;
+_Powered by Zwash_`;
 
         const whatsappUrl = `https://wa.me/91${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
@@ -1499,6 +1518,7 @@ _Powered by Z3Connect_`;
                 planId: plan.id,
                 planName: plan.name,
                 price: totalAmount,
+                companyId: userProfile?.companyId,
                 // Payment Tracking
                 totalAmount: totalAmount,
                 advancePayment: advanceAmt,
@@ -1548,10 +1568,10 @@ _Powered by Z3Connect_`;
             await addDoc(collection(db, 'invoices'), invoiceData);
             */
 
-            alert('Plan assigned successfully!');
+            alert(t('plan_assigned', 'Plan assigned successfully!'));
 
             // Proactive message offer
-            if (window.confirm("Plan assigned successfully! Would you like to send the welcome message via WhatsApp?")) {
+            if (window.confirm(t('confirm_whatsapp_welcome', "Plan assigned successfully! Would you like to send the welcome message via WhatsApp?"))) {
                 shareViaWhatsApp(subscriptionData);
             }
 
@@ -1559,7 +1579,7 @@ _Powered by Z3Connect_`;
             onClose();
         } catch (error) {
             console.error("Error assigning plan: ", error);
-            alert("Error assigning plan");
+            alert(t('error_assigning_plan', "Error assigning plan"));
         }
         setLoading(false);
     };
@@ -1604,7 +1624,7 @@ _Powered by Z3Connect_`;
 
                     {/* Price Override */}
                     <div className="form-group">
-                        <label>Sale Price (â‚¹)</label>
+                        <label>{t('sale_price', 'Sale Price')} ({currentCurrency.symbol})</label>
                         <input
                             type="number"
                             value={salePrice}
@@ -1663,7 +1683,7 @@ _Powered by Z3Connect_`;
                         </div>
 
                         <div className="form-group" style={{ marginBottom: '0.5rem' }}>
-                            <label style={{ fontSize: '0.85rem', fontWeight: '500', color: '#166534' }}>Advance Payment (â‚¹)</label>
+                            <label style={{ fontSize: '0.85rem', fontWeight: '500', color: '#166534' }}>{t('advance_payment', 'Advance Payment')} ({currentCurrency.symbol})</label>
                             <input
                                 type="number"
                                 value={advancePayment}
@@ -1902,6 +1922,9 @@ _Powered by Z3Connect_`;
 };
 
 const EditSubscriptionModal = ({ subscription, plans, onClose, onSuccess }) => {
+    const { t } = useTranslation();
+    const { userProfile } = useAuth();
+    const { currentCurrency } = useCurrency();
     const [loading, setLoading] = useState(false);
     const [expiryDate, setExpiryDate] = useState(
         subscription.expiryDate?.toDate ? subscription.expiryDate.toDate().toISOString().split('T')[0] :
@@ -1999,7 +2022,7 @@ const EditSubscriptionModal = ({ subscription, plans, onClose, onSuccess }) => {
                             </select>
                         </div>
                         <div className="form-group">
-                            <label>Price (â‚¹)</label>
+                            <label>{t('price', 'Price')} ({currentCurrency.symbol})</label>
                             <input
                                 type="number"
                                 value={price}
@@ -2047,6 +2070,9 @@ const EditSubscriptionModal = ({ subscription, plans, onClose, onSuccess }) => {
 
 // Service Tracking Modal - Track individual service usage with tick boxes
 const ServiceTrackingModal = ({ subscription, onClose, onUpdate, sendCompletionMessage }) => {
+    const { t } = useTranslation();
+    const { userProfile } = useAuth();
+    const { currentCurrency } = useCurrency();
     const [serviceTracking, setServiceTracking] = useState(subscription.serviceTracking || []);
     const [saving, setSaving] = useState(false);
     const [selectedService, setSelectedService] = useState(null);
@@ -2367,6 +2393,8 @@ const ServiceTrackingModal = ({ subscription, onClose, onUpdate, sendCompletionM
 };
 
 const SubscriptionInvoiceModal = ({ subscription, onClose, onSuccess, userProfile }) => {
+    const { t } = useTranslation();
+    const { currentCurrency } = useCurrency();
     const [paymentSplits, setPaymentSplits] = useState([{ mode: 'cash', amount: '' }]);
     const [price, setPrice] = useState('');
     const [loading, setLoading] = useState(false);

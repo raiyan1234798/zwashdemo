@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { db } from '../config/firebase';
 import {
     collection,
@@ -11,22 +13,22 @@ import {
     limit
 } from 'firebase/firestore';
 import {
-    ClipboardList,
-    CheckCircle,
-    Clock,
-    Trophy,
-    Users,
-    Car,
-    Star,
-    IndianRupee,
     AlertTriangle,
     Package,
     TrendingUp,
-    Calendar
+    Calendar,
+    Wallet,
+    ClipboardList,
+    Car,
+    Clock,
+    Trophy,
+    Users
 } from 'lucide-react';
 
 const Dashboard = () => {
+    const { t, i18n } = useTranslation();
     const { userProfile, hasPermission } = useAuth();
+    const { currency: currentCurrencyCode, formatCurrency: globalFormatCurrency, currentCurrency } = useCurrency();
     const [stats, setStats] = useState({
         pending: 0,
         confirmed: 0,
@@ -50,7 +52,7 @@ const Dashboard = () => {
 
     useEffect(() => {
         fetchDashboardData();
-    }, []);
+    }, [i18n.language, currentCurrencyCode]);
 
     const fetchDashboardData = async () => {
         try {
@@ -58,15 +60,29 @@ const Dashboard = () => {
 
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            const todayStr = today.toLocaleDateString('en-CA'); // YYYY-MM-DD
+            const todayStr = today.toLocaleDateString('en-CA');
 
             const yesterday = new Date(today);
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayStr = yesterday.toLocaleDateString('en-CA');
 
-            // Fetch all bookings for stats
             const bookingsRef = collection(db, 'bookings');
-            const allBookingsSnapshot = await getDocs(bookingsRef);
+
+            // TENANT ISOLATION: filter by companyId for non-superadmin users
+            const companyId = userProfile?.companyId || userProfile?.uid;
+            
+            if (!companyId && userProfile?.role !== 'superadmin') {
+                console.warn('Dashboard: companyId missing for non-SA user');
+                setLoading(false);
+                return;
+            }
+
+            let allBookingsSnapshot;
+            if (userProfile?.role === 'superadmin') {
+                allBookingsSnapshot = await getDocs(bookingsRef);
+            } else {
+                allBookingsSnapshot = await getDocs(query(bookingsRef, where('companyId', '==', companyId)));
+            }
             const allBookings = allBookingsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
             // SUPER ADMIN FETCH LOGIC
@@ -115,11 +131,12 @@ const Dashboard = () => {
             for (let i = 6; i >= 0; i--) {
                 const date = new Date(today);
                 date.setDate(date.getDate() - i);
-                const dateStr = date.toLocaleDateString('en-CA');
+                const dateStr = date.toISOString().split('T')[0];
+                const monthName = date.toLocaleDateString(i18n.language || 'en-US', { month: 'short' });
                 const dayBookings = allBookings.filter(b => b.bookingDate === dateStr && b.status !== 'cancelled');
                 const dayRevenue = calculateRevenue(dayBookings);
                 weekData.push({
-                    day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+                    day: date.toLocaleDateString(i18n.language || 'en-US', { weekday: 'short' }),
                     date: dateStr,
                     revenue: dayRevenue,
                     bookings: dayBookings.length
@@ -140,13 +157,19 @@ const Dashboard = () => {
                 .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
             setTodaySchedule(schedule.slice(0, 5));
 
-            // Fetch metadata
+            // Fetch metadata with tenant isolation
+            const customersRef = collection(db, 'customers');
+            const servicesRef = collection(db, 'services');
+            const materialsRef = collection(db, 'materials');
+            const usersRef = collection(db, 'adminUsers');
+            const attendanceRef = collection(db, 'attendance');
+
             const [customersSnap, servicesSnap, materialsSnap, empSnap, attendanceSnap] = await Promise.all([
-                getDocs(collection(db, 'customers')),
-                getDocs(query(collection(db, 'services'), where('isActive', '==', true))),
-                getDocs(collection(db, 'materials')),
-                getDocs(collection(db, 'adminUsers')),
-                getDocs(query(collection(db, 'attendance'), where('date', '==', todayStr)))
+                getDocs(query(customersRef, where('companyId', '==', companyId))),
+                getDocs(query(servicesRef, where('companyId', '==', companyId), where('isActive', '==', true))),
+                getDocs(query(materialsRef, where('companyId', '==', companyId))),
+                getDocs(query(usersRef, where('companyId', '==', companyId))),
+                getDocs(query(attendanceRef, where('companyId', '==', companyId), where('date', '==', todayStr)))
             ]);
             
             const absentCount = attendanceSnap.docs.filter(doc => doc.data().status === 'absent').length;
@@ -209,7 +232,7 @@ const Dashboard = () => {
             const perfData = employees.map(emp => {
                 const empBookings = monthBookings.filter(b => b.assignedEmployee === emp.id);
                 return {
-                    name: emp.displayName || emp.email?.split('@')[0] || 'Employee',
+                    name: emp.displayName || emp.email?.split('@')[0] || t('employee'),
                     bookings: empBookings.length,
                     revenue: calculateRevenue(empBookings)
                 };
@@ -244,21 +267,16 @@ const Dashboard = () => {
         }
     };
 
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0
-        }).format(amount);
-    };
+    // The data in Firestore is stored in INR. We convert it to the user's selected currency.
+    const formatAmount = (amount) => globalFormatCurrency(amount || 0);
 
     const getStatusBadge = (status) => {
         const badges = {
-            'pending_confirmation': { class: 'badge-pending', label: 'Pending' },
-            'confirmed': { class: 'badge-confirmed', label: 'Confirmed' },
-            'in_progress': { class: 'badge-progress', label: 'In Progress' },
-            'completed': { class: 'badge-completed', label: 'Completed' },
-            'cancelled': { class: 'badge-cancelled', label: 'Cancelled' }
+            'pending_confirmation': { class: 'badge-pending', label: t('pending') },
+            'confirmed': { class: 'badge-confirmed', label: t('confirmed') },
+            'in_progress': { class: 'badge-progress', label: t('in_progress') },
+            'completed': { class: 'badge-completed', label: t('completed') },
+            'cancelled': { class: 'badge-cancelled', label: t('cancelled') }
         };
         return badges[status] || { class: 'badge-pending', label: status };
     };
@@ -269,7 +287,7 @@ const Dashboard = () => {
         return (
             <div className="page-loader">
                 <div className="loader"></div>
-                <p>Loading dashboard...</p>
+                <p>{t('loading_dashboard')}</p>
             </div>
         );
     }
@@ -280,8 +298,8 @@ const Dashboard = () => {
             <div className="dashboard-page">
                 <div className="dashboard-header">
                     <div className="header-info">
-                        <h1><Trophy size={28} /> Super Admin Overview</h1>
-                        <p className="welcome-text">Network Statistics</p>
+                        <h1><Trophy size={28} /> {t('super_admin_overview')}</h1>
+                        <p className="welcome-text">{t('network_statistics')}</p>
                     </div>
                 </div>
 
@@ -290,52 +308,65 @@ const Dashboard = () => {
                         <div className="stat-icon-sm"><TrendingUp size={18} /></div>
                         <div className="stat-content">
                             <span className="stat-number">{stats.uniqueShops || 0}</span>
-                            <span className="stat-text">Total Shops</span>
+                            <span className="stat-text">{t('total_shops')}</span>
                         </div>
                     </div>
                     <div className="stat-card-compact blue">
                         <div className="stat-icon-sm"><Users size={18} /></div>
                         <div className="stat-content">
                             <span className="stat-number">{stats.totalAdmins || 0}</span>
-                            <span className="stat-text">Shop Admins</span>
+                            <span className="stat-text">{t('shop_admins')}</span>
                         </div>
                     </div>
                     <div className="stat-card-compact green">
                         <div className="stat-icon-sm"><Car size={18} /></div>
                         <div className="stat-content">
                             <span className="stat-number">{stats.totalBookingsCount || 0}</span>
-                            <span className="stat-text">Total Bookings</span>
+                            <span className="stat-text">{t('total_bookings')}</span>
                         </div>
                     </div>
                 </div>
 
                 <div className="dashboard-widget" style={{ marginTop: '1.5rem' }}>
                     <div className="widget-header">
-                        <h3><TrendingUp size={18} /> Shop Performance</h3>
+                        <h3><TrendingUp size={18} /> {t('shop_performance')}</h3>
                     </div>
                     <div className="table-container-compact">
                         <table className="data-table-compact">
                             <thead>
                                 <tr>
-                                    <th>Shop Name (Admin)</th>
-                                    <th>Email</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
+                                    <th>{t('shop_name_admin')}</th>
+                                    <th>{t('email')}</th>
+                                    <th>{t('status')}</th>
+                                    <th>{t('action')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {stats.shopList?.map(shop => (
                                     <tr key={shop.id}>
                                         <td><strong>{shop.displayName}</strong></td>
-                                        <td>{shop.email}</td>
-                                        <td><span className="badge-sm badge-completed">Active</span></td>
                                         <td>
-                                            <Link to="/superadmin" className="btn btn-sm btn-primary">Manage</Link>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <div style={{ background: 'white', padding: '2px', borderRadius: '4px', display: 'flex', border: '1px solid #e2e8f0' }}>
+                                                    <svg width="12" height="12" viewBox="0 0 24 24">
+                                                        <path fill="#4285F4" d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2z"/>
+                                                        <path fill="#34A853" d="M22 6v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6l10 7 10-7z"/>
+                                                        <path fill="#EA4335" d="M2 6l10 7 10-7V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v0z"/>
+                                                        <path fill="#FBBC05" d="M2 18l7.5-5.25L2 6v12z"/>
+                                                        <path fill="#FBBC05" d="M22 6l-7.5 6.75L22 18V6z"/>
+                                                    </svg>
+                                                </div>
+                                                <span style={{ fontSize: '0.85rem' }}>{shop.email}</span>
+                                            </div>
+                                        </td>
+                                        <td><span className="badge-sm badge-completed">{t('active')}</span></td>
+                                        <td>
+                                            <Link to="/tenants" className="btn btn-sm btn-primary">{t('manage')}</Link>
                                         </td>
                                     </tr>
                                 ))}
                                 {(!stats.shopList || stats.shopList.length === 0) && (
-                                    <tr><td colSpan="4" style={{ textAlign: 'center' }}>No shops found</td></tr>
+                                    <tr><td colSpan="4" style={{ textAlign: 'center' }}>{t('no_shops_found')}</td></tr>
                                 )}
                             </tbody>
                         </table>
@@ -349,62 +380,64 @@ const Dashboard = () => {
         <div className="dashboard-page">
             <div className="dashboard-header">
                 <div className="header-info">
-                    <h1>Dashboard</h1>
-                    <p className="welcome-text">Welcome back, {userProfile?.displayName || 'Admin'}!</p>
+                    <h1>{userProfile?.companyName || t('dashboard')}</h1>
+                    <p className="welcome-text">{t('welcome_back', { name: userProfile?.displayName || t('admin') })}</p>
                 </div>
             </div>
 
             {/* Main Stats Grid */}
             <div className="dashboard-section-title">
-                <ClipboardList size={18} /> Operational Status
+                <ClipboardList size={18} /> {t('operational_status')}
             </div>
             <div className="stats-grid-modern">
                 <div className="stat-card-modern pending">
-                    <div className="stat-label">Pending Confirmation</div>
+                    <div className="stat-label">{t('pending_confirmation')}</div>
                     <div className="stat-value">{stats.pending}</div>
-                    <div className="stat-footer">Requires action</div>
+                    <div className="stat-footer">{t('requires_action')}</div>
                 </div>
                 <div className="stat-card-modern confirmed">
-                    <div className="stat-label">Confirmed Bookings</div>
+                    <div className="stat-label">{t('confirmed_bookings')}</div>
                     <div className="stat-value">{stats.confirmed}</div>
-                    <div className="stat-footer">Scheduled soon</div>
+                    <div className="stat-footer">{t('scheduled_soon')}</div>
                 </div>
                 <div className="stat-card-modern progress">
-                    <div className="stat-label">Currently In-Progress</div>
+                    <div className="stat-label">{t('in_progress_title')}</div>
                     <div className="stat-value">{stats.inProgress}</div>
-                    <div className="stat-footer">Active on floor</div>
+                    <div className="stat-footer">{t('active_on_floor')}</div>
                 </div>
                 <div className="stat-card-modern completed">
-                    <div className="stat-label">Completed Today</div>
+                    <div className="stat-label">{t('completed_today')}</div>
                     <div className="stat-value">{todaySchedule.filter(b => b.status === 'completed').length}</div>
-                    <div className="stat-footer">{stats.completed} Total All-time</div>
+                    <div className="stat-footer">{stats.completed} {t('total_all_time')}</div>
                 </div>
                 {hasPermission('employees') && (
-                    <div className="stat-card-modern" style={{ borderColor: '#ef4444' }}>
-                        <div className="stat-label">Today's Absentees</div>
+                    <div className="stat-card-modern" style={{ borderLeftColor: '#ef4444' }}>
+                        <div className="stat-label">{t('todays_absentees')}</div>
                         <div className="stat-value" style={{ color: '#ef4444' }}>{stats.absentees}</div>
-                        <div className="stat-footer">Staff missing</div>
+                        <div className="stat-footer">{t('staff_missing')}</div>
                     </div>
                 )}
                 {hasPermission('finance') && (
-                    <div className="stat-card-modern" style={{ borderColor: '#f97316', cursor: 'pointer' }} onClick={() => setShowIncompleteModal(true)}>
-                        <div className="stat-label">Incomplete Payments</div>
+                    <div className="stat-card-modern" style={{ borderLeftColor: '#f97316', cursor: 'pointer' }} onClick={() => setShowIncompleteModal(true)}>
+                        <div className="stat-label">{t('incomplete_payments')}</div>
                         <div className="stat-value" style={{ color: '#f97316' }}>{stats.incompletePayments}</div>
-                        <div className="stat-footer" style={{ textDecoration: 'underline' }}>Click to view records</div>
+                        <div className="stat-footer" style={{ textDecoration: 'underline' }}>{t('click_view_records')}</div>
                     </div>
                 )}
             </div>
 
             <div className="dashboard-section-title" style={{ marginTop: '2rem' }}>
-                <IndianRupee size={18} /> Financial Summary
+                <Wallet size={18} /> {t('financial_summary')}
             </div>
             <div className="stats-grid-compact">
                 {hasPermission('finance') && (
                     <div className="stat-card-compact purple">
-                        <div className="stat-icon-sm"><IndianRupee size={18} /></div>
+                        <div className="stat-icon-sm" style={{ fontSize: '1rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {currentCurrency.symbol}
+                        </div>
                         <div className="stat-content">
-                            <span className="stat-number">{formatCurrency(stats.todayRevenue)}</span>
-                            <span className="stat-text">Today Revenue</span>
+                            <span className="stat-number">{formatAmount(stats.todayRevenue)}</span>
+                            <span className="stat-text">{t('today_revenue')}</span>
                         </div>
                         {comparison.revenue !== 0 && (
                             <span className={`trend ${comparison.revenue >= 0 ? 'up' : 'down'}`}>
@@ -417,14 +450,14 @@ const Dashboard = () => {
                     <div className="stat-icon-sm"><Users size={18} /></div>
                     <div className="stat-content">
                         <span className="stat-number">{stats.totalCustomers}</span>
-                        <span className="stat-text">Total Customers</span>
+                        <span className="stat-text">{t('total_customers')}</span>
                     </div>
                 </div>
                 <div className="stat-card-compact pink">
                     <div className="stat-icon-sm"><Car size={18} /></div>
                     <div className="stat-content">
                         <span className="stat-number">{stats.activeServices}</span>
-                        <span className="stat-text">Active Services</span>
+                        <span className="stat-text">{t('active_services')}</span>
                     </div>
                 </div>
             </div>
@@ -434,7 +467,7 @@ const Dashboard = () => {
                 {hasPermission('finance') && (
                     <div className="dashboard-widget wide-widget">
                         <div className="widget-header">
-                            <h3><TrendingUp size={18} /> Weekly Performance</h3>
+                            <h3><TrendingUp size={18} /> {t('weekly_performance')}</h3>
                         </div>
                         <div className="chart-container-large">
                             <div className="revenue-chart">
@@ -446,8 +479,8 @@ const Dashboard = () => {
                                                 style={{ height: `${(day.revenue / maxRevenue) * 100}%` }}
                                             >
                                                 <div className="tooltip">
-                                                    {formatCurrency(day.revenue)}<br />
-                                                    {day.bookings} bookings
+                                                    {formatAmount(day.revenue)}<br />
+                                                    {day.bookings} {t('bookings')}
                                                 </div>
                                             </div>
                                         </div>
@@ -462,13 +495,13 @@ const Dashboard = () => {
                 {/* Today's Schedule */}
                 <div className="dashboard-widget">
                     <div className="widget-header">
-                        <h3><Calendar size={18} /> Today's Appointments</h3>
-                        <Link to="/bookings" className="view-all-link">View All</Link>
+                        <h3><Calendar size={18} /> {t('todays_appointments')}</h3>
+                        <Link to="/bookings" className="view-all-link">{t('view_all')}</Link>
                     </div>
                     {todaySchedule.length === 0 ? (
                         <div className="empty-widget">
                             <Clock size={24} />
-                            <p>No appointments scheduled for today</p>
+                            <p>{t('no_appointments_today')}</p>
                         </div>
                     ) : (
                         <div className="schedule-list-modern">
@@ -476,7 +509,7 @@ const Dashboard = () => {
                                 <div key={booking.id} className="schedule-item-modern">
                                     <div className="time-slot">{booking.startTime}</div>
                                     <div className="booking-details">
-                                        <span className="service-name">{booking.serviceName}</span>
+                                        <span className="service-name">{t(booking.serviceName)}</span>
                                         <span className="car-plate">{booking.licensePlate}</span>
                                     </div>
                                     <span className={`status-dot ${booking.status}`}></span>
@@ -490,17 +523,17 @@ const Dashboard = () => {
                 {hasPermission('expenses') && frequentlyMovingItems.length > 0 && (
                     <div className="dashboard-widget alert-widget">
                         <div className="widget-header">
-                            <h3><TrendingUp size={18} /> Top Moving Materials</h3>
+                            <h3><TrendingUp size={18} /> {t('top_moving_materials')}</h3>
                         </div>
                         <div className="alert-list-modern">
                             {frequentlyMovingItems.map(item => (
-                                <div key={item.id} className="alert-card" style={{ borderColor: '#cbd5e1' }}>
+                                <div key={item.id} className="alert-card" style={{ borderLeftColor: '#cbd5e1' }}>
                                     <div className="alert-icon-shell" style={{ background: '#f8fafc', color: '#0ea5e9' }}><Package size={16} /></div>
                                     <div className="alert-content">
                                         <h4>{item.name}</h4>
-                                        <p>Usage Score: <strong>{item.usageScore}</strong></p>
+                                        <p>{t('usage_score')}: <strong>{item.usageScore}</strong></p>
                                     </div>
-                                    <Link to="/materials" className="reorder-link" style={{ background: '#f8fafc', color: '#0ea5e9' }}>View</Link>
+                                    <Link to="/materials" className="reorder-link" style={{ background: '#f8fafc', color: '#0ea5e9' }}>{t('view')}</Link>
                                 </div>
                             ))}
                         </div>
@@ -511,7 +544,7 @@ const Dashboard = () => {
                 {hasPermission('expenses') && lowStockItems.length > 0 && (
                     <div className="dashboard-widget alert-widget">
                         <div className="widget-header">
-                            <h3><AlertTriangle size={18} /> Critical Stock Alerts</h3>
+                            <h3><AlertTriangle size={18} /> {t('critical_stock_alerts')}</h3>
                         </div>
                         <div className="alert-list-modern">
                             {lowStockItems.map(item => (
@@ -519,9 +552,9 @@ const Dashboard = () => {
                                     <div className="alert-icon-shell"><Package size={16} /></div>
                                     <div className="alert-content">
                                         <h4>{item.name}</h4>
-                                        <p>Remaining: <span className="urgent">{item.currentStock} {item.unit}</span></p>
+                                        <p>{t('remaining')}: <span className="urgent">{item.currentStock} {item.unit}</span></p>
                                     </div>
-                                    <Link to="/materials" className="reorder-link">Fix</Link>
+                                    <Link to="/materials" className="reorder-link">{t('fix')}</Link>
                                 </div>
                             ))}
                         </div>
@@ -532,7 +565,7 @@ const Dashboard = () => {
                 {hasPermission('employees') && employeePerformance.length > 0 && (
                     <div className="dashboard-widget">
                         <div className="widget-header">
-                            <h3><Users size={18} /> Top Performers</h3>
+                            <h3><Users size={18} /> {t('top_performers')}</h3>
                             <span className="month-label">{new Date().toLocaleString('default', { month: 'long' })}</span>
                         </div>
                         <div className="perf-list-modern">
@@ -541,9 +574,9 @@ const Dashboard = () => {
                                     <div className="perf-rank">{i + 1}</div>
                                     <div className="perf-info">
                                         <strong>{emp.name}</strong>
-                                        <span>{emp.bookings} jobs completed</span>
+                                        <span>{emp.bookings} {t('jobs_completed')}</span>
                                     </div>
-                                    <div className="perf-value">{formatCurrency(emp.revenue)}</div>
+                                    <div className="perf-value">{formatAmount(emp.revenue)}</div>
                                 </div>
                             ))}
                         </div>
@@ -554,33 +587,29 @@ const Dashboard = () => {
             {/* Recent Bookings Table */}
             <div className="bookings-section-modern">
                 <div className="section-header">
-                    <h2>Recent Activity</h2>
-                    <Link to="/bookings" className="btn-text">View History →</Link>
+                    <h2>{t('recent_activity')}</h2>
+                    <Link to="/bookings" className="btn-text">{t('view_history')} →</Link>
                 </div>
                 <div className="table-responsive">
                     <table className="modern-table">
                         <thead>
                             <tr>
-                                <th>Ref ID</th>
-                                <th>Service Type</th>
-                                <th>Date / Time</th>
-                                <th className="desktop-only text-center">Amount</th>
-                                <th className="text-center">Status</th>
+                                <th>{t('ref_id')}</th>
+                                <th>{t('service_type')}</th>
+                                <th>{t('date_time')}</th>
+                                <th className="desktop-only text-center">{t('amount')}</th>
+                                <th className="text-center">{t('status')}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {recentBookings.map(booking => {
-                                const badge = getStatusBadge(booking.status);
                                 return (
                                     <tr key={booking.id}>
-                                        <td className="ref-cell" data-label="Ref">{booking.bookingReference || booking.id.slice(0, 8)}</td>
-                                        <td className="service-cell" data-label="Service">{booking.serviceName}</td>
-                                        <td className="date-time-cell" data-label="Date & Time">
-                                            <span>{booking.bookingDate}</span>
-                                            <small>{booking.startTime}</small>
-                                        </td>
-                                        <td className="price-cell desktop-only text-center" data-label="Amount">{formatCurrency(booking.price || 0)}</td>
-                                        <td className="text-center" data-label="Status"><span className={`status-badge ${booking.status}`}>{badge.label}</span></td>
+                                        <td><strong>{booking.bookingReference || booking.id.slice(0, 8)}</strong></td>
+                                        <td>{t(booking.serviceName)}</td>
+                                        <td>{booking.bookingDate} <small>{booking.startTime}</small></td>
+                                        <td className="desktop-only text-center">{formatAmount(booking.price)}</td>
+                                        <td className="text-center">{getStatusBadge(booking.status).label}</td>
                                     </tr>
                                 );
                             })}
@@ -594,31 +623,31 @@ const Dashboard = () => {
                 <div className="modal">
                     <div className="modal-content modal-lg">
                         <div className="modal-header">
-                            <h2>Incomplete Payments</h2>
+                            <h2>{t('incomplete_payments')}</h2>
                             <button className="modal-close" onClick={() => setShowIncompleteModal(false)}>&times;</button>
                         </div>
                         <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
                             {incompleteBookings.length === 0 ? (
-                                <p>No incomplete payments found.</p>
+                                <p>{t('no_incomplete_payments')}</p>
                             ) : (
                                 <table className="modern-table">
                                     <thead>
                                         <tr>
-                                            <th>Ref ID</th>
-                                            <th>Customer</th>
-                                            <th>Price</th>
-                                            <th>Paid</th>
-                                            <th>Due</th>
+                                            <th>{t('ref_id')}</th>
+                                            <th>{t('customers')}</th>
+                                            <th>{t('amount')}</th>
+                                            <th>{t('paid')}</th>
+                                            <th>{t('due')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {incompleteBookings.map(b => (
                                             <tr key={b.id}>
-                                                <td>{b.bookingReference || b.id.slice(0,8)}</td>
+                                                <td><strong>{b.bookingReference || b.id.slice(0, 8)}</strong></td>
                                                 <td>{b.customerName || 'N/A'}</td>
-                                                <td>{formatCurrency(b.price || 0)}</td>
-                                                <td>{formatCurrency(b.paidAmount || 0)}</td>
-                                                <td style={{ color: '#ef4444', fontWeight: 'bold' }}>{formatCurrency((b.price || 0) - (b.paidAmount || 0))}</td>
+                                                <td>{formatAmount(b.price)}</td>
+                                                <td>{formatAmount(b.paidAmount || 0)}</td>
+                                                <td style={{ color: '#ef4444', fontWeight: 'bold' }}>{formatAmount(b.price - (b.paidAmount || 0))}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -626,8 +655,8 @@ const Dashboard = () => {
                             )}
                         </div>
                         <div className="modal-footer">
-                            <button className="btn btn-secondary" onClick={() => setShowIncompleteModal(false)}>Close</button>
-                            <Link to="/payments" className="btn btn-primary" onClick={() => setShowIncompleteModal(false)}>Go to Payments</Link>
+                            <button className="btn btn-secondary" onClick={() => setShowIncompleteModal(false)}>{t('close')}</button>
+                            <Link to="/payments" className="btn btn-primary" onClick={() => setShowIncompleteModal(false)}>{t('go_to_payments')}</Link>
                         </div>
                     </div>
                 </div>

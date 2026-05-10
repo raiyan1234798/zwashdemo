@@ -18,6 +18,11 @@
     z-index: 1000;
     transition: var(--transition-base);
     box-shadow: 4px 0 30px rgba(0, 0, 0, 0.2);
+    inset-inline-start: 0;
+}
+
+[dir="rtl"] .sidebar {
+    box-shadow: -4px 0 30px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar-header {
@@ -190,7 +195,7 @@
 
 .main-content {
     flex: 1;
-    margin-left: var(--sidebar-width);
+    margin-inline-start: var(--sidebar-width);
     padding: 1.25rem 1.5rem;
     min-height: 100vh;
     background: linear-gradient(135deg, var(--navy-50) 0%, #e9eef6 100%);

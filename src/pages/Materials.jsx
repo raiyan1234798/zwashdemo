@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { db } from '../config/firebase';
 import { logAction } from '../utils/logger';
 import {
@@ -33,6 +35,8 @@ import {
 import * as XLSX from 'xlsx';
 
 const Materials = () => {
+    const { t } = useTranslation();
+    const { currentCurrency, currency: currentCurrencyCode, formatCurrency: globalFormatCurrency } = useCurrency();
     const { hasPermission, userProfile } = useAuth();
     const [materials, setMaterials] = useState([]);
     const [services, setServices] = useState([]);
@@ -46,15 +50,24 @@ const Materials = () => {
     const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, name }
 
     useEffect(() => {
-        fetchMaterials();
-        fetchServices();
-    }, []);
+        if (userProfile?.companyId) {
+            fetchMaterials();
+            fetchServices();
+        }
+    }, [userProfile?.companyId]);
 
     const fetchMaterials = async () => {
         try {
             setLoading(true);
+            const companyId = userProfile?.companyId;
+            if (!companyId) { setLoading(false); return; }
+            
             const materialsRef = collection(db, 'materials');
-            const q = query(materialsRef, orderBy('name', 'asc'));
+            const q = query(
+                materialsRef, 
+                where('companyId', '==', companyId),
+                orderBy('name', 'asc')
+            );
             const snapshot = await getDocs(q);
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setMaterials(data);
@@ -67,7 +80,11 @@ const Materials = () => {
 
     const fetchServices = async () => {
         try {
-            const snapshot = await getDocs(collection(db, 'services'));
+            const companyId = userProfile?.companyId;
+            if (!companyId) return;
+
+            const q = query(collection(db, 'services'), where('companyId', '==', companyId));
+            const snapshot = await getDocs(q);
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setServices(data.filter(s => s.materials?.length > 0));
         } catch (error) {
@@ -99,8 +116,10 @@ const Materials = () => {
             setMaterials(prev => prev.filter(m => m.id !== id));
             setDeleteConfirm(null);
         } catch (error) {
-            console.error('Error deleting material:', error);
-            alert('Error deleting material');
+            console.error('Error saving material:', error);
+            alert(t('saving_error_msg'));
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -111,7 +130,7 @@ const Materials = () => {
             'Current Stock': m.currentStock,
             Unit: m.unit,
             'Min Stock Level': m.minStockLevel,
-            'Cost Per Unit (₹)': m.costPerUnit,
+            [`Cost Per Unit (${currentCurrency.symbol})`]: m.costPerUnit,
             Status: m.currentStock <= m.minStockLevel ? 'Low Stock' : 'OK'
         }));
 
@@ -122,11 +141,7 @@ const Materials = () => {
     };
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0
-        }).format(amount || 0);
+        return globalFormatCurrency(amount || 0);
     };
 
     const getCategoryIcon = (category) => {
@@ -165,19 +180,19 @@ const Materials = () => {
         <div className="materials-page">
             <div className="page-header">
                 <div>
-                    <h1><Package size={28} /> Materials & Inventory</h1>
-                    <p className="subtitle">Manage raw materials and supplies</p>
+                    <h1><Package size={28} /> {t('materials_inventory_title')}</h1>
+                    <p className="subtitle">{t('manage_materials_subtitle')}</p>
                 </div>
                 <div className="header-actions">
                     <Link to="/material-usage" className="btn btn-secondary">
-                        <BarChart3 size={18} /> View Usage
+                        <BarChart3 size={18} /> {t('view_usage')}
                     </Link>
                     <button className="btn btn-secondary" onClick={exportToExcel}>
-                        <Download size={18} /> Export
+                        <Download size={18} /> {t('export')}
                     </button>
                     {hasPermission('materials', 'create') && (
                         <button className="btn btn-primary" onClick={() => { setEditingMaterial(null); setShowModal(true); }}>
-                            <Plus size={18} /> Add Material
+                            <Plus size={18} /> {t('add_material')}
                         </button>
                     )}
                 </div>
@@ -191,7 +206,7 @@ const Materials = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{totalItems}</span>
-                        <span className="stat-label">Total Items</span>
+                        <span className="stat-label">{t('total_items')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -200,7 +215,7 @@ const Materials = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{lowStockItems}</span>
-                        <span className="stat-label">Low Stock</span>
+                        <span className="stat-label">{t('low_stock')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -209,7 +224,7 @@ const Materials = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{formatCurrency(totalValue)}</span>
-                        <span className="stat-label">Inventory Value</span>
+                        <span className="stat-label">{t('inventory_value')}</span>
                     </div>
                 </div>
             </div>
@@ -220,7 +235,7 @@ const Materials = () => {
                     <Search size={18} />
                     <input
                         type="text"
-                        placeholder="Search materials..."
+                        placeholder={t('search_materials_placeholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -232,19 +247,19 @@ const Materials = () => {
                         style={{ whiteSpace: 'nowrap' }}
                     >
                         <AlertTriangle size={16} />
-                        {showLowStock ? 'Show All' : 'Low Stock Only'}
+                        {showLowStock ? t('show_all') : t('low_stock_only')}
                     </button>
                     <select
                         className="filter-select"
                         value={categoryFilter}
                         onChange={(e) => setCategoryFilter(e.target.value)}
                     >
-                        <option value="">All Categories</option>
-                        <option value="chemicals">Chemicals & Liquids</option>
-                        <option value="water">Water</option>
-                        <option value="consumables">Consumables</option>
-                        <option value="equipment">Equipment</option>
-                        <option value="other">Other</option>
+                        <option value="">{t('all_categories')}</option>
+                        <option value="chemicals">{t('chemicals_liquids')}</option>
+                        <option value="water">{t('water')}</option>
+                        <option value="consumables">{t('consumables')}</option>
+                        <option value="equipment">{t('equipment')}</option>
+                        <option value="other">{t('other')}</option>
                     </select>
                 </div>
             </div>
@@ -259,10 +274,10 @@ const Materials = () => {
                     ) : filteredMaterials.length === 0 ? (
                         <div className="empty-state">
                             <Package size={48} />
-                            <p>No materials found</p>
+                            <p>{t('no_materials_found')}</p>
                             {hasPermission('materials', 'create') && (
                                 <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                                    <Plus size={18} /> Add First Material
+                                    <Plus size={18} /> {t('add_first_material')}
                                 </button>
                             )}
                         </div>
@@ -286,26 +301,26 @@ const Materials = () => {
                                                 </div>
                                                 {isLowStock && (
                                                     <span className="badge badge-warning">
-                                                        <AlertTriangle size={12} /> Low Stock
+                                                        <AlertTriangle size={12} /> {t('low_stock')}
                                                     </span>
                                                 )}
                                             </div>
                                             <div className="material-meta">
-                                                <span className="category">{material.category}</span>
+                                                <span className="category">{t(material.category) || material.category}</span>
                                                 <span className="separator">•</span>
-                                                <span className="cost">{formatCurrency(material.costPerUnit)} / {material.unit}</span>
+                                                <span className="cost">{formatCurrency(material.costPerUnit)} / {t(material.unit) || material.unit}</span>
                                             </div>
                                         </div>
                                         <div className="material-stock">
                                             <span className="stock-value">{material.currentStock}</span>
-                                            <span className="stock-unit">{material.unit}</span>
-                                            <span className="stock-min">Min: {material.minStockLevel}</span>
+                                            <span className="stock-unit">{t(material.unit) || material.unit}</span>
+                                            <span className="stock-min">{t('min_label')} {material.minStockLevel}</span>
                                         </div>
                                         <div className="material-actions">
                                             <button
                                                 className="btn-icon"
                                                 onClick={() => setViewingMaterial(material)}
-                                                title="View"
+                                                title={t('view')}
                                             >
                                                 <Eye size={16} />
                                             </button>
@@ -313,7 +328,7 @@ const Materials = () => {
                                                 <button
                                                     className="btn-icon"
                                                     onClick={() => { setEditingMaterial(material); setShowModal(true); }}
-                                                    title="Edit"
+                                                    title={t('edit')}
                                                 >
                                                     <Edit size={16} />
                                                 </button>
@@ -322,7 +337,7 @@ const Materials = () => {
                                                 <button
                                                     className="btn-icon danger"
                                                     onClick={() => setDeleteConfirm({ id: material.id, name: material.name })}
-                                                    title="Delete"
+                                                    title={t('delete')}
                                                 >
                                                     <Trash2 size={16} />
                                                 </button>
@@ -349,24 +364,24 @@ const Materials = () => {
                 <div className="modal">
                     <div className="modal-content" style={{ maxWidth: '400px' }}>
                         <div className="modal-header">
-                            <h2><AlertTriangle size={20} color="#ef4444" /> Confirm Delete</h2>
+                            <h2><AlertTriangle size={20} color="#ef4444" /> {t('confirm_delete_title')}</h2>
                             <button className="modal-close" onClick={() => setDeleteConfirm(null)}>&times;</button>
                         </div>
                         <div className="modal-body" style={{ textAlign: 'center' }}>
                             <AlertTriangle size={48} color="#ef4444" style={{ marginBottom: '1rem' }} />
-                            <h3 style={{ marginBottom: '0.5rem' }}>Delete "{deleteConfirm.name}"?</h3>
+                            <h3 style={{ marginBottom: '0.5rem' }}>{t('delete_material_confirm_msg', { name: deleteConfirm.name })}</h3>
                             <p style={{ color: 'var(--navy-500)' }}>
-                                This action cannot be undone. This will permanently delete this material from inventory.
+                                {t('delete_undone_warning')}
                             </p>
                         </div>
                         <div className="modal-footer" style={{ justifyContent: 'center' }}>
-                            <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+                            <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>{t('cancel')}</button>
                             <button
                                 className="btn"
                                 style={{ background: '#ef4444', color: 'white' }}
                                 onClick={() => deleteMaterial(deleteConfirm.id)}
                             >
-                                <Trash2 size={16} /> Delete
+                                <Trash2 size={16} /> {t('delete')}
                             </button>
                         </div>
                     </div>
@@ -387,20 +402,20 @@ const Materials = () => {
                                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: viewingMaterial.currentStock <= viewingMaterial.minStockLevel ? '#ef4444' : 'var(--primary)' }}>
                                         {viewingMaterial.currentStock}
                                     </div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Current Stock ({viewingMaterial.unit})</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('current_stock_label')} ({t(viewingMaterial.unit) || viewingMaterial.unit})</div>
                                 </div>
                                 <div style={{ padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '1.5rem', fontWeight: 600 }}>{viewingMaterial.minStockLevel}</div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Minimum Level</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('minimum_level_label')}</div>
                                 </div>
                             </div>
                             <div style={{ display: 'grid', gap: '0.75rem' }}>
-                                <p><strong>Category:</strong> {viewingMaterial.category}</p>
-                                <p><strong>Cost per {viewingMaterial.unit}:</strong> ₹{viewingMaterial.costPerUnit}</p>
-                                <p><strong>Total Value:</strong> ₹{(viewingMaterial.currentStock * viewingMaterial.costPerUnit).toLocaleString()}</p>
+                                <p><strong>{t('category_label')}:</strong> {t(viewingMaterial.category) || viewingMaterial.category}</p>
+                                <p><strong>{t('cost_per_unit_label', { unit: t(viewingMaterial.unit) || viewingMaterial.unit })}:</strong> {formatCurrency(viewingMaterial.costPerUnit)}</p>
+                                <p><strong>{t('total_value_label')}:</strong> {formatCurrency(viewingMaterial.currentStock * viewingMaterial.costPerUnit)}</p>
                                 {viewingMaterial.linkedServiceIds?.length > 0 && (
                                     <div>
-                                        <strong>Linked Services:</strong>
+                                        <strong>{t('linked_services_label')}:</strong>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
                                             {viewingMaterial.linkedServiceIds.map(sId => {
                                                 const svc = services.find(s => s.id === sId);
@@ -419,10 +434,10 @@ const Materials = () => {
                                     className="btn btn-primary"
                                     onClick={() => { setEditingMaterial(viewingMaterial); setShowModal(true); setViewingMaterial(null); }}
                                 >
-                                    <Edit size={16} /> Edit
+                                    <Edit size={16} /> {t('edit')}
                                 </button>
                             )}
-                            <button className="btn btn-secondary" onClick={() => setViewingMaterial(null)}>Close</button>
+                            <button className="btn btn-secondary" onClick={() => setViewingMaterial(null)}>{t('close')}</button>
                         </div>
                     </div>
                 </div>
@@ -705,6 +720,7 @@ const Materials = () => {
 
 // Material Add/Edit Modal
 const MaterialModal = ({ material, onClose, onSuccess }) => {
+    const { t } = useTranslation();
     const { userProfile } = useAuth();
     const [loading, setLoading] = useState(false);
 
@@ -724,6 +740,7 @@ const MaterialModal = ({ material, onClose, onSuccess }) => {
             minStockLevel: Number(formData.get('minStockLevel')),
             costPerUnit: Number(formData.get('costPerUnit')),
             isActive: true,
+            companyId: userProfile?.companyId,
             updatedAt: serverTimestamp()
         };
 
@@ -751,50 +768,50 @@ const MaterialModal = ({ material, onClose, onSuccess }) => {
         <div className="modal">
             <div className="modal-content">
                 <div className="modal-header">
-                    <h2>{material ? 'Edit Material' : 'Add Material'}</h2>
+                    <h2>{material ? t('edit_material') : t('add_material')}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Material Name *</label>
-                                <input name="name" defaultValue={material?.name} required placeholder="e.g., Car Shampoo" />
+                                <label>{t('material_name_label')}</label>
+                                <input name="name" defaultValue={material?.name} required placeholder={t('material_name_label').replace('*', '').trim()} />
                             </div>
                             <div className="form-group">
-                                <label>Brand</label>
-                                <input name="brand" defaultValue={material?.brand} placeholder="e.g., 3M, Bosch" />
+                                <label>{t('brand_label')}</label>
+                                <input name="brand" defaultValue={material?.brand} placeholder={t('brand_label')} />
                             </div>
                         </div>
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Category *</label>
+                                <label>{t('category_label')}</label>
                                 <select name="category" defaultValue={material?.category || ''} required>
-                                    <option value="">Select Category</option>
-                                    <option value="chemicals">Chemicals & Liquids</option>
-                                    <option value="water">Water</option>
-                                    <option value="consumables">Consumables</option>
-                                    <option value="equipment">Equipment</option>
-                                    <option value="other">Other</option>
+                                    <option value="">{t('select_category')}</option>
+                                    <option value="chemicals">{t('chemicals_liquids')}</option>
+                                    <option value="water">{t('water')}</option>
+                                    <option value="consumables">{t('consumables')}</option>
+                                    <option value="equipment">{t('equipment')}</option>
+                                    <option value="other">{t('other')}</option>
                                 </select>
                             </div>
                             <div className="form-group">
-                                <label>Unit *</label>
+                                <label>{t('unit_label')}</label>
                                 <select name="unit" defaultValue={material?.unit || ''} required>
-                                    <option value="">Select Unit</option>
-                                    <option value="liters">Liters</option>
-                                    <option value="ml">Milliliters (ml)</option>
-                                    <option value="pieces">Pieces</option>
-                                    <option value="sheets">Sheets</option>
-                                    <option value="kg">Kilograms</option>
-                                    <option value="grams">Grams</option>
-                                    <option value="units">Units</option>
+                                    <option value="">{t('select_unit')}</option>
+                                    <option value="liters">{t('liters')}</option>
+                                    <option value="ml">{t('ml')}</option>
+                                    <option value="pieces">{t('pieces')}</option>
+                                    <option value="sheets">{t('sheets')}</option>
+                                    <option value="kg">{t('kg')}</option>
+                                    <option value="grams">{t('grams')}</option>
+                                    <option value="units">{t('units')}</option>
                                 </select>
                             </div>
                         </div>
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Current Stock *</label>
+                                <label>{t('current_stock_label')} *</label>
                                 <input
                                     name="currentStock"
                                     type="number"
@@ -805,7 +822,7 @@ const MaterialModal = ({ material, onClose, onSuccess }) => {
                                 />
                             </div>
                             <div className="form-group">
-                                <label>Minimum Stock Level *</label>
+                                <label>{t('minimum_stock_level_label')} *</label>
                                 <input
                                     name="minStockLevel"
                                     type="number"
@@ -817,7 +834,7 @@ const MaterialModal = ({ material, onClose, onSuccess }) => {
                             </div>
                         </div>
                         <div className="form-group">
-                            <label>Cost Per Unit (₹) *</label>
+                            <label>{t('cost_per_unit_label', { unit: currentCurrency.symbol })} *</label>
                             <input
                                 name="costPerUnit"
                                 type="number"
@@ -829,9 +846,9 @@ const MaterialModal = ({ material, onClose, onSuccess }) => {
                         </div>
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancel')}</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Saving...' : (material ? 'Update' : 'Add Material')}
+                            {loading ? t('saving') : (material ? t('update') : t('add_material'))}
                         </button>
                     </div>
                 </form>

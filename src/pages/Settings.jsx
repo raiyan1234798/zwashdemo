@@ -1,32 +1,37 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { db } from '../config/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import {
     Settings as SettingsIcon,
     Store,
     Clock,
-    IndianRupee,
+    Wallet,
     Calendar,
     Save,
     Download,
     FileText,
     ToggleLeft,
-    ToggleRight
+    ToggleRight,
+    RefreshCw
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const Settings = () => {
-    const { isAdmin, user } = useAuth();
+    const { t } = useTranslation();
+    const { isAdmin, user, userProfile } = useAuth();
     const { theme, updateTheme } = useTheme();
+    const { changeCurrency } = useCurrency();
     const [settings, setSettings] = useState({
         businessName: 'My Car Wash',
         businessPhone: '',
         businessEmail: '',
         businessAddress: '',
-        currency: 'INR',
-        currencySymbol: '₹',
+        currency: 'USD',
+        currencySymbol: '$',
         openTime: '09:00',
         closeTime: '18:00',
         slotDuration: 30,
@@ -39,7 +44,11 @@ const Settings = () => {
         // Default Templates
         whatsappConfirmation: '',
         whatsappReminder: '',
-        workingDays: [1, 2, 3, 4, 5, 6]
+        workingDays: [1, 2, 3, 4, 5, 6],
+        logoURL: '',
+        supportPhone: '',
+        paymentPhone: '',
+        enquiryPhone: ''
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -70,11 +79,34 @@ const Settings = () => {
     const saveSettings = async () => {
         setSaving(true);
         try {
+            const companyId = userProfile?.companyId;
+
+            // Save to shop-specific settings
             await setDoc(doc(db, 'settings', user.uid), {
                 ...settings,
                 updatedAt: serverTimestamp()
             });
-            alert('Settings saved successfully!');
+
+            // Sync with demoClients if companyId exists (to reflect on public booking site)
+            if (companyId) {
+                await import('firebase/firestore').then(({ updateDoc, doc }) => {
+                    return updateDoc(doc(db, 'demoClients', companyId), {
+                        companyName: settings.businessName,
+                        logoURL: settings.logoURL,
+                        openTime: settings.openingTime || settings.openTime,
+                        closeTime: settings.closingTime || settings.closeTime,
+                        slotDuration: settings.slotDuration,
+                        maxConcurrentBookings: settings.maxConcurrentBookings,
+                        updatedAt: serverTimestamp()
+                    });
+                });
+            }
+
+            // Sync with global currency context
+            if (settings.currency) {
+                changeCurrency(settings.currency);
+            }
+            alert(t('settings_saved_success', { defaultValue: 'Settings saved successfully!' }));
         } catch (error) {
             console.error('Error saving settings:', error);
             alert('Error saving settings');
@@ -105,7 +137,7 @@ const Settings = () => {
 
             const link = document.createElement('a');
             link.href = url;
-            link.download = `detailingcommando_backup_${new Date().toISOString().split('T')[0]}.json`;
+            link.download = `zwashdemo_backup_${new Date().toISOString().split('T')[0]}.json`;
             link.click();
 
             URL.revokeObjectURL(url);
@@ -123,43 +155,98 @@ const Settings = () => {
     }
 
     return (
+        <>
         <div className="settings-page">
             <div className="page-header">
                 <div>
-                    <h1><SettingsIcon size={28} /> Settings</h1>
-                    <p className="subtitle">Configure your business settings</p>
+                    <h1><SettingsIcon size={28} /> {t('settings')}</h1>
+                    <p className="subtitle">{t('configure_business_settings', { defaultValue: 'Configure your business settings' })}</p>
                 </div>
                 <div className="header-actions">
                     <button className="btn btn-secondary" onClick={handleBackup}>
-                        <Download size={18} /> Backup Data
+                        <Download size={18} /> {t('backup_data', { defaultValue: 'Backup Data' })}
                     </button>
                     {isAdmin && (
                         <button className="btn btn-primary" onClick={saveSettings} disabled={saving}>
-                            <Save size={18} /> {saving ? 'Saving...' : 'Save Settings'}
+                            <Save size={18} /> {saving ? t('saving') : t('save_settings', { defaultValue: 'Save Settings' })}
                         </button>
                     )}
                 </div>
             </div>
 
             <div className="settings-grid">
+                {/* Personal Profile Info */}
+                <div className="card" style={{ borderLeft: '4px solid #6366f1' }}>
+                    <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h3 style={{ margin: 0 }}><SettingsIcon size={18} /> Personal Profile</h3>
+                        <div style={{ fontSize: '0.75rem', background: '#eff6ff', color: '#1e40af', padding: '4px 10px', borderRadius: '20px', fontWeight: 600 }}>Connected to Google</div>
+                    </div>
+                    <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                        <div style={{ position: 'relative' }}>
+                            {userProfile?.photoURL ? (
+                                <img 
+                                    src={userProfile.photoURL} 
+                                    alt="" 
+                                    style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', border: '3px solid white', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        e.target.parentNode.querySelector('.profile-placeholder').style.display = 'flex';
+                                    }}
+                                />
+                            ) : null}
+                            <div className="profile-placeholder" style={{ display: userProfile?.photoURL ? 'none' : 'flex', width: 80, height: 80, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: 'white', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', fontWeight: 700, border: '3px solid white', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+                                {userProfile?.displayName?.charAt(0) || 'U'}
+                            </div>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 800, fontSize: '1.2rem', color: '#0f172a' }}>{userProfile?.displayName}</div>
+                            <div style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: 12 }}>{userProfile?.email}</div>
+                            <button 
+                                className="btn btn-secondary" 
+                                style={{ fontSize: '0.8rem', padding: '6px 12px' }}
+                                onClick={async () => {
+                                    if (window.confirm('Sync profile info from your Google account?')) {
+                                        // This will trigger the sync logic in fetchUserProfile on next reload or login
+                                        // But for immediate effect, we can suggest a reload
+                                        window.location.reload();
+                                    }
+                                }}
+                            >
+                                <RefreshCw size={14} style={{ marginRight: 6 }} /> Sync from Google
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Business Info */}
                 <div className="card">
                     <div className="card-header">
-                        <h3><Store size={18} /> Business Information</h3>
+                        <h3><Store size={18} /> {t('business_information')}</h3>
                     </div>
                     <div className="card-body">
                         <div className="form-group">
-                            <label>Business Name</label>
+                            <label>{t('business_name')}</label>
                             <input
                                 name="businessName"
                                 value={settings.businessName}
                                 onChange={handleChange}
-                                placeholder="Your Car Wash Name"
+                                placeholder={t('business_name_placeholder')}
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>{t('logo_url')}</label>
+                            <input
+                                name="logoURL"
+                                value={settings.logoURL || ''}
+                                onChange={handleChange}
+                                placeholder="https://example.com/logo.png"
                             />
                         </div>
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Phone</label>
+                                <label>{t('phone')}</label>
                                 <input
                                     name="businessPhone"
                                     value={settings.businessPhone}
@@ -168,7 +255,7 @@ const Settings = () => {
                                 />
                             </div>
                             <div className="form-group">
-                                <label>Email</label>
+                                <label>{t('email')}</label>
                                 <input
                                     name="businessEmail"
                                     type="email"
@@ -179,13 +266,13 @@ const Settings = () => {
                             </div>
                         </div>
                         <div className="form-group">
-                            <label>Address</label>
+                            <label>{t('address')}</label>
                             <textarea
                                 name="businessAddress"
                                 value={settings.businessAddress}
                                 onChange={handleChange}
                                 rows="2"
-                                placeholder="123 Main Street, Nagercoil"
+                                placeholder="123 Demo Street, Tech City"
                             />
                         </div>
                     </div>
@@ -195,12 +282,12 @@ const Settings = () => {
                 {isAdmin && (
                     <div className="card">
                         <div className="card-header">
-                            <h3><SettingsIcon size={18} /> UI Appearance</h3>
+                            <h3><SettingsIcon size={18} /> {t('ui_appearance')}</h3>
                         </div>
                         <div className="card-body">
                             <div className="form-row">
                                 <div className="form-group">
-                                    <label>Primary Brand Color</label>
+                                    <label>{t('primary_brand_color')}</label>
                                     <div className="form-group-color-input" style={{ display: 'flex', gap: '0.5rem' }}>
                                         <input
                                             type="color"
@@ -217,7 +304,7 @@ const Settings = () => {
                                     </div>
                                 </div>
                                 <div className="form-group">
-                                    <label>Secondary / Accent Color</label>
+                                    <label>{t('secondary_color')}</label>
                                     <div className="form-group-color-input" style={{ display: 'flex', gap: '0.5rem' }}>
                                         <input
                                             type="color"
@@ -234,7 +321,7 @@ const Settings = () => {
                                     </div>
                                 </div>
                                 <div className="form-group">
-                                    <label>Sidebar Background</label>
+                                    <label>{t('sidebar_background')}</label>
                                     <div className="form-group-color-input" style={{ display: 'flex', gap: '0.5rem' }}>
                                         <input
                                             type="color"
@@ -251,16 +338,16 @@ const Settings = () => {
                                     </div>
                                 </div>
                                 <div className="form-group">
-                                    <label>Border Radius</label>
+                                    <label>{t('border_radius')}</label>
                                     <select
                                         value={theme?.borderRadius || '8px'}
                                         onChange={(e) => updateTheme({ ...theme, borderRadius: e.target.value })}
                                     >
-                                        <option value="0px">Square (0px)</option>
-                                        <option value="4px">Small (4px)</option>
-                                        <option value="8px">Medium (8px)</option>
-                                        <option value="12px">Large (12px)</option>
-                                        <option value="20px">Round (20px)</option>
+                                        <option value="0px">{t('square')}</option>
+                                        <option value="4px">{t('small')}</option>
+                                        <option value="8px">{t('medium')}</option>
+                                        <option value="12px">{t('large')}</option>
+                                        <option value="20px">{t('round')}</option>
                                     </select>
                                 </div>
                             </div>
@@ -271,12 +358,12 @@ const Settings = () => {
                 {/* Operating Hours */}
                 <div className="card">
                     <div className="card-header">
-                        <h3><Clock size={18} /> Operating Hours</h3>
+                        <h3><Clock size={18} /> {t('operating_hours')}</h3>
                     </div>
                     <div className="card-body">
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Opening Time</label>
+                                <label>{t('opening_time')}</label>
                                 <input
                                     name="openTime"
                                     type="time"
@@ -285,7 +372,7 @@ const Settings = () => {
                                 />
                             </div>
                             <div className="form-group">
-                                <label>Closing Time</label>
+                                <label>{t('closing_time')}</label>
                                 <input
                                     name="closeTime"
                                     type="time"
@@ -296,7 +383,7 @@ const Settings = () => {
                         </div>
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Slot Duration (minutes)</label>
+                                <label>{t('slot_duration')}</label>
                                 <input
                                     name="slotDuration"
                                     type="number"
@@ -307,7 +394,7 @@ const Settings = () => {
                                 />
                             </div>
                             <div className="form-group">
-                                <label>Buffer Time (minutes)</label>
+                                <label>{t('buffer_time')}</label>
                                 <input
                                     name="bufferTime"
                                     type="number"
@@ -319,7 +406,7 @@ const Settings = () => {
                             </div>
                         </div>
                         <div className="form-group">
-                            <label>Max Concurrent Bookings</label>
+                            <label>{t('max_concurrent_bookings')}</label>
                             <input
                                 name="maxConcurrentBookings"
                                 type="number"
@@ -335,12 +422,12 @@ const Settings = () => {
                 {/* Currency */}
                 <div className="card">
                     <div className="card-header">
-                        <h3><IndianRupee size={18} /> Currency Settings</h3>
+                        <h3><Wallet size={18} /> {t('currency_settings')}</h3>
                     </div>
                     <div className="card-body">
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Currency Code</label>
+                                <label>{t('currency_code')}</label>
                                 <select name="currency" value={settings.currency} onChange={handleChange}>
                                     <option value="INR">INR - Indian Rupee</option>
                                     <option value="USD">USD - US Dollar</option>
@@ -349,12 +436,12 @@ const Settings = () => {
                                 </select>
                             </div>
                             <div className="form-group">
-                                <label>Currency Symbol</label>
+                                <label>{t('currency_symbol')}</label>
                                 <input
                                     name="currencySymbol"
                                     value={settings.currencySymbol}
                                     onChange={handleChange}
-                                    placeholder="₹"
+                                    placeholder="$"
                                 />
                             </div>
                         </div>
@@ -364,11 +451,11 @@ const Settings = () => {
                 {/* GST Settings */}
                 <div className="card">
                     <div className="card-header">
-                        <h3><FileText size={18} /> GST / Tax Settings</h3>
+                        <h3><FileText size={18} /> {t('tax_settings')}</h3>
                     </div>
                     <div className="card-body">
                         <div className="form-group">
-                            <label>Enable GST</label>
+                            <label>{t('enable_gst')}</label>
                             <button
                                 type="button"
                                 className="toggle-btn"
@@ -386,14 +473,14 @@ const Settings = () => {
                                 }}
                             >
                                 {settings.gstEnabled ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-                                {settings.gstEnabled ? 'Enabled' : 'Disabled'}
+                                {settings.gstEnabled ? t('enabled') : t('disabled')}
                             </button>
                         </div>
 
                         {settings.gstEnabled && (
                             <>
                                 <div className="form-group">
-                                    <label>GST Number (GSTIN)</label>
+                                    <label>{t('gst_number')}</label>
                                     <input
                                         name="gstNumber"
                                         value={settings.gstNumber}
@@ -403,7 +490,7 @@ const Settings = () => {
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label>GST Percentage (%)</label>
+                                    <label>{t('gst_percentage')}</label>
                                     <input
                                         name="gstPercentage"
                                         type="number"
@@ -422,11 +509,11 @@ const Settings = () => {
                 {/* WhatsApp Message Templates */}
                 <div className="card">
                     <div className="card-header">
-                        <h3>📱 WhatsApp Templates</h3>
+                        <h3>📱 {t('whatsapp_templates')}</h3>
                     </div>
                     <div className="card-body">
                         <div className="form-group">
-                            <label>Booking Confirmation</label>
+                            <label>{t('booking_confirmation')}</label>
                             <textarea
                                 name="whatsappConfirmation"
                                 value={settings.whatsappConfirmation || 'Hi {name}! Booking confirmed. 📅 {date}, ⏰ {time}, 🚗 {service}. - {business}'}
@@ -435,7 +522,7 @@ const Settings = () => {
                             />
                         </div>
                         <div className="form-group">
-                            <label>Reminder Message</label>
+                            <label>{t('reminder_message')}</label>
                             <textarea
                                 name="whatsappReminder"
                                 value={settings.whatsappReminder || 'Reminder: Your car wash is tomorrow at {time}. - {business}'}
@@ -447,10 +534,51 @@ const Settings = () => {
                     </div>
                 </div>
 
+                {/* Support & Messaging Channels */}
+                <div className="card">
+                    <div className="card-header">
+                        <h3>💬 {t('support_channels')}</h3>
+                    </div>
+                    <div className="card-body">
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label>{t('complaints_phone')}</label>
+                                <input
+                                    name="supportPhone"
+                                    value={settings.supportPhone || ''}
+                                    onChange={handleChange}
+                                    placeholder="+91 98765 43210"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>{t('payment_phone')}</label>
+                                <input
+                                    name="paymentPhone"
+                                    value={settings.paymentPhone || ''}
+                                    onChange={handleChange}
+                                    placeholder="+91 98765 43210"
+                                />
+                            </div>
+                        </div>
+                        <div className="form-group">
+                            <label>{t('enquiry_phone')}</label>
+                            <input
+                                name="enquiryPhone"
+                                value={settings.enquiryPhone || ''}
+                                onChange={handleChange}
+                                placeholder="+91 98765 43210"
+                            />
+                        </div>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--navy-500)', marginTop: '0.5rem' }}>
+                            {t('support_channels_help')}
+                        </p>
+                    </div>
+                </div>
+
                 {/* Working Days */}
                 <div className="card">
                     <div className="card-header">
-                        <h3><Calendar size={18} /> Working Days</h3>
+                        <h3><Calendar size={18} /> {t('working_days')}</h3>
                     </div>
                     <div className="card-body">
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -582,6 +710,7 @@ const Settings = () => {
         }
       `}</style>
         </div>
+        </>
     );
 };
 

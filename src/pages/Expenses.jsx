@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { jsPDF } from 'jspdf';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { db } from '../config/firebase';
 import {
     collection,
@@ -17,7 +19,6 @@ import {
     serverTimestamp
 } from 'firebase/firestore';
 import {
-    IndianRupee,
     Plus,
     TrendingDown,
     TrendingUp,
@@ -30,7 +31,8 @@ import {
     Trash2,
     Download,
     UserCog,
-    CheckCircle2
+    CheckCircle2,
+    Wallet
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
@@ -38,7 +40,9 @@ import {
 } from 'recharts';
 
 const Expenses = () => {
-    const { hasPermission } = useAuth();
+    const { t } = useTranslation();
+    const { hasPermission, userProfile } = useAuth();
+    const { currency: currentCurrencyCode, formatCurrency: globalFormatCurrency } = useCurrency();
     const [expenses, setExpenses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -53,15 +57,24 @@ const Expenses = () => {
     const [employees, setEmployees] = useState([]);
 
     useEffect(() => {
-        fetchCategories();
-        fetchExpenses();
-        fetchEmployees();
-    }, []);
+        if (userProfile?.companyId) {
+            fetchCategories();
+            fetchExpenses();
+            fetchEmployees();
+        }
+    }, [currentCurrencyCode, userProfile?.companyId]);
 
     const fetchEmployees = async () => {
         try {
+            const companyId = userProfile?.companyId;
+            if (!companyId) return;
+
             const usersRef = collection(db, 'adminUsers');
-            const q = query(usersRef, where('status', '==', 'approved'));
+            const q = query(
+                usersRef, 
+                where('companyId', '==', companyId),
+                where('status', '==', 'approved')
+            );
             const snapshot = await getDocs(q);
             const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setEmployees(list);
@@ -72,7 +85,11 @@ const Expenses = () => {
 
     const fetchCategories = async () => {
         try {
-            const docRef = doc(db, 'settings', 'expenses');
+            const companyId = userProfile?.companyId;
+            if (!companyId) return;
+
+            // Tenant isolated settings
+            const docRef = doc(db, 'settings', `expenses_${companyId}`);
             const docSnap = await getDoc(docRef);
             let expenseCategories = ['tea', 'supplies', 'utilities', 'maintenance', 'rent', 'misc'];
 
@@ -81,7 +98,7 @@ const Expenses = () => {
             }
 
             // Fetch services to include them as categories
-            const servicesSnapshot = await getDocs(collection(db, 'services'));
+            const servicesSnapshot = await getDocs(query(collection(db, 'services'), where('companyId', '==', companyId)));
             const servicesList = servicesSnapshot.docs
                 .map(doc => doc.data().name.toLowerCase())
                 .filter(name => name);
@@ -97,7 +114,14 @@ const Expenses = () => {
     const fetchExpenses = async () => {
         try {
             setLoading(true);
-            const q = query(collection(db, 'expenses'), orderBy('date', 'desc'));
+            const companyId = userProfile?.companyId;
+            if (!companyId) { setLoading(false); return; }
+
+            const q = query(
+                collection(db, 'expenses'), 
+                where('companyId', '==', companyId),
+                orderBy('date', 'desc')
+            );
             const snapshot = await getDocs(q);
             const expensesList = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -105,8 +129,8 @@ const Expenses = () => {
             }));
             setExpenses(expensesList);
 
-            // Fetch bookings for income calculation
-            const bookingsSnap = await getDocs(collection(db, 'bookings'));
+            // Fetch bookings for income calculation (tenant isolated)
+            const bookingsSnap = await getDocs(query(collection(db, 'bookings'), where('companyId', '==', companyId)));
             const bookingsList = bookingsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
             // Calculate stats
@@ -184,7 +208,7 @@ const Expenses = () => {
     };
 
     const deleteExpense = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this expense?')) return;
+        if (!window.confirm(t('delete_expense_confirm'))) return;
         try {
             await deleteDoc(doc(db, 'expenses', id));
             fetchExpenses();
@@ -194,12 +218,7 @@ const Expenses = () => {
     };
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
-        }).format(amount || 0);
+        return globalFormatCurrency(amount || 0);
     };
 
     const getCategoryIcon = (category) => {
@@ -269,7 +288,7 @@ const Expenses = () => {
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(16);
         doc.setTextColor(16, 185, 129); // Success color
-        doc.text(`INR ${amount.toLocaleString()}`, margin + 60, y);
+        doc.text(`${currentCurrencyCode} ${amount.toLocaleString()}`, margin + 60, y);
 
         y += 12;
         doc.setTextColor(30, 41, 59);
@@ -334,16 +353,16 @@ const Expenses = () => {
         <div className="expenses-page">
             <div className="page-header">
                 <div>
-                    <h1><IndianRupee size={28} /> Expense Tracking</h1>
-                    <p className="subtitle">Track and manage business expenses</p>
+                    <h1><Wallet size={28} /> {t('expense_tracking_title')}</h1>
+                    <p className="subtitle">{t('track_manage_expenses')}</p>
                 </div>
                 <div className="header-actions">
                     <button className="btn btn-secondary" onClick={exportToExcel}>
-                        <Download size={18} /> Export
+                        <Download size={18} /> {t('export')}
                     </button>
                     {hasPermission('expenses', 'create') && (
                         <button className="btn btn-primary" onClick={() => { setEditingExpense(null); setShowModal(true); }}>
-                            <Plus size={18} /> Add Expense
+                            <Plus size={18} /> {t('add_expense')}
                         </button>
                     )}
                 </div>
@@ -355,10 +374,10 @@ const Expenses = () => {
                 {/* Section header */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.5rem', paddingLeft: '4px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '700', color: '#059669', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        <TrendingUp size={14} /> Income (Paid)
+                        <TrendingUp size={14} /> {t('income_paid')}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: '700', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        <TrendingDown size={14} /> Expenses
+                        <TrendingDown size={14} /> {t('expenses_label')}
                     </div>
                 </div>
 
@@ -378,7 +397,7 @@ const Expenses = () => {
                                     <TrendingUp size={22} />
                                 </div>
                                 <div className="expense-content">
-                                    <span className="expense-label">{label} — Income</span>
+                                    <span className="expense-label">{t(label.toLowerCase().replace(' ', '_'))} — {t('income')}</span>
                                     <span className="expense-value" style={{ color: '#059669' }}>{formatCurrency(inc)}</span>
                                 </div>
                             </div>
@@ -388,7 +407,7 @@ const Expenses = () => {
                                     <TrendingDown size={22} />
                                 </div>
                                 <div className="expense-content">
-                                    <span className="expense-label">{label} — Expenses</span>
+                                    <span className="expense-label">{t(label.toLowerCase().replace(' ', '_'))} — {t('expenses_label')}</span>
                                     <span className="expense-value" style={{ color: '#dc2626' }}>{formatCurrency(exp)}</span>
                                 </div>
                             </div>
@@ -403,7 +422,7 @@ const Expenses = () => {
                             <TrendingUp size={22} />
                         </div>
                         <div className="expense-content">
-                            <span className="expense-label">Last 30 Days — Income</span>
+                            <span className="expense-label">{t('last_30_days')} — {t('income')}</span>
                             <span className="expense-value" style={{ color: '#059669' }}>{formatCurrency(income.last30Days)}</span>
                         </div>
                     </div>
@@ -412,7 +431,7 @@ const Expenses = () => {
                             <TrendingDown size={22} />
                         </div>
                         <div className="expense-content">
-                            <span className="expense-label">Last 30 Days — Expenses</span>
+                            <span className="expense-label">{t('last_30_days')} — {t('expenses_label')}</span>
                             <span className="expense-value" style={{ color: '#dc2626' }}>{formatCurrency(stats.last30Days)}</span>
                         </div>
                     </div>
@@ -422,12 +441,17 @@ const Expenses = () => {
                     }}>
                         <div className="expense-icon" style={{
                             background: (income.last30Days - stats.last30Days) >= 0 ? '#bbf7d0' : '#fecaca',
-                            color: (income.last30Days - stats.last30Days) >= 0 ? '#059669' : '#dc2626'
+                            color: (income.last30Days - stats.last30Days) >= 0 ? '#059669' : '#dc2626',
+                            fontSize: '1.2rem',
+                            fontWeight: 'bold',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                         }}>
-                            <IndianRupee size={22} />
+                            {currentCurrencyCode}
                         </div>
                         <div className="expense-content">
-                            <span className="expense-label">Net Profit (30 Days)</span>
+                            <span className="expense-label">{t('net_profit_30_days')}</span>
                             <span className="expense-value" style={{ color: (income.last30Days - stats.last30Days) >= 0 ? '#059669' : '#dc2626' }}>
                                 {formatCurrency(income.last30Days - stats.last30Days)}
                             </span>
@@ -439,13 +463,13 @@ const Expenses = () => {
             {/* Calendar View */}
             <div className="card" style={{ marginBottom: '1.5rem' }}>
                 <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3>📅 Expense Calendar (Last 30 Days)</h3>
+                    <h3>📅 {t('expense_calendar_title')}</h3>
                     {selectedDate && (
                         <button
                             onClick={() => setSelectedDate(null)}
                             style={{ background: '#eff6ff', color: '#3b82f6', border: 'none', padding: '4px 12px', borderRadius: '12px', fontSize: '0.8rem', cursor: 'pointer', fontWeight: '600' }}
                         >
-                            Reset Filter
+                            {t('reset_filter')}
                         </button>
                     )}
                 </div>
@@ -547,18 +571,18 @@ const Expenses = () => {
             {/* Expense Trend Chart */}
             <div className="card" style={{ marginBottom: '1.5rem' }}>
                 <div className="card-header">
-                    <h3>📈 Monthly Expense Trend (Last 30 Days)</h3>
+                    <h3>📈 {t('monthly_expense_trend')}</h3>
                 </div>
                 <div className="card-body" style={{ height: '350px', paddingBottom: '2rem' }}>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={stats.dailyBreakdown} margin={{ top: 20, right: 10, left: 10, bottom: 20 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                             <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} minTickGap={15} />
-                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(value) => `₹${value}`} width={60} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} tickFormatter={(value) => `${currentCurrencyCode} ${value}`} width={60} />
                             <RechartsTooltip
                                 cursor={{ fill: '#f8fafc' }}
                                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                                formatter={(value) => [`₹${value}`, '']}
+                                formatter={(value) => [`${currentCurrencyCode} ${value}`, '']}
                             />
                             <Bar dataKey="expense" name="Expense" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={30} />
                         </BarChart>
@@ -570,7 +594,7 @@ const Expenses = () => {
             {stats.total > 0 && (
                 <div className="card" style={{ marginBottom: '1.5rem' }}>
                     <div className="card-header">
-                        <h3>📊 Category Breakdown</h3>
+                        <h3>📊 {t('category_breakdown')}</h3>
                     </div>
                     <div className="card-body">
                         <div className="category-chart">
@@ -601,15 +625,15 @@ const Expenses = () => {
 
             {/* Filter */}
             <div className="search-filter-bar" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                <select
-                    className="filter-select"
+                <select 
+                    className="filter-select" 
+                    style={{ flex: '1 1 200px' }}
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value)}
-                    style={{ flex: '1 1 200px' }}
                 >
-                    <option value="">All Categories</option>
+                    <option value="">{t('all_categories')}</option>
                     {categories.map(cat => (
-                        <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+                        <option key={cat} value={cat}>{t(cat) || cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
                     ))}
                 </select>
 
@@ -619,16 +643,16 @@ const Expenses = () => {
                         className="filter-input"
                         value={startDateFilter}
                         onChange={(e) => setStartDateFilter(e.target.value)}
-                        placeholder="Start Date"
+                        placeholder={t('start_date')}
                         style={{ flex: 1 }}
                     />
-                    <span style={{ color: 'var(--navy-500)', fontWeight: '500' }}>to</span>
+                    <span style={{ color: 'var(--navy-500)', fontWeight: '500' }}>{t('to')}</span>
                     <input
                         type="date"
                         className="filter-input"
                         value={endDateFilter}
                         onChange={(e) => setEndDateFilter(e.target.value)}
-                        placeholder="End Date"
+                        placeholder={t('end_date')}
                         style={{ flex: 1 }}
                     />
                     {(startDateFilter || endDateFilter) && (
@@ -637,7 +661,7 @@ const Expenses = () => {
                             onClick={() => { setStartDateFilter(''); setEndDateFilter(''); }}
                             style={{ padding: '0.4rem 0.75rem' }}
                         >
-                            Clear Dates
+                            {t('clear_dates')}
                         </button>
                     )}
                 </div>
@@ -654,7 +678,7 @@ const Expenses = () => {
                     gap: '0.5rem',
                     boxShadow: 'var(--shadow-sm)'
                 }}>
-                    <span>Filtered Total:</span>
+                    <span>{t('filtered_total_label')}</span>
                     <span>{formatCurrency(filteredTotal)}</span>
                 </div>
             </div>
@@ -668,8 +692,8 @@ const Expenses = () => {
                         </div>
                     ) : filteredExpenses.length === 0 ? (
                         <div className="empty-state">
-                            <IndianRupee size={48} />
-                            <p>No expenses found</p>
+                            <Wallet size={48} />
+                            <p>{t('no_expenses_found')}</p>
                         </div>
                     ) : (
                         <div className="expenses-list">
@@ -932,6 +956,8 @@ const Expenses = () => {
 };
 
 const ExpenseModal = ({ expense, onClose, onSuccess, categories, employees, generateAdvanceSlip }) => {
+    const { t } = useTranslation();
+    const { currentCurrency, formatCurrency: globalFormatCurrency } = useCurrency();
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [showNewCategory, setShowNewCategory] = useState(false);
@@ -963,7 +989,7 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories, employees, gene
         };
 
         if (isAdvance && !selectedEmployeeId) {
-            alert('Please select an employee for the advance salary.');
+            alert(t('select_employee_advance_alert'));
             setLoading(false);
             return;
         }
@@ -1015,7 +1041,7 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories, employees, gene
             onClose();
         } catch (error) {
             console.error('Error saving expense:', error);
-            alert('Error saving expense. Check console for details.');
+            alert(t('save_expense_error'));
         } finally {
             setLoading(false);
         }
@@ -1025,20 +1051,20 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories, employees, gene
         <div className="modal">
             <div className="modal-content">
                 <div className="modal-header">
-                    <h2>{expense ? 'Edit Expense' : 'Add Expense'}</h2>
+                    <h2>{expense ? t('edit_expense') : t('add_expense')}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
                         {selectedCategory !== 'advance salary' && (
                             <div className="form-group">
-                                <label>Title *</label>
-                                <input name="title" defaultValue={expense?.title} required placeholder="Car wash shampoo" />
+                                <label>{t('title_label')}</label>
+                                <input name="title" defaultValue={expense?.title} required placeholder={t('title_label')} />
                             </div>
                         )}
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Amount (₹) *</label>
+                                <label>Amount ({currentCurrency.symbol})</label>
                                 <input name="amount" type="number" defaultValue={expense?.amount} required placeholder="500" />
                             </div>
                             <div className="form-group">
@@ -1052,10 +1078,10 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories, employees, gene
                                             required
                                             style={{ flex: 1 }}
                                         >
-                                            <option value="">Select Category</option>
-                                            <option value="advance salary">Advance Salary</option>
+                                            <option value="">{t('select_category')}</option>
+                                            <option value="advance salary">{t('advance_salary')}</option>
                                             {categories.filter(c => c !== 'advance salary').map(cat => (
-                                                <option key={cat} value={cat}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
+                                                <option key={cat} value={cat}>{t(cat) || cat.charAt(0).toUpperCase() + cat.slice(1)}</option>
                                             ))}
                                         </select>
                                         <button
@@ -1071,7 +1097,7 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories, employees, gene
                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                                         <input
                                             type="text"
-                                            placeholder="New category name"
+                                            placeholder={t('new_category_placeholder')}
                                             value={newCategory}
                                             onChange={(e) => setNewCategory(e.target.value)}
                                             autoFocus
@@ -1082,7 +1108,7 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories, employees, gene
                                             className="btn btn-secondary btn-sm"
                                             onClick={() => { setShowNewCategory(false); setNewCategory(''); }}
                                         >
-                                            Cancel
+                                            {t('cancel')}
                                         </button>
                                     </div>
                                 )}
@@ -1097,7 +1123,7 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories, employees, gene
                                     onChange={(e) => setSelectedEmployeeId(e.target.value)}
                                     required
                                 >
-                                    <option value="">-- Choose Employee --</option>
+                                    <option value="">{t('choose_employee_placeholder')}</option>
                                     {employees.map(emp => (
                                         <option key={emp.id} value={emp.id}>
                                             {emp.displayName} ({emp.role})
@@ -1108,28 +1134,28 @@ const ExpenseModal = ({ expense, onClose, onSuccess, categories, employees, gene
                         )}
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Date *</label>
+                                <label>{t('date')} *</label>
                                 <input name="date" type="date" defaultValue={expense?.date || new Date().toISOString().split('T')[0]} required />
                             </div>
                             <div className="form-group">
-                                <label>Payment Mode</label>
+                                <label>{t('payment_mode_label')}</label>
                                 <select name="paymentMode" defaultValue={expense?.paymentMode || 'cash'}>
-                                    <option value="cash">Cash</option>
-                                    <option value="bank">Bank Transfer</option>
-                                    <option value="upi">UPI</option>
-                                    <option value="card">Card</option>
+                                    <option value="cash">{t('cash')}</option>
+                                    <option value="bank">{t('bank_transfer')}</option>
+                                    <option value="upi">{t('upi')}</option>
+                                    <option value="card">{t('card')}</option>
                                 </select>
                             </div>
                         </div>
                         <div className="form-group">
-                            <label>Note</label>
-                            <textarea name="note" defaultValue={expense?.note} rows="2" placeholder="Additional details..." />
+                            <label>{t('note_label')}</label>
+                            <textarea name="note" defaultValue={expense?.note} rows="2" placeholder={t('additional_details_placeholder')} />
                         </div>
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancel')}</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Saving...' : (expense ? 'Update' : 'Add Expense')}
+                            {loading ? t('saving') : (expense ? t('update') : t('add_expense'))}
                         </button>
                     </div>
                 </form>

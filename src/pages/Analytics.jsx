@@ -18,8 +18,16 @@ import {
     ChevronRight,
     MapPin
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useCurrency } from '../contexts/CurrencyContext';
+import { useAuth } from '../contexts/AuthContext';
 
 const Analytics = () => {
+    const { t, i18n } = useTranslation();
+    const { formatCurrency, currentCurrency, currency: currentCurrencyCode } = useCurrency();
+    const formatAmount = (amount) => formatCurrency(amount || 0);
+    const currentCurrencySymbol = currentCurrency.symbol;
+    const { hasPermission } = useAuth();
     const [stats, setStats] = useState({
         todayRevenue: 0,
         yesterdayRevenue: 0,
@@ -70,7 +78,7 @@ const Analytics = () => {
 
     useEffect(() => {
         fetchAnalytics();
-    }, [startDate, endDate, isAllTime]);
+    }, [startDate, endDate, isAllTime, i18n.language]);
 
     const fetchAnalytics = async () => {
         try {
@@ -212,7 +220,7 @@ const Analytics = () => {
             for (let i = 5; i >= 0; i--) {
                 const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
                 const monthStr = toLocalDateStr(date).slice(0, 7); // Uses correct timezone
-                const monthName = date.toLocaleDateString('en-US', { month: 'short' });
+                const monthName = date.toLocaleDateString(i18n.language || 'en-US', { month: 'short' });
 
                 const mRevenue = sumPaid(bookingsData.filter(b => b.bookingDate?.startsWith(monthStr)));
                 const mExpenses = allExpenses
@@ -229,7 +237,7 @@ const Analytics = () => {
                 const date = new Date(today);
                 date.setDate(date.getDate() - i);
                 const dateStr = toLocalDateStr(date); // Uses correct timezone
-                const dayLabel = date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+                const dayLabel = date.toLocaleDateString(i18n.language || 'en-US', { weekday: 'short', day: 'numeric' });
 
                 const dayRevenue = sumPaid(bookingsData.filter(b => b.bookingDate === dateStr));
                 const dayBookings = bookingsData.filter(b => b.bookingDate === dateStr && b.status === 'completed').length;
@@ -290,14 +298,6 @@ const Analytics = () => {
         }
     };
 
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0
-        }).format(amount || 0);
-    };
-
     const revenueChange = stats.yesterdayRevenue > 0
         ? ((stats.todayRevenue - stats.yesterdayRevenue) / stats.yesterdayRevenue * 100).toFixed(1)
         : 0;
@@ -309,8 +309,8 @@ const Analytics = () => {
         <div className="analytics-page">
             <div className="page-header">
                 <div style={{ flex: 1 }}>
-                    <h1><BarChart3 size={28} /> Analytics</h1>
-                    <p className="subtitle">Business performance overview</p>
+                    <h1><BarChart3 size={28} /> {t('analytics')}</h1>
+                    <p className="subtitle">{t('analytics_subtitle', { defaultValue: 'Business performance overview' })}</p>
                 </div>
                 {/* Date Picker for Custom View */}
                 <div className="date-filter" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'white', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--navy-100)' }}>
@@ -327,7 +327,7 @@ const Analytics = () => {
                             fontWeight: '500'
                         }}
                     >
-                        All Time
+                        {t('all_time', { defaultValue: 'All Time' })}
                     </button>
                     {!isAllTime && (
                         <>
@@ -338,7 +338,7 @@ const Analytics = () => {
                                 onChange={(e) => setStartDate(e.target.value)}
                                 style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.9rem', color: 'var(--navy-700)' }}
                             />
-                            <span style={{ color: 'var(--navy-400)' }}>to</span>
+                            <span style={{ color: 'var(--navy-400)' }}>{t('to')}</span>
                             <input
                                 type="date"
                                 value={endDate}
@@ -355,35 +355,35 @@ const Analytics = () => {
                 {/* Custom Range Card (Dynamic) */}
                 <div className="metric-card" style={{ border: '2px solid var(--primary)', background: '#f0fdfa' }}>
                     <div className="metric-card-icon success">
-                        <IndianRupee size={24} />
+                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{currentCurrencySymbol}</span>
                     </div>
                     <div className="metric-card-body">
                         <div className="metric-card-value" style={{ color: 'var(--primary)' }}>{formatCurrency(stats.customRevenue)}</div>
-                        <div className="metric-card-label">Revenue ({isAllTime ? 'All Time' : `${startDate} to ${endDate}`})</div>
+                        <div className="metric-card-label">{t('revenue')} ({isAllTime ? t('all_time') : `${startDate} ${t('to')} ${endDate}`})</div>
                     </div>
                 </div>
 
                 <div className="metric-card">
                     <div className="metric-card-icon success">
-                        <IndianRupee size={24} />
+                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{currentCurrencySymbol}</span>
                     </div>
                     <div className="metric-card-body">
                         <div className="metric-card-value">{formatCurrency(stats.todayRevenue)}</div>
-                        <div className="metric-card-label">Today's Revenue</div>
+                        <div className="metric-card-label">{t('today_revenue')}</div>
                         <div className={`metric-card-trend ${revenueChange >= 0 ? 'up' : 'down'}`}>
                             {revenueChange >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                            <span>{Math.abs(revenueChange)}% vs yesterday</span>
+                            <span>{Math.abs(revenueChange)}% {t('vs_yesterday', { defaultValue: 'vs yesterday' })}</span>
                         </div>
                     </div>
                 </div>
 
                 <div className="metric-card">
                     <div className="metric-card-icon info">
-                        <IndianRupee size={24} />
+                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{currentCurrencySymbol}</span>
                     </div>
                     <div className="metric-card-body">
                         <div className="metric-card-value">{formatCurrency(stats.weekRevenue)}</div>
-                        <div className="metric-card-label">This Week</div>
+                        <div className="metric-card-label">{t('this_week', { defaultValue: 'This Week' })}</div>
                     </div>
                 </div>
 
@@ -393,10 +393,10 @@ const Analytics = () => {
                     </div>
                     <div className="metric-card-body">
                         <div className="metric-card-value">{formatCurrency(stats.monthRevenue)}</div>
-                        <div className="metric-card-label">This Month</div>
+                        <div className="metric-card-label">{t('this_month', { defaultValue: 'This Month' })}</div>
                         <div className={`metric-card-trend ${stats.growthRate >= 0 ? 'up' : 'down'}`}>
                             {stats.growthRate >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                            <span>{Math.abs(stats.growthRate).toFixed(1)}% vs last month</span>
+                            <span>{Math.abs(stats.growthRate).toFixed(1)}% {t('vs_last_month', { defaultValue: 'vs last month' })}</span>
                         </div>
                     </div>
                 </div>
@@ -409,7 +409,7 @@ const Analytics = () => {
                         <div className="metric-card-value" style={{ color: stats.netProfit >= 0 ? '#10b981' : '#ef4444' }}>
                             {formatCurrency(stats.netProfit)}
                         </div>
-                        <div className="metric-card-label">Net Profit (Month)</div>
+                        <div className="metric-card-label">{t('net_profit', { defaultValue: 'Net Profit' })} ({t('month')})</div>
                     </div>
                 </div>
 
@@ -419,30 +419,30 @@ const Analytics = () => {
                     </div>
                     <div className="metric-card-body">
                         <div className="metric-card-value">{stats.totalBookings}</div>
-                        <div className="metric-card-label">Bookings (Month)</div>
+                        <div className="metric-card-label">{t('bookings')} ({t('month')})</div>
                     </div>
                 </div>
 
                 {/* New Card: Expenses with segments */}
                 <div className="metric-card" style={{ gridColumn: 'span 2' }}>
                     <div className="metric-card-icon danger">
-                        <IndianRupee size={24} />
+                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>{currentCurrencySymbol}</span>
                     </div>
                     <div className="metric-card-body" style={{ width: '100%' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div className="metric-card-value" style={{ color: '#ef4444' }}>{formatCurrency(stats.totalExpenses)}</div>
                             <div style={{ textAlign: 'right' }}>
-                                <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Monthly Expenses</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('monthly_expenses', { defaultValue: 'Monthly Expenses' })}</div>
                             </div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed #fee2e2' }}>
                             <div>
                                 <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#ef4444' }}>{formatCurrency(stats.todayExpenses || 0)}</div>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--navy-500)' }}>Today's Expenses</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--navy-500)' }}>{t('today_expenses', { defaultValue: 'Today\'s Expenses' })}</div>
                             </div>
                             <div>
                                 <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#ef4444' }}>{formatCurrency(stats.customExpenses || 0)}</div>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--navy-500)' }}>Selected Range</div>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--navy-500)' }}>{t('selected_range', { defaultValue: 'Selected Range' })}</div>
                             </div>
                         </div>
                     </div>
@@ -454,7 +454,7 @@ const Analytics = () => {
                     </div>
                     <div className="metric-card-body">
                         <div className="metric-card-value">{stats.carBookings}</div>
-                        <div className="metric-card-label">Car Bookings (Month)</div>
+                        <div className="metric-card-label">{t('car_bookings')} ({t('month')})</div>
                     </div>
                 </div>
 
@@ -464,7 +464,7 @@ const Analytics = () => {
                     </div>
                     <div className="metric-card-body">
                         <div className="metric-card-value">{stats.bikeBookings}</div>
-                        <div className="metric-card-label">Bike Bookings (Month)</div>
+                        <div className="metric-card-label">{t('bike_bookings')} ({t('month')})</div>
                     </div>
                 </div>
             </div>
@@ -472,9 +472,9 @@ const Analytics = () => {
             {/* Daily Revenue Trend */}
             <div className="analytics-card full-width" style={{ marginBottom: '1.5rem' }}>
                 <div className="analytics-card-header">
-                    <h3><TrendingUp size={18} /> Daily Revenue Trend (Last 14 Days)</h3>
+                    <h3><TrendingUp size={18} /> {t('daily_revenue_trend', { defaultValue: 'Daily Revenue Trend (Last 14 Days)' })}</h3>
                 </div>
-                <div className="daily-chart-container">
+                <div className="daily-chart-container" style={{ minHeight: '200px' }}>
                     <div className="daily-revenue-chart">
                         {dailyRevenue.map((day, i) => {
                             const maxDailyRevenue = Math.max(...dailyRevenue.map(d => d.revenue), 1);
@@ -486,7 +486,7 @@ const Analytics = () => {
                                         title={`${day.label}: ${formatCurrency(day.revenue)}`}
                                     >
                                         {day.revenue > 0 && (
-                                            <span className="daily-bar-value">₹{(day.revenue / 1000).toFixed(0)}k</span>
+                                            <span className="daily-bar-value">{formatAmount(day.revenue)}</span>
                                         )}
                                     </div>
                                     <span className="daily-label">{day.label.split(' ')[0]}</span>
@@ -501,34 +501,34 @@ const Analytics = () => {
             <div className="analytics-card full-width pivot-section" style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
                 <div className="analytics-card-header pivot-header">
                     <div className="title-area">
-                        <h3><Layers size={18} /> Pivot Analysis</h3>
-                        <p className="pivot-subtitle">Dynamic multidimensional data matrix</p>
+                        <h3><Layers size={18} /> {t('pivot_analysis', { defaultValue: 'Pivot Analysis' })}</h3>
+                        <p className="pivot-subtitle">{t('pivot_subtitle', { defaultValue: 'Dynamic multidimensional data matrix' })}</p>
                     </div>
                     <div className="pivot-controls">
                         <div className="control-group">
-                            <label><Table size={14} /> Row Dimension</label>
+                            <label><Table size={14} /> {t('row_dimension', { defaultValue: 'Row Dimension' })}</label>
                             <select value={pivotRow} onChange={(e) => setPivotRow(e.target.value)}>
-                                <option value="serviceName">Service</option>
-                                <option value="assignedEmployee">Employee</option>
-                                <option value="bookingDate">Month</option>
-                                <option value="status">Status</option>
-                                <option value="paymentMethod">Payment</option>
+                                <option value="serviceName">{t('service')}</option>
+                                <option value="assignedEmployee">{t('employee', { defaultValue: 'Employee' })}</option>
+                                <option value="bookingDate">{t('month', { defaultValue: 'Month' })}</option>
+                                <option value="status">{t('status')}</option>
+                                <option value="paymentMethod">{t('payment', { defaultValue: 'Payment' })}</option>
                             </select>
                         </div>
                         <div className="control-group">
-                            <label><Filter size={14} /> Column Dimension</label>
+                            <label><Filter size={14} /> {t('column_dimension', { defaultValue: 'Column Dimension' })}</label>
                             <select value={pivotCol} onChange={(e) => setPivotCol(e.target.value)}>
-                                <option value="status">Status</option>
-                                <option value="paymentMethod">Payment</option>
-                                <option value="serviceName">Service</option>
-                                <option value="assignedEmployee">Employee</option>
+                                <option value="status">{t('status')}</option>
+                                <option value="paymentMethod">{t('payment')}</option>
+                                <option value="serviceName">{t('service')}</option>
+                                <option value="assignedEmployee">{t('employee')}</option>
                             </select>
                         </div>
                         <div className="control-group">
-                            <label><IndianRupee size={14} /> Metric</label>
+                            <label><span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{currentCurrencySymbol}</span> {t('metric', { defaultValue: 'Metric' })}</label>
                             <select value={pivotMetric} onChange={(e) => setPivotMetric(e.target.value)}>
-                                <option value="revenue">Revenue (₹)</option>
-                                <option value="count">Count (Bookings)</option>
+                                <option value="revenue">{t('revenue')} ({currentCurrency.symbol})</option>
+                                <option value="count">{t('count_bookings', { defaultValue: 'Count (Bookings)' })}</option>
                             </select>
                         </div>
                     </div>
@@ -568,9 +568,9 @@ const Analytics = () => {
                                 <table className="pivot-table">
                                     <thead>
                                         <tr>
-                                            <th>{pivotRow.replace(/([A-Z])/g, ' $1').trim()} \ {pivotCol.replace(/([A-Z])/g, ' $1').trim()}</th>
-                                            {sortedCols.map(c => <th key={c}>{c}</th>)}
-                                            <th className="total-col">Total</th>
+                                            <th>{t(pivotRow)} \ {t(pivotCol)}</th>
+                                            {sortedCols.map(c => <th key={c}>{t(c.toLowerCase()) || c}</th>)}
+                                            <th className="total-col">{t('total', { defaultValue: 'Total' })}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -600,9 +600,9 @@ const Analytics = () => {
                 {/* Revenue vs Expenses Chart */}
                 <div className="analytics-card">
                     <div className="analytics-card-header">
-                        <h3><BarChart3 size={18} /> Revenue vs Expenses (6 Months)</h3>
+                        <h3><BarChart3 size={18} /> {t('revenue_vs_expenses', { defaultValue: 'Revenue vs Expenses (6 Months)' })}</h3>
                     </div>
-                    <div className="chart-container">
+                    <div className="chart-container" style={{ minHeight: '220px' }}>
                         <div className="comparison-chart">
                             {monthlyComparison.map((m, i) => (
                                 <div key={i} className="comparison-bar-group">
@@ -623,8 +623,8 @@ const Analytics = () => {
                             ))}
                         </div>
                         <div className="chart-legend">
-                            <span><span className="dot revenue"></span> Revenue</span>
-                            <span><span className="dot expense"></span> Expenses</span>
+                            <span><span className="dot revenue"></span> {t('revenue')}</span>
+                            <span><span className="dot expense"></span> {t('expenses')}</span>
                         </div>
                     </div>
                 </div>
@@ -632,11 +632,11 @@ const Analytics = () => {
                 {/* Service Breakdown */}
                 <div className="analytics-card">
                     <div className="analytics-card-header">
-                        <h3><PieChart size={18} /> Service Revenue (Selected Range)</h3>
+                        <h3><PieChart size={18} /> {t('service_revenue_selected', { defaultValue: 'Service Revenue (Selected Range)' })}</h3>
                     </div>
                     <div className="service-list">
                         {serviceBreakdown.length === 0 ? (
-                            <p className="empty-text">No data available for this range</p>
+                            <p className="empty-text">{t('no_data_available', { defaultValue: 'No data available for this range' })}</p>
                         ) : (
                             serviceBreakdown.map((service, i) => (
                                 <div key={i} className="service-item">
@@ -660,7 +660,7 @@ const Analytics = () => {
                 {/* Employee Performance */}
                 <div className="analytics-card">
                     <div className="analytics-card-header">
-                        <h3><UserCheck size={18} /> Employee Performance ({isAllTime ? 'All Time' : `${startDate} to ${endDate}`})</h3>
+                        <h3><UserCheck size={18} /> {t('employee_performance_title', { defaultValue: 'Employee Performance' })} ({isAllTime ? t('all_time') : `${startDate} ${t('to')} ${endDate}`})</h3>
                     </div>
                     <div className="performance-list">
                         {employeePerformance.length === 0 ? (
@@ -683,7 +683,7 @@ const Analytics = () => {
                 {/* Location Performance */}
                 <div className="analytics-card">
                     <div className="analytics-card-header">
-                        <h3><MapPin size={18} /> Top Locations ({isAllTime ? 'All Time' : `${startDate} to ${endDate}`})</h3>
+                        <h3><MapPin size={18} /> {t('top_locations', { defaultValue: 'Top Locations' })} ({isAllTime ? t('all_time') : `${startDate} ${t('to')} ${endDate}`})</h3>
                     </div>
                     <div className="performance-list">
                         {topLocations.length === 0 ? (

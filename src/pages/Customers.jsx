@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
+import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
+import { useTranslation } from 'react-i18next';
 import {
     collection,
     query,
@@ -35,7 +37,29 @@ import {
 import * as XLSX from 'xlsx';
 
 const Customers = () => {
+    const { t } = useTranslation();
     const { hasPermission, userProfile, isAdmin } = useAuth();
+    const { currency: currentCurrencyCode, formatCurrency: globalFormatCurrency } = useCurrency();
+
+    // PII Masking Logic
+    const maskPII = (value, type) => {
+        if (!value) return 'N/A';
+        const str = value.toString();
+        if (type === 'phone') {
+            return str.length > 4 ? str.slice(0, 4) + '******' : str;
+        }
+        if (type === 'plate') {
+            return str.length > 4 ? str.slice(0, 4) + '****' : str;
+        }
+        if (type === 'place' || type === 'address') {
+            return str.length > 3 ? str.slice(0, 3) + '****' : str;
+        }
+        return str;
+    };
+
+    const formatCurrency = (amount) => {
+        return globalFormatCurrency(amount || 0);
+    };
     const [customers, setCustomers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -45,21 +69,34 @@ const Customers = () => {
     const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, name }
     const [filterType, setFilterType] = useState('all'); // all, repeat, new_car
 
+    // Check if the current user can view full customer details (unmasked)
+    const canViewFullDetails = isAdmin || userProfile?.role === 'admin' || userProfile?.role === 'manager';
+
     useEffect(() => {
-        fetchCustomers();
-    }, []);
+        if (userProfile?.companyId) {
+            fetchCustomers();
+        }
+    }, [userProfile?.companyId]);
 
     const fetchCustomers = async () => {
         try {
             setLoading(true);
 
             // Fetch from customers collection
-            const customersQuery = query(collection(db, 'customers'), orderBy('createdAt', 'desc'));
+            const customersQuery = query(
+                collection(db, 'customers'), 
+                where('companyId', '==', userProfile?.companyId || 'NA'),
+                orderBy('createdAt', 'desc')
+            );
             const customersSnapshot = await getDocs(customersQuery);
             const customersData = customersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'customers' }));
 
             // Also fetch unique customers from bookings
-            const bookingsQuery = query(collection(db, 'bookings'), orderBy('createdAt', 'desc'));
+            const bookingsQuery = query(
+                collection(db, 'bookings'), 
+                where('companyId', '==', userProfile?.companyId || 'NA'),
+                orderBy('createdAt', 'desc')
+            );
             const bookingsSnapshot = await getDocs(bookingsQuery);
 
             // Count how many bookings each phone/plate key has (for repeat detection)
@@ -184,16 +221,16 @@ const Customers = () => {
         <div className="customers-page">
             <div className="page-header">
                 <div>
-                    <h1><Users size={28} /> Customers</h1>
-                    <p className="subtitle">Manage customer relationships</p>
+                    <h1><Users size={28} /> {t('customers')}</h1>
+                    <p className="subtitle">{t('manage_customer_relationships')}</p>
                 </div>
                 <div className="header-actions">
                     <button className="btn btn-secondary" onClick={exportToExcel}>
-                        <Download size={18} /> Export
+                        <Download size={18} /> {t('export')}
                     </button>
                     {hasPermission('customers', 'create') && (
                         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                            <Plus size={18} /> Add Customer
+                            <Plus size={18} /> {t('add_customer')}
                         </button>
                     )}
                 </div>
@@ -207,7 +244,7 @@ const Customers = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{customers.length}</span>
-                        <span className="stat-label">Total Customers</span>
+                        <span className="stat-label">{t('total_customers')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -222,7 +259,7 @@ const Customers = () => {
                                 return createdAt && createdAt.getMonth() === now.getMonth() && createdAt.getFullYear() === now.getFullYear();
                             }).length}
                         </span>
-                        <span className="stat-label">New This Month</span>
+                        <span className="stat-label">{t('new_this_month')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -233,7 +270,7 @@ const Customers = () => {
                         <span className="stat-value">
                             {new Set(customers.map(c => c.carMake).filter(Boolean)).size}
                         </span>
-                        <span className="stat-label">Vehicle Brands</span>
+                        <span className="stat-label">{t('vehicle_brands')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -244,7 +281,7 @@ const Customers = () => {
                         <span className="stat-value">
                             {customers.filter(c => c.phone).length}
                         </span>
-                        <span className="stat-label">With Phone</span>
+                        <span className="stat-label">{t('with_phone')}</span>
                     </div>
                 </div>
             </div>
@@ -255,7 +292,7 @@ const Customers = () => {
                     <Search size={18} />
                     <input
                         type="text"
-                        placeholder="Search by name, phone, plate..."
+                        placeholder={t('search_placeholder_customers')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -264,20 +301,20 @@ const Customers = () => {
                     <button
                         className={`btn btn-sm ${filterType === 'all' ? 'btn-primary' : 'btn-secondary'}`}
                         onClick={() => setFilterType('all')}
-                    >All</button>
+                    >{t('all')}</button>
                     <button
                         className={`btn btn-sm ${filterType === 'repeat' ? 'btn-primary' : 'btn-secondary'}`}
                         onClick={() => setFilterType('repeat')}
                         style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                     >
-                        <Star size={14} fill={filterType === 'repeat' ? 'white' : 'transparent'} /> Repeat
+                        <Star size={14} fill={filterType === 'repeat' ? 'white' : 'transparent'} /> {t('repeat')}
                     </button>
                     <button
                         className={`btn btn-sm ${filterType === 'new_car' ? 'btn-primary' : 'btn-secondary'}`}
                         onClick={() => setFilterType('new_car')}
                         style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
                     >
-                        <Tag size={14} /> New Cars
+                        <Tag size={14} /> {t('new_cars')}
                     </button>
                 </div>
             </div>
@@ -290,7 +327,7 @@ const Customers = () => {
                     ) : filteredCustomers.length === 0 ? (
                         <div className="empty-state">
                             <Users size={48} />
-                            <p>No customers found</p>
+                            <p>{t('no_customers_found', { defaultValue: 'No customers found' })}</p>
                         </div>
                     ) : (
                         <>
@@ -299,10 +336,10 @@ const Customers = () => {
                                 <table className="data-table">
                                     <thead>
                                         <tr>
-                                            <th>Customer</th>
-                                            <th>Contact</th>
-                                            <th>Vehicle</th>
-                                            <th>Actions</th>
+                                            <th>{t('customer')}</th>
+                                            <th>{t('email')}</th>
+                                            <th>{t('vehicle_type')}</th>
+                                            <th>{t('actions')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -312,48 +349,71 @@ const Customers = () => {
                                                     <strong>{customer.name || 'N/A'}</strong>
                                                 </td>
                                                 <td>
-                                                    <div><Phone size={12} /> {customer.phone}</div>
-                                                    {customer.email && <div><Mail size={12} /> {customer.email}</div>}
+                                                    {customer.email || 'N/A'}
                                                 </td>
                                                 <td>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                                         {customer.carMake} {customer.carModel}
-                                                        {isNewRegistration(customer.licensePlate) && (
-                                                            <span className="badge badge-new-car" style={{ background: '#3b82f6', color: 'white', fontSize: '0.65rem' }}>NEW CAR</span>
-                                                        )}
                                                         {(customer.bookingCount || 0) > 1 && (
-                                                            <span className="badge badge-repeat" style={{ background: '#8b5cf6', color: 'white', fontSize: '0.65rem' }}>REPEAT</span>
+                                                            <span className="badge badge-repeat" style={{ background: '#8b5cf6', color: 'white', fontSize: '0.65rem' }}>{t('repeat')}</span>
                                                         )}
                                                     </div>
-                                                    <div><strong>{customer.licensePlate}</strong></div>
                                                 </td>
                                                 <td>
                                                     <div style={{ display: 'flex', gap: '0.25rem' }}>
-                                                        <button
-                                                            className="btn-icon"
-                                                            onClick={() => setSelectedCustomer(customer)}
-                                                            title="View"
-                                                        >
-                                                            <Eye size={16} />
-                                                        </button>
-                                                        {hasPermission('customers', 'edit') && (
+                                                        {['admin', 'manager', 'senior'].includes(userProfile?.role) && (
                                                             <button
                                                                 className="btn-icon"
-                                                                onClick={() => setEditingCustomer(customer)}
-                                                                title="Edit"
+                                                                onClick={() => setSelectedCustomer(customer)}
+                                                                title={t('view')}
                                                             >
-                                                                <Edit size={16} />
+                                                                <Eye size={16} />
                                                             </button>
                                                         )}
-                                                        {hasPermission('customers', 'delete') && (
-                                                            <button
-                                                                className="btn-icon danger"
-                                                                onClick={() => setDeleteConfirm({ id: customer.id, name: customer.name || customer.phone })}
-                                                                title="Delete"
+                                                        {customer.phone && (
+                                                            <a
+                                                                href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="btn-icon"
+                                                                style={{ color: '#25D366' }}
                                                             >
-                                                                <Trash2 size={16} />
-                                                            </button>
+                                                                <Phone size={14} />
+                                                            </a>
                                                         )}
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                                        <div className="action-buttons">
+                                                            {canViewFullDetails && (
+                                                                <button
+                                                                    className="btn-icon"
+                                                                    onClick={() => setSelectedCustomer(customer)}
+                                                                    title={t('view_details')}
+                                                                >
+                                                                    <Eye size={16} />
+                                                                </button>
+                                                            )}
+                                                            {hasPermission('customers', 'edit') && (
+                                                                <button
+                                                                    className="btn-icon"
+                                                                    onClick={() => setEditingCustomer(customer)}
+                                                                    title={t('edit')}
+                                                                >
+                                                                    <Edit size={16} />
+                                                                </button>
+                                                            )}
+                                                            {hasPermission('customers', 'delete') && (
+                                                                <button
+                                                                    className="btn-icon danger"
+                                                                    onClick={() => setDeleteConfirm({ id: customer.id, name: customer.name || t('customer') })}
+                                                                    title={t('delete')}
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -367,29 +427,37 @@ const Customers = () => {
                                 {filteredCustomers.map(customer => (
                                     <div key={customer.id} className="booking-card">
                                         <div className="booking-card-header">
-                                            <strong>{customer.name || 'Walk-in Customer'}</strong>
+                                            <strong>{customer.name || t('walk_in_customer')}</strong>
                                             <div style={{ display: 'flex', gap: '4px' }}>
-                                                {isNewRegistration(customer.licensePlate) && (
-                                                    <span className="badge" style={{ background: '#3b82f6', color: 'white', fontSize: '0.65rem' }}>NEW CAR</span>
-                                                )}
                                                 {(customer.bookingCount || 0) > 1 && (
-                                                    <span className="badge" style={{ background: '#8b5cf6', color: 'white', fontSize: '0.65rem' }}>REPEAT</span>
+                                                    <span className="badge" style={{ background: '#8b5cf6', color: 'white', fontSize: '0.65rem' }}>{t('repeat').toUpperCase()}</span>
                                                 )}
-                                                <span className="badge badge-confirmed">{customer.carMake || 'Unknown'}</span>
+                                                <span className="badge badge-confirmed">{customer.carMake || t('unknown')}</span>
                                             </div>
                                         </div>
                                         <div className="booking-card-body">
-                                            <p><Phone size={14} /> {customer.phone || 'No phone'}</p>
                                             <p><Car size={14} /> {customer.carMake} {customer.carModel}</p>
-                                            <p><strong>{customer.licensePlate || 'No plate'}</strong></p>
                                         </div>
                                         <div className="booking-card-footer">
-                                            <button
-                                                className="btn btn-sm btn-primary"
-                                                onClick={() => setSelectedCustomer(customer)}
-                                            >
-                                                View Details
-                                            </button>
+                                            {canViewFullDetails && (
+                                                <button
+                                                    className="btn btn-sm btn-primary"
+                                                    onClick={() => setSelectedCustomer(customer)}
+                                                >
+                                                    {t('view_details')}
+                                                </button>
+                                            )}
+                                            {customer.phone && (
+                                                <a
+                                                    href={`https://wa.me/${customer.phone.replace(/[^0-9]/g, '')}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="btn btn-sm"
+                                                    style={{ background: '#25D366', color: 'white', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                                >
+                                                    <Phone size={14} /> WhatsApp
+                                                </a>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -425,24 +493,24 @@ const Customers = () => {
                 <div className="modal">
                     <div className="modal-content" style={{ maxWidth: '400px' }}>
                         <div className="modal-header">
-                            <h2><AlertTriangle size={20} color="#ef4444" /> Confirm Delete</h2>
+                            <h2><AlertTriangle size={20} color="#ef4444" /> {t('confirm_delete')}</h2>
                             <button className="modal-close" onClick={() => setDeleteConfirm(null)}>&times;</button>
                         </div>
                         <div className="modal-body" style={{ textAlign: 'center' }}>
                             <AlertTriangle size={48} color="#ef4444" style={{ marginBottom: '1rem' }} />
-                            <h3 style={{ marginBottom: '0.5rem' }}>Delete "{deleteConfirm.name}"?</h3>
+                            <h3 style={{ marginBottom: '0.5rem' }}>{t('delete_customer_confirm', { name: deleteConfirm.name })}</h3>
                             <p style={{ color: 'var(--navy-500)' }}>
-                                This action cannot be undone. This will permanently delete this customer and all their data.
+                                {t('delete_undone_warning_customer')}
                             </p>
                         </div>
                         <div className="modal-footer" style={{ justifyContent: 'center' }}>
-                            <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+                            <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>{t('cancel')}</button>
                             <button
                                 className="btn"
                                 style={{ background: '#ef4444', color: 'white' }}
                                 onClick={() => deleteCustomer(deleteConfirm.id)}
                             >
-                                <Trash2 size={16} /> Delete
+                                <Trash2 size={16} /> {t('delete')}
                             </button>
                         </div>
                     </div>
@@ -479,11 +547,9 @@ const CustomerModal = ({ onClose, onSuccess }) => {
         try {
             await addDoc(collection(db, 'customers'), {
                 name: formData.get('name'),
-                phone: formData.get('phone'),
                 email: formData.get('email') || null,
                 carMake: formData.get('carMake'),
                 carModel: formData.get('carModel'),
-                licensePlate: plateValue.toUpperCase(),
                 bookingCount: 0,
                 createdAt: serverTimestamp()
             });
@@ -497,30 +563,22 @@ const CustomerModal = ({ onClose, onSuccess }) => {
         }
     };
 
-    const plateValid = plateValue && !validatePlate(plateValue);
-
     return (
         <div className="modal">
             <div className="modal-content">
                 <div className="modal-header">
-                    <h2><Plus size={20} /> Add Customer</h2>
+                    <h2><Plus size={20} /> {t('add_customer')}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
                         <div className="form-group">
-                            <label>Name</label>
-                            <input name="name" placeholder="John Doe" />
+                            <label>{t('name')}</label>
+                            <input name="name" placeholder={t('full_name_placeholder')} />
                         </div>
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label>Phone *</label>
-                                <input name="phone" type="tel" required placeholder="+91 98765 43210" />
-                            </div>
-                            <div className="form-group">
-                                <label>Email</label>
-                                <input name="email" type="email" placeholder="john@example.com" />
-                            </div>
+                        <div className="form-group">
+                            <label>{t('email')}</label>
+                            <input name="email" type="email" placeholder="john@example.com" />
                         </div>
                         <div className="form-row">
                             <div className="form-group">
@@ -532,36 +590,11 @@ const CustomerModal = ({ onClose, onSuccess }) => {
                                 <input name="carModel" required placeholder="Camry" />
                             </div>
                         </div>
-                        <div className="form-group">
-                            <label>License Plate</label>
-                            <input
-                                name="licensePlate"
-                                value={plateValue}
-                                onChange={handlePlateChange}
-                                placeholder="TN-01-AB-1234"
-                                style={{
-                                    textTransform: 'uppercase',
-                                    border: plateValue
-                                        ? (plateValid ? '2px solid #10b981' : '2px solid #f59e0b')
-                                        : undefined
-                                }}
-                            />
-                            {plateError && (
-                                <small style={{ color: plateError.type === 'error' ? '#ef4444' : '#f59e0b', display: 'block', marginTop: '4px' }}>
-                                    {plateError.type === 'error' ? '⚠ ' : '⚠ '}{plateError.msg}
-                                </small>
-                            )}
-                            {plateValid && (
-                                <small style={{ color: '#10b981', display: 'block', marginTop: '4px' }}>
-                                    ✓ Valid TN plate{(/^TN74(BJ|BK)\d{4}$/.test(plateValue.replace(/[-\s]/g, '')) || /^TN75(AK|AL)\d{4}$/.test(plateValue.replace(/[-\s]/g, ''))) ? ' — New Registration' : ''}
-                                </small>
-                            )}
-                        </div>
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancel')}</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Adding...' : 'Add Customer'}
+                            {loading ? t('adding') : t('add_customer')}
                         </button>
                     </div>
                 </form>
@@ -569,6 +602,10 @@ const CustomerModal = ({ onClose, onSuccess }) => {
         </div>
     );
 };
+
+// Simplified Customers List Table Header
+// Remove columns: Phone, License Plate, Place
+// ... (rest of the file update)
 
 // Edit Customer Modal with Audit Trail
 const EditCustomerModal = ({ customer, onClose, onSuccess, userProfile }) => {
@@ -624,7 +661,7 @@ const EditCustomerModal = ({ customer, onClose, onSuccess, userProfile }) => {
         <div className="modal">
             <div className="modal-content">
                 <div className="modal-header">
-                    <h2><Edit size={20} /> Edit Customer</h2>
+                    <h2><Edit size={20} /> {t('edit_customer')}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit}>
@@ -639,68 +676,37 @@ const EditCustomerModal = ({ customer, onClose, onSuccess, userProfile }) => {
                                 background: 'var(--navy-50)',
                                 borderRadius: '4px'
                             }}>
-                                Last edited by <strong>{customer.lastEditedBy}</strong>
+                                {t('last_edited_by')} <strong>{customer.lastEditedBy}</strong>
                                 {customer.lastEditedAt && (
-                                    <> on {customer.lastEditedAt.toDate ?
+                                    <> {t('on')} {customer.lastEditedAt.toDate ?
                                         customer.lastEditedAt.toDate().toLocaleDateString() :
                                         new Date(customer.lastEditedAt).toLocaleDateString()}</>
                                 )}
                             </div>
                         )}
                         <div className="form-group">
-                            <label>Name</label>
+                            <label>{t('name')}</label>
                             <input name="name" value={formData.name} onChange={handleChange} placeholder="John Doe" />
                         </div>
-                        <div className="form-row">
-                            <div className="form-group">
-                                <label>Phone *</label>
-                                <input name="phone" type="tel" required value={formData.phone} onChange={handleChange} placeholder="+91 98765 43210" />
-                            </div>
-                            <div className="form-group">
-                                <label>Email</label>
-                                <input name="email" type="email" value={formData.email} onChange={handleChange} placeholder="john@example.com" />
-                            </div>
+                        <div className="form-group">
+                            <label>{t('email')}</label>
+                            <input name="email" type="email" value={formData.email} onChange={handleChange} placeholder="john@example.com" />
                         </div>
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Car Make *</label>
+                                <label>{t('car_make')} *</label>
                                 <input name="carMake" required value={formData.carMake} onChange={handleChange} placeholder="Toyota" />
                             </div>
                             <div className="form-group">
-                                <label>Car Model *</label>
+                                <label>{t('car_model')} *</label>
                                 <input name="carModel" required value={formData.carModel} onChange={handleChange} placeholder="Camry" />
                             </div>
                         </div>
-                        <div className="form-group">
-                            <label>License Plate</label>
-                            <input
-                                name="licensePlate"
-                                value={formData.licensePlate}
-                                onChange={handleChange}
-                                placeholder="TN-01-AB-1234"
-                                style={{
-                                    textTransform: 'uppercase',
-                                    border: formData.licensePlate
-                                        ? (plateValid ? '2px solid #10b981' : '2px solid #f59e0b')
-                                        : undefined
-                                }}
-                            />
-                            {plateError && (
-                                <small style={{ color: plateError.type === 'error' ? '#ef4444' : '#f59e0b', display: 'block', marginTop: '4px' }}>
-                                    ⚠ {plateError.msg}
-                                </small>
-                            )}
-                            {plateValid && (
-                                <small style={{ color: '#10b981', display: 'block', marginTop: '4px' }}>
-                                    ✓ Valid TN plate{(/^TN74(BJ|BK)\d{4}$/.test(formData.licensePlate.replace(/[-\s]/g, '')) || /^TN75(AK|AL)\d{4}$/.test(formData.licensePlate.replace(/[-\s]/g, ''))) ? ' — New Registration' : ''}
-                                </small>
-                            )}
-                        </div>
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancel')}</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Saving...' : 'Save Changes'}
+                            {loading ? t('saving') : t('save_changes')}
                         </button>
                     </div>
                 </form>
@@ -848,7 +854,6 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                 tagHistory: newTagHistory.slice(0, 20), // Keep last 20 entries
                 noteHistory: newNoteHistory.slice(0, 20),
                 recommendedServices: recommendedServices,
-                address: address,
                 membershipTier: membershipTier,
                 preferredContact: preferredContact,
                 updatedAt: serverTimestamp()
@@ -896,7 +901,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
         <div className="modal">
             <div className="modal-content modal-lg">
                 <div className="modal-header">
-                    <h2><Users size={20} /> Customer Details</h2>
+                    <h2><Users size={20} /> {t('customer_details')}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <div className="modal-body">
@@ -939,7 +944,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                     {/* Inactive Alert */}
                     {isInactive && (
                         <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', padding: '0.75rem 1rem', borderRadius: '8px', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            ⚠️ <strong>Inactive Customer</strong> - Last visit was {lastVisit} (over 30 days ago)
+                            ⚠️ <strong>{t('inactive_customer')}</strong> - {t('last_visit_was')} {lastVisit} (over 30 days ago)
                         </div>
                     )}
 
@@ -947,33 +952,31 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                     <div className="customer-stats-grid">
                         <div style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
                             <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--primary)' }}>{bookings.length}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Total Visits</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('total_visits')}</div>
                         </div>
                         <div style={{ background: '#dcfce7', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
                             <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#166534' }}>{formatCurrency(totalSpend)}</div>
-                            <div style={{ fontSize: '0.75rem', color: '#166534' }}>Total Spend</div>
+                            <div style={{ fontSize: '0.75rem', color: '#166534' }}>{t('total_spend')}</div>
                         </div>
                         <div style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
                             <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--navy-700)' }}>{bookings.filter(b => b.status === 'completed').length}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Completed</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('completed')}</div>
                         </div>
                         <div style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '8px', textAlign: 'center' }}>
                             <div style={{ fontSize: '0.9rem', fontWeight: '600', color: 'var(--navy-700)' }}>{lastVisit || 'N/A'}</div>
-                            <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Last Visit</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('last_visit')}</div>
                         </div>
                     </div>
 
                     <div className="customer-info-grid">
                         <div>
-                            <h4 style={{ color: 'var(--navy-500)', marginBottom: '0.5rem' }}>Contact</h4>
+                            <h4 style={{ color: 'var(--navy-500)', marginBottom: '0.5rem' }}>{t('contact')}</h4>
                             <p><strong>{customer.name || 'N/A'}</strong></p>
-                            <p><Phone size={14} /> {customer.phone}</p>
                             {customer.email && <p><Mail size={14} /> {customer.email}</p>}
                         </div>
                         <div>
-                            <h4 style={{ color: 'var(--navy-500)', marginBottom: '0.5rem' }}>Vehicle</h4>
+                            <h4 style={{ color: 'var(--navy-500)', marginBottom: '0.5rem' }}>{t('vehicle')}</h4>
                             <p><Car size={14} /> {customer.carMake} {customer.carModel}</p>
-                            <p><strong>{customer.licensePlate}</strong></p>
                         </div>
                     </div>
 
@@ -981,7 +984,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                     {hasPermission('customers', 'edit') && (
                         <div className="customer-details-grid">
                             <div className="form-group" style={{ margin: 0 }}>
-                                <label style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Membership Tier</label>
+                                <label style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('membership_tier')}</label>
                                 <select
                                     value={membershipTier}
                                     onChange={(e) => setMembershipTier(e.target.value)}
@@ -994,7 +997,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                                 </select>
                             </div>
                             <div className="form-group" style={{ margin: 0 }}>
-                                <label style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Preferred Contact</label>
+                                <label style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('preferred_contact')}</label>
                                 <select
                                     value={preferredContact}
                                     onChange={(e) => setPreferredContact(e.target.value)}
@@ -1006,12 +1009,12 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                                 </select>
                             </div>
                             <div className="form-group" style={{ margin: 0 }}>
-                                <label style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Address</label>
+                                <label style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('address')}</label>
                                 <input
                                     type="text"
                                     value={address}
                                     onChange={(e) => setAddress(e.target.value)}
-                                    placeholder="Customer address..."
+                                    placeholder={t('address_placeholder')}
                                     style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--navy-200)' }}
                                 />
                             </div>
@@ -1022,14 +1025,14 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                     {hasPermission('customers', 'view') && (
                         <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px' }}>
                             <h4 style={{ marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <Star size={16} /> Recommended Services (Upsell)
+                                <Star size={16} /> {t('recommended_services')}
                             </h4>
 
                             {/* Mapped services list */}
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
                                 {recommendedServices.length === 0 ? (
                                     <span style={{ color: 'var(--navy-400)', fontSize: '0.85rem', fontStyle: 'italic' }}>
-                                        No services mapped yet - add services to recommend to this customer
+                                        {t('no_recommended_services')}
                                     </span>
                                 ) : (
                                     recommendedServices.map(service => (
@@ -1066,7 +1069,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                                         onChange={(e) => setSelectedServiceToAdd(e.target.value)}
                                         style={{ flex: 1, padding: '0.4rem', borderRadius: '6px', border: '1px solid var(--navy-200)' }}
                                     >
-                                        <option value="">Select service to recommend...</option>
+                                        <option value="">{t('select_service_placeholder')}</option>
                                         {services.filter(s => !recommendedServices.find(r => r.id === s.id)).map(service => (
                                             <option key={service.id} value={service.id}>{service.name}</option>
                                         ))}
@@ -1077,7 +1080,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                                         disabled={!selectedServiceToAdd}
                                         className="btn btn-sm btn-primary"
                                     >
-                                        Add
+                                        {t('add')}
                                     </button>
                                 </div>
                             )}
@@ -1090,14 +1093,14 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                             <div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                     <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                        <Tag size={14} /> Tags
+                                        <Tag size={14} /> {t('tags')}
                                     </h4>
                                     {tagHistory.length > 0 && (
                                         <button
                                             onClick={() => setShowTagHistory(!showTagHistory)}
                                             style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.75rem' }}
                                         >
-                                            <Clock size={12} /> {showTagHistory ? 'Hide' : 'Show'} History
+                                            <Clock size={12} /> {showTagHistory ? t('hide') : t('show')} {t('history')}
                                         </button>
                                     )}
                                 </div>
@@ -1105,7 +1108,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                                     type="text"
                                     value={tags}
                                     onChange={(e) => setTags(e.target.value)}
-                                    placeholder="VIP, Regular, New..."
+                                    placeholder={t('tags_placeholder')}
                                     style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--navy-200)' }}
                                     disabled={!hasPermission('customers', 'edit')}
                                 />
@@ -1125,14 +1128,14 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                             <div>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                     <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                        <FileText size={14} /> Notes
+                                        <FileText size={14} /> {t('notes')}
                                     </h4>
                                     {noteHistory.length > 0 && (
                                         <button
                                             onClick={() => setShowNoteHistory(!showNoteHistory)}
                                             style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.75rem' }}
                                         >
-                                            <Clock size={12} /> {showNoteHistory ? 'Hide' : 'Show'} History
+                                            <Clock size={12} /> {showNoteHistory ? t('hide') : t('show')} {t('history')}
                                         </button>
                                     )}
                                 </div>
@@ -1140,7 +1143,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                                     type="text"
                                     value={notes}
                                     onChange={(e) => setNotes(e.target.value)}
-                                    placeholder="Customer preferences..."
+                                    placeholder={t('notes_placeholder')}
                                     style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--navy-200)' }}
                                     disabled={!hasPermission('customers', 'edit')}
                                 />
@@ -1160,7 +1163,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                         </div>
                         {hasPermission('customers', 'edit') && (
                             <button className="btn btn-primary btn-sm" onClick={saveCustomerData} disabled={saving} style={{ marginTop: '0.75rem' }}>
-                                {saving ? 'Saving...' : 'Save Customer Data'}
+                                {saving ? t('saving') : t('save_customer_data')}
                             </button>
                         )}
                     </div>
@@ -1168,7 +1171,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                     {/* Last Services Used */}
                     {bookings.length > 0 && (
                         <div style={{ marginBottom: '1rem', padding: '0.75rem', background: 'var(--navy-50)', borderRadius: '8px' }}>
-                            <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>🕐 Last Services Used</h4>
+                            <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem' }}>🕐 {t('last_services_used')}</h4>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                                 {[...new Map(
                                     bookings
@@ -1196,20 +1199,20 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                         </div>
                     )}
 
-                    <h4 style={{ marginBottom: '0.75rem' }}>Booking History ({bookings.length})</h4>
+                    <h4 style={{ marginBottom: '0.75rem' }}>{t('booking_history')} ({bookings.length})</h4>
                     {loading ? (
                         <div className="loader" style={{ margin: '1rem auto' }}></div>
                     ) : bookings.length === 0 ? (
-                        <p style={{ color: 'var(--navy-500)' }}>No bookings found</p>
+                        <p style={{ color: 'var(--navy-500)' }}>{t('no_bookings_found')}</p>
                     ) : (
                         <div className="table-container" style={{ maxHeight: '200px', overflowY: 'auto' }}>
                             <table className="data-table">
                                 <thead>
                                     <tr>
-                                        <th>Date</th>
-                                        <th>Service</th>
-                                        <th>Amount</th>
-                                        <th>Status</th>
+                                        <th>{t('date')}</th>
+                                        <th>{t('service')}</th>
+                                        <th>{t('amount')}</th>
+                                        <th>{t('status')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1231,7 +1234,7 @@ const CustomerDetailsModal = ({ customer, onClose }) => {
                     )}
                 </div>
                 <div className="modal-footer">
-                    <button className="btn btn-secondary" onClick={onClose}>Close</button>
+                    <button className="btn btn-secondary" onClick={onClose}>{t('close')}</button>
                 </div>
             </div>
             <style>{`

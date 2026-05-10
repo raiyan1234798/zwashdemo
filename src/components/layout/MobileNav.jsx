@@ -21,7 +21,8 @@ import {
     ChevronRight,
     ShieldCheck,
     Activity,
-    Database
+    Database,
+    Building2
 } from 'lucide-react';
 
 const MobileNav = () => {
@@ -44,6 +45,16 @@ const MobileNav = () => {
 
     // Secondary items (shown in more menu)
     const secondaryItems = [
+        { path: '/tenants', icon: Building2, label: 'Tenants', permission: 'superadmin' },
+        { path: '/platform-enquiries', icon: () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                <path fill="#4285F4" d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2z"/>
+                <path fill="#34A853" d="M22 6v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6l10 7 10-7z"/>
+                <path fill="#EA4335" d="M2 6l10 7 10-7V6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v0z"/>
+                <path fill="#FBBC05" d="M2 18l7.5-5.25L2 6v12z"/>
+                <path fill="#FBBC05" d="M22 6l-7.5 6.75L22 18V6z"/>
+            </svg>
+        ), label: 'Enquiries', permission: 'superadmin' },
         { path: '/services', icon: Car, label: 'Services', permission: 'services' },
         { path: '/analytics', icon: BarChart3, label: 'Analytics', permission: 'analytics' },
         { path: '/invoices', icon: FileText, label: 'Invoices', permission: 'invoices' },
@@ -117,9 +128,24 @@ const MobileNav = () => {
                         {/* User Profile Section */}
                         <div className="more-menu-user">
                             {userProfile?.photoURL ? (
-                                <img src={userProfile.photoURL} alt="" className="more-menu-avatar" />
-                            ) : (
-                                <div className="more-menu-avatar-placeholder">
+                                <img 
+                                    src={userProfile.photoURL} 
+                                    alt="" 
+                                    className="more-menu-avatar" 
+                                    referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.style.display = 'none';
+                                        const placeholder = e.target.parentNode.querySelector('.more-menu-avatar-placeholder-hidden');
+                                        if (placeholder) placeholder.style.display = 'flex';
+                                    }}
+                                />
+                            ) : null}
+                            {(!userProfile?.photoURL || userProfile?.photoURL) && (
+                                <div 
+                                    className={`more-menu-avatar-placeholder ${userProfile?.photoURL ? 'more-menu-avatar-placeholder-hidden' : ''}`}
+                                    style={userProfile?.photoURL ? { display: 'none' } : {}}
+                                >
                                     {userProfile?.displayName?.charAt(0) || 'U'}
                                 </div>
                             )}

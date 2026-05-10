@@ -5,16 +5,26 @@ import {
     collection, addDoc, getDocs, doc, updateDoc,
     deleteDoc, serverTimestamp, query, orderBy
 } from 'firebase/firestore';
-import { Globe, Plus, Trash2, Check, X, Clock, Mail, Building2, RefreshCw, Copy, CheckCheck } from 'lucide-react';
+import { Globe, Plus, Trash2, Check, X, Clock, Mail, Building2, RefreshCw, Copy, CheckCheck, Zap, ShieldCheck, Crown, Edit3 } from 'lucide-react';
+import { PLANS, PLAN_FEATURES } from '../contexts/AuthContext';
 
 const DemoAccess = () => {
-    const { isAdmin, userProfile } = useAuth();
+    const { isSuperAdmin, userProfile } = useAuth();
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [copied, setCopied] = useState(null);
-    const [form, setForm] = useState({ companyName: '', email: '', country: '', expiresAt: '', notes: '' });
+    const [editingId, setEditingId] = useState(null);
+    const [form, setForm] = useState({ 
+        companyName: '', 
+        email: '', 
+        country: '', 
+        expiresAt: '', 
+        notes: '',
+        logoURL: '',
+        plan: PLANS.BASIC,
+        permissions: PLAN_FEATURES[PLANS.BASIC].reduce((acc, feat) => ({ ...acc, [feat]: true }), {})
+    });
 
     useEffect(() => { fetchClients(); }, []);
 
@@ -32,20 +42,56 @@ const DemoAccess = () => {
         if (!form.email || !form.companyName) return;
         setSaving(true);
         try {
-            await addDoc(collection(db, 'demoClients'), {
-                ...form,
-                email: form.email.toLowerCase().trim(),
-                active: true,
-                loginCount: 0,
-                lastLogin: null,
-                addedBy: userProfile?.email,
-                createdAt: serverTimestamp(),
+            if (editingId) {
+                await updateDoc(doc(db, 'demoClients', editingId), {
+                    ...form,
+                    email: form.email.toLowerCase().trim(),
+                    updatedAt: serverTimestamp(),
+                });
+            } else {
+                await addDoc(collection(db, 'demoClients'), {
+                    ...form,
+                    email: form.email.toLowerCase().trim(),
+                    active: true,
+                    loginCount: 0,
+                    lastLogin: null,
+                    addedBy: userProfile?.email,
+                    createdAt: serverTimestamp(),
+                });
+            }
+            setEditingId(null);
+            setForm({ 
+                companyName: '', 
+                email: '', 
+                country: '', 
+                expiresAt: '', 
+                notes: '',
+                logoURL: '',
+                plan: PLANS.BASIC,
+                permissions: PLAN_FEATURES[PLANS.BASIC].reduce((acc, feat) => ({ ...acc, [feat]: true }), {})
             });
-            setForm({ companyName: '', email: '', country: '', expiresAt: '', notes: '' });
             setShowModal(false);
             fetchClients();
         } catch (e) { alert('Error: ' + e.message); }
         setSaving(false);
+    };
+
+    const handlePlanChange = (newPlan) => {
+        setForm(prev => ({
+            ...prev,
+            plan: newPlan,
+            permissions: PLAN_FEATURES[newPlan].reduce((acc, feat) => ({ ...acc, [feat]: true }), {})
+        }));
+    };
+
+    const togglePermission = (module) => {
+        setForm(prev => ({
+            ...prev,
+            permissions: {
+                ...prev.permissions,
+                [module]: !prev.permissions[module]
+            }
+        }));
     };
 
     const toggleActive = async (client) => {
@@ -53,16 +99,24 @@ const DemoAccess = () => {
         fetchClients();
     };
 
+    const handleEdit = (client) => {
+        setEditingId(client.id);
+        setForm({
+            companyName: client.companyName || '',
+            email: client.email || '',
+            country: client.country || '',
+            expiresAt: client.expiresAt || '',
+            notes: client.notes || '',
+            plan: client.plan || PLANS.BASIC,
+            permissions: client.permissions || PLAN_FEATURES[client.plan || PLANS.BASIC].reduce((acc, feat) => ({ ...acc, [feat]: true }), {})
+        });
+        setShowModal(true);
+    };
+
     const handleDelete = async (id, name) => {
         if (!window.confirm(`Remove demo access for ${name}?`)) return;
         await deleteDoc(doc(db, 'demoClients', id));
         fetchClients();
-    };
-
-    const copyEmail = (email) => {
-        navigator.clipboard.writeText(email);
-        setCopied(email);
-        setTimeout(() => setCopied(null), 2000);
     };
 
     const isExpired = (expiresAt) => expiresAt && new Date(expiresAt) < new Date();
@@ -74,10 +128,10 @@ const DemoAccess = () => {
         logins: clients.reduce((a, c) => a + (c.loginCount || 0), 0),
     };
 
-    if (!isAdmin) return (
+    if (!isSuperAdmin) return (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--navy-500)' }}>
             <Globe size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
-            <p>Admin access required</p>
+            <p>Super Admin access required</p>
         </div>
     );
 
@@ -87,16 +141,16 @@ const DemoAccess = () => {
             <div className="page-header">
                 <div>
                     <h1 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Globe size={26} /> Demo Client Access
+                        <Globe size={26} /> Super Admin Control
                     </h1>
-                    <p className="subtitle">Manage which companies can access the demo via Google login</p>
+                    <p className="subtitle">Manage company demos and module-level permissions</p>
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
                     <button className="btn btn-secondary" onClick={fetchClients}>
                         <RefreshCw size={16} /> Refresh
                     </button>
-                    <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                        <Plus size={18} /> Add Company
+                    <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true); }}>
+                        <Plus size={18} /> New Demo Account
                     </button>
                 </div>
             </div>
@@ -104,27 +158,16 @@ const DemoAccess = () => {
             {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 24 }}>
                 {[
-                    { label: 'Total Companies', value: stats.total, color: '#3b82f6' },
-                    { label: 'Active Access', value: stats.active, color: '#10b981' },
+                    { label: 'Companies', value: stats.total, color: '#3b82f6' },
+                    { label: 'Active', value: stats.active, color: '#10b981' },
                     { label: 'Expired', value: stats.expired, color: '#ef4444' },
-                    { label: 'Total Logins', value: stats.logins, color: '#f59e0b' },
+                    { label: 'Logins', value: stats.logins, color: '#f59e0b' },
                 ].map(s => (
                     <div key={s.label} className="card" style={{ padding: '20px 24px' }}>
                         <div style={{ fontSize: '2rem', fontWeight: 700, color: s.color }}>{s.value}</div>
                         <div style={{ fontSize: '0.82rem', color: 'var(--navy-500)', marginTop: 4 }}>{s.label}</div>
                     </div>
                 ))}
-            </div>
-
-            {/* How it works info box */}
-            <div style={{ background: 'linear-gradient(135deg, #eff6ff, #f0fdf4)', border: '1px solid #bfdbfe', borderRadius: 12, padding: '16px 20px', marginBottom: 24, display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                <Globe size={20} style={{ color: '#3b82f6', flexShrink: 0, marginTop: 2 }} />
-                <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1e40af', marginBottom: 4 }}>How Demo Access Works</div>
-                    <div style={{ fontSize: '0.82rem', color: '#3b82f6', lineHeight: 1.6 }}>
-                        Add a company's Gmail address below. When they visit your demo URL and click <strong>"Continue with Google"</strong> using that exact Gmail, they will automatically get access as a <strong>Manager-level demo user</strong>. No passwords, no manual approval — instant access with optional expiry date.
-                    </div>
-                </div>
             </div>
 
             {/* Table */}
@@ -141,11 +184,11 @@ const DemoAccess = () => {
                         <table className="data-table">
                             <thead>
                                 <tr>
-                                    <th>Company</th>
+                                    <th>Company Branding</th>
                                     <th>Gmail Access</th>
-                                    <th>Country</th>
+                                    <th>Plan</th>
+                                    <th>Features</th>
                                     <th>Expires</th>
-                                    <th>Logins</th>
                                     <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
@@ -155,6 +198,8 @@ const DemoAccess = () => {
                                     const expired = isExpired(c.expiresAt);
                                     const statusColor = !c.active ? '#6b7280' : expired ? '#ef4444' : '#10b981';
                                     const statusLabel = !c.active ? 'Disabled' : expired ? 'Expired' : 'Active';
+                                    const activePermissionsCount = Object.values(c.permissions || {}).filter(Boolean).length;
+                                    
                                     return (
                                         <tr key={c.id} style={{ opacity: !c.active ? 0.55 : 1 }}>
                                             <td>
@@ -164,46 +209,47 @@ const DemoAccess = () => {
                                                     </div>
                                                     <div>
                                                         <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{c.companyName}</div>
-                                                        {c.notes && <div style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{c.notes}</div>}
+                                                        <div style={{ fontSize: '0.75rem', color: 'var(--navy-400)' }}>{c.country || 'N/A'}</div>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                    <span style={{ fontSize: '0.85rem', fontFamily: 'monospace' }}>{c.email}</span>
-                                                    <button onClick={() => copyEmail(c.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--navy-400)', padding: 2, display: 'flex' }}>
-                                                        {copied === c.email ? <CheckCheck size={14} style={{ color: '#10b981' }} /> : <Copy size={14} />}
-                                                    </button>
+                                                    <span style={{ fontSize: '0.85rem' }}>{c.email}</span>
                                                 </div>
                                             </td>
-                                            <td>{c.country || <span style={{ color: 'var(--navy-300)' }}>—</span>}</td>
                                             <td>
-                                                {c.expiresAt ? (
-                                                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: expired ? '#ef4444' : 'var(--navy-600)', fontSize: '0.83rem' }}>
-                                                        <Clock size={13} /> {c.expiresAt}
-                                                    </span>
-                                                ) : (
-                                                    <span style={{ fontSize: '0.8rem', color: 'var(--navy-300)' }}>Unlimited</span>
-                                                )}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', fontWeight: 600 }}>
+                                                    {c.plan === PLANS.PREMIUM ? <Crown size={14} color="#f59e0b" /> : 
+                                                     c.plan === PLANS.STANDARD ? <ShieldCheck size={14} color="#3b82f6" /> : 
+                                                     <Zap size={14} color="#10b981" />}
+                                                    <span style={{ textTransform: 'capitalize' }}>{c.plan || 'Basic'}</span>
+                                                </div>
                                             </td>
-                                            <td style={{ fontWeight: 600 }}>{c.loginCount || 0}</td>
+                                            <td>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--navy-600)', background: '#f1f5f9', padding: '2px 8px', borderRadius: 4, display: 'inline-block' }}>
+                                                    {activePermissionsCount} Modules
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span style={{ color: expired ? '#ef4444' : 'var(--navy-600)', fontSize: '0.83rem' }}>
+                                                    {c.expiresAt || 'Lifetime'}
+                                                </span>
+                                            </td>
                                             <td>
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: `${statusColor}18`, color: statusColor, fontSize: '0.75rem', fontWeight: 600, padding: '3px 10px', borderRadius: 20 }}>
-                                                    {statusLabel === 'Active' ? <Check size={11} /> : <X size={11} />}
                                                     {statusLabel}
                                                 </span>
                                             </td>
                                             <td>
                                                 <div style={{ display: 'flex', gap: 6 }}>
-                                                    <button
-                                                        onClick={() => toggleActive(c)}
-                                                        className={`btn btn-sm ${c.active ? 'btn-secondary' : 'btn-primary'}`}
-                                                        title={c.active ? 'Disable access' : 'Enable access'}
-                                                    >
-                                                        {c.active ? <X size={13} /> : <Check size={13} />}
+                                                    <button onClick={() => handleEdit(c)} className="btn btn-sm btn-secondary" title="Edit details & plan">
+                                                        <Edit3 size={13} />
+                                                    </button>
+                                                    <button onClick={() => toggleActive(c)} className="btn btn-sm btn-secondary">
                                                         {c.active ? 'Disable' : 'Enable'}
                                                     </button>
-                                                    <button onClick={() => handleDelete(c.id, c.companyName)} className="btn btn-sm" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fecaca' }}>
+                                                    <button onClick={() => handleDelete(c.id, c.companyName)} className="btn btn-sm btn-danger">
                                                         <Trash2 size={13} />
                                                     </button>
                                                 </div>
@@ -220,50 +266,100 @@ const DemoAccess = () => {
             {/* Modal */}
             {showModal && (
                 <div className="modal">
-                    <div className="modal-content" style={{ maxWidth: 520 }}>
+                    <div className="modal-content" style={{ maxWidth: 650 }}>
                         <div className="modal-header">
-                            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Building2 size={20} /> Add Demo Company</h2>
+                            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Building2 size={20} /> {editingId ? 'Edit' : 'New'} Demo Configuration</h2>
                             <button className="modal-close" onClick={() => setShowModal(false)}>×</button>
                         </div>
                         <form onSubmit={handleAdd}>
-                            <div className="modal-body">
-                                <div className="form-group">
-                                    <label>Company / Client Name *</label>
-                                    <input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} required placeholder="e.g. AutoGlanz GmbH, Carrosserie Italia..." />
+                            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                    <div className="form-group">
+                                        <label>Company Branding Name *</label>
+                                        <input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} required placeholder="e.g. Clean & Go Studio" />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Company Gmail *</label>
+                                        <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required placeholder="client@gmail.com" />
+                                    </div>
                                 </div>
+
                                 <div className="form-group">
-                                    <label><Mail size={13} style={{ verticalAlign: 'middle' }} /> Gmail Address (for Google login) *</label>
-                                    <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required placeholder="company@gmail.com or person@gmail.com" />
-                                    <small style={{ color: 'var(--navy-400)', fontSize: '0.75rem' }}>This exact Gmail will be granted demo access when they sign in.</small>
+                                    <label>Company Logo URL (Optional)</label>
+                                    <input value={form.logoURL} onChange={e => setForm({ ...form, logoURL: e.target.value })} placeholder="https://example.com/logo.png" />
                                 </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+
+                                <div className="form-group">
+                                    <label>Subscription Plan</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 8 }}>
+                                        {[
+                                            { id: PLANS.BASIC, label: 'Basic', icon: Zap, color: '#10b981', desc: 'Core ERP' },
+                                            { id: PLANS.STANDARD, label: 'Standard', icon: ShieldCheck, color: '#3b82f6', desc: 'Full Financials' },
+                                            { id: PLANS.PREMIUM, label: 'Premium', icon: Crown, color: '#f59e0b', desc: 'Advanced Ops' }
+                                        ].map(p => (
+                                            <div 
+                                                key={p.id}
+                                                onClick={() => handlePlanChange(p.id)}
+                                                style={{
+                                                    padding: '12px',
+                                                    borderRadius: '12px',
+                                                    border: `2px solid ${form.plan === p.id ? p.color : '#e2e8f0'}`,
+                                                    background: form.plan === p.id ? `${p.color}08` : 'white',
+                                                    cursor: 'pointer',
+                                                    textAlign: 'center',
+                                                    transition: 'all 0.2s'
+                                                }}
+                                            >
+                                                <p.icon size={20} color={p.color} style={{ marginBottom: 4 }} />
+                                                <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{p.label}</div>
+                                                <div style={{ fontSize: '0.65rem', color: 'var(--navy-400)' }}>{p.desc}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Access Permissions (Select Modules)</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10, background: '#f8fafc', padding: 16, borderRadius: 12, marginTop: 8 }}>
+                                        {Object.keys(form.permissions).map(module => (
+                                            <label key={module} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', cursor: 'pointer', textTransform: 'capitalize' }}>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={form.permissions[module]} 
+                                                    onChange={() => togglePermission(module)}
+                                                    style={{ width: 16, height: 16 }}
+                                                />
+                                                {module}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                     <div className="form-group">
                                         <label>Country</label>
-                                        <input value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} placeholder="Germany, Italy, India..." />
+                                        <input value={form.country} onChange={e => setForm({ ...form, country: e.target.value })} placeholder="e.g. Switzerland" />
                                     </div>
                                     <div className="form-group">
-                                        <label><Clock size={13} style={{ verticalAlign: 'middle' }} /> Access Expires</label>
+                                        <label>Demo Expiry Date</label>
                                         <input type="date" value={form.expiresAt} onChange={e => setForm({ ...form, expiresAt: e.target.value })} />
                                     </div>
-                                </div>
-                                <div className="form-group">
-                                    <label>Notes (internal)</label>
-                                    <input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="e.g. Met at AutoExpo 2025, interested in premium plan..." />
-                                </div>
-                                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: '12px 16px', fontSize: '0.82rem', color: '#166534' }}>
-                                    ✓ Once added, the company can immediately sign in via Google. No password needed.
                                 </div>
                             </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
                                 <button type="submit" className="btn btn-primary" disabled={saving}>
-                                    {saving ? 'Adding...' : 'Grant Access'}
+                                    {saving ? 'Creating...' : 'Grant Module Access'}
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
+            <style>{`
+                .btn-danger { background: #fef2f2; color: #ef4444; border: 1px solid #fecaca; }
+                .btn-danger:hover { background: #fee2e2; }
+            `}</style>
         </div>
     );
 };

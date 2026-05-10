@@ -5,7 +5,7 @@ import { db } from '../config/firebase';
 import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy, serverTimestamp } from 'firebase/firestore';
 import {
     UserCog, Mail, Phone, Calendar, MapPin,
-    ArrowLeft, Save, Shield, Clock, IndianRupee,
+    ArrowLeft, Save, Shield, Clock, Wallet,
     CheckCircle, XCircle, AlertTriangle
 } from 'lucide-react';
 import PermissionSelector from '../components/PermissionSelector';
@@ -178,7 +178,7 @@ const EmployeeDetails = () => {
 
     const formatTime = (timestamp) => {
         if (!timestamp) return '-';
-        if (timestamp.toDate) return timestamp.toDate().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        if (timestamp.toDate) return timestamp.toDate().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
         return timestamp;
     };
 

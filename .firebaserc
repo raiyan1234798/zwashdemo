@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "zwashdemo"
-  }
+  },
+  "targets": {
+    "zwashdemo": {
+      "hosting": {
+        "admin": [
+          "zwashdemo"
+        ],
+        "booking": [
+          "zwashdemo-booking"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

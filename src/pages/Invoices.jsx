@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { jsPDF } from 'jspdf';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
@@ -9,6 +11,8 @@ import SplitPaymentSelector from '../components/SplitPaymentSelector';
 import { getNextInvoiceNumber, migrateExistingInvoices } from '../utils/invoiceUtils';
 
 const Invoices = () => {
+    const { t } = useTranslation();
+    const { currency: currentCurrencyCode, formatCurrency: globalFormatCurrency } = useCurrency();
     const { hasPermission, isAdmin, isEmployee, user, userProfile } = useAuth();
 
     // Get today and yesterday dates for employee filtering
@@ -45,7 +49,7 @@ const Invoices = () => {
     useEffect(() => {
         fetchInvoices();
         fetchSettings();
-    }, []);
+    }, [currentCurrencyCode]);
 
     const fetchSettings = async () => {
         try {
@@ -114,18 +118,18 @@ const Invoices = () => {
     const archiveInvoice = async (invoice) => {
         if (activeTab === 'archived') {
             // Permanent Delete
-            if (!window.confirm(`PERMANENTLY DELETE invoice #${invoice.invoiceNumber || invoice.id.slice(0, 8)} for ${invoice.customerName}? This cannot be undone.`)) return;
+            if (!window.confirm(t('permanent_delete_confirm', { number: invoice.invoiceNumber || invoice.id.slice(0, 8), name: invoice.customerName }))) return;
             try {
                 const collectionName = invoice.source === 'invoice' ? 'invoices' : 'bookings';
                 await deleteDoc(doc(db, collectionName, invoice.id));
                 fetchInvoices();
             } catch (error) {
                 console.error('Error deleting invoice:', error);
-                alert('Error deleting invoice');
+                alert(t('error_occurred'));
             }
         } else {
             // Soft Archive
-            if (!window.confirm(`Archive invoice for ${invoice.customerName || 'this customer'}?`)) return;
+            if (!window.confirm(t('archive_invoice_confirm', { name: invoice.customerName || t('this_customer') }))) return;
             try {
                 const collectionName = invoice.source === 'invoice' ? 'invoices' : 'bookings';
                 await updateDoc(doc(db, collectionName, invoice.id), {
@@ -135,7 +139,7 @@ const Invoices = () => {
                 fetchInvoices();
             } catch (error) {
                 console.error('Error archiving invoice:', error);
-                alert('Error archiving invoice');
+                alert(t('error_occurred'));
             }
         }
     };
@@ -151,7 +155,7 @@ const Invoices = () => {
             fetchInvoices();
         } catch (error) {
             console.error('Error restoring invoice:', error);
-            alert('Error restoring invoice');
+            alert(t('error_occurred'));
         }
     };
 
@@ -167,7 +171,7 @@ const Invoices = () => {
             fetchInvoices(); // Refresh list to show new IDs
         } catch (error) {
             console.error("Migration failed:", error);
-            alert("Migration failed. Check console for details.");
+            alert(t('migration_failed_msg'));
         } finally {
             setIsMigrating(false);
         }
@@ -408,10 +412,10 @@ const Invoices = () => {
             setPaymentPrice('');
             setBalanceNote('');
             setPaymentDueDate('');
-            alert(`Payment recorded! New Balance: ₹${newTotalPrice - newPaidTotal}`);
+            alert(`${t('payment_recorded')}! ${t('balance_due')}: ${formatCurrency(newTotalPrice - newPaidTotal)}`);
         } catch (error) {
             console.error('Error updating payment:', error);
-            alert('Error recording payment');
+            alert(t('error_occurred'));
         } finally {
             setProcessing(false);
         }
@@ -420,19 +424,14 @@ const Invoices = () => {
     const getPaymentBadge = (invoice) => {
         const status = invoice.paymentStatus || 'unpaid';
         const badges = {
-            'paid': { class: 'badge-completed', label: 'Paid' },
-            'partial': { class: 'badge-progress', label: 'Partial' },
-            'unpaid': { class: 'badge-pending', label: 'Unpaid' }
+            'paid': { class: 'badge-completed', label: t('paid') },
+            'partial': { class: 'badge-progress', label: t('partial') },
+            'unpaid': { class: 'badge-pending', label: t('unpaid') }
         };
         return badges[status] || badges.unpaid;
     };
-
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0
-        }).format(amount || 0);
+        return globalFormatCurrency(amount || 0);
     };
 
     const formatTime12Hour = (time24) => {
@@ -487,7 +486,7 @@ const Invoices = () => {
         // Render table rows HTML
         const itemRowsHtml = lineItems.map(item => `
             <tr>
-                <td><strong>${item.description || item.serviceName || 'Service'}</strong></td>
+                <td><strong>${item.description || item.serviceName || t('service')}</strong></td>
                 <td>${item.quantity ?? 1}</td>
                 <td class="text-right">${formatCurrency(item.price ?? item.rate ?? 0)}</td>
                 <td class="text-right"><strong>${formatCurrency(item.total ?? item.amount ?? 0)}</strong></td>
@@ -500,14 +499,16 @@ const Invoices = () => {
         const brandAccent = '#047857';       // Emerald green accent
         const brandSuccess = '#10b981';      // Green for GST
 
+        const isRtl = document.documentElement.dir === 'rtl';
+
         const printContent = `
 <!DOCTYPE html>
-<html>
+<html dir="${isRtl ? 'rtl' : 'ltr'}">
 <head>
-    <title>${includeGST ? 'GST Bill' : 'Invoice'} - ${invoice.bookingReference || invoice.id.slice(0, 8)}</title>
+    <title>${includeGST ? t('print_gst_bill') : t('print_invoice')} - ${invoice.bookingReference || invoice.id.slice(0, 8)}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; background: #fff; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; background: #fff; text-align: ${isRtl ? 'right' : 'left'}; }
         .invoice-container { max-width: 800px; margin: 0 auto; padding: 30px 40px; }
         
         /* Header with Logo */
@@ -518,8 +519,9 @@ const Invoices = () => {
             margin-bottom: 30px; 
             padding-bottom: 25px; 
             border-bottom: 3px solid ${brandPrimary}; 
+            flex-direction: ${isRtl ? 'row-reverse' : 'row'};
         }
-        .company-info { display: flex; align-items: flex-start; gap: 20px; }
+        .company-info { display: flex; align-items: flex-start; gap: 20px; flex-direction: ${isRtl ? 'row-reverse' : 'row'}; }
         .company-logo { 
             width: 100px; 
             height: 100px; 
@@ -530,7 +532,7 @@ const Invoices = () => {
         .company-details p { color: #64748b; font-size: 12px; line-height: 1.6; }
         .company-details .contact { margin-top: 8px; }
         
-        .invoice-title { text-align: right; }
+        .invoice-title { text-align: ${isRtl ? 'left' : 'right'}; }
         .invoice-title h2 { 
             font-size: 28px; 
             color: ${includeGST ? brandSuccess : brandPrimary}; 
@@ -573,7 +575,7 @@ const Invoices = () => {
             background: ${brandPrimary}; 
             color: white;
             padding: 14px 15px; 
-            text-align: left; 
+            text-align: ${isRtl ? 'right' : 'left'}; 
             font-size: 11px; 
             text-transform: uppercase; 
             letter-spacing: 1px;
@@ -584,17 +586,18 @@ const Invoices = () => {
             border-bottom: 1px solid #e2e8f0;
             font-size: 13px;
         }
-        .items-table .text-right { text-align: right; }
+        .items-table .text-right { text-align: ${isRtl ? 'left' : 'right'}; }
         .items-table tbody tr:hover { background: #f8fafc; }
         
         /* Totals */
-        .totals { width: 280px; margin-left: auto; }
+        .totals { width: 280px; margin-${isRtl ? 'right' : 'left'}: auto; }
         .totals-row { 
             display: flex; 
             justify-content: space-between; 
             padding: 10px 0; 
             border-bottom: 1px solid #e2e8f0;
             font-size: 13px;
+            flex-direction: ${isRtl ? 'row-reverse' : 'row'};
         }
         .totals-row.total { 
             font-size: 18px; 
@@ -644,43 +647,42 @@ const Invoices = () => {
     <div class="invoice-container">
         <div class="invoice-header">
             <div class="company-info">
-                <img src="/detail.png" class="company-logo" alt="Zwash Demo Logo" />
+                <img src="${userProfile?.logoURL || '/logo.png'}" class="company-logo" alt="Logo" />
                 <div class="company-details">
-                    <h1>${settings?.businessName || 'Zwash Demo'}</h1>
-                    <p>Suchindram Byp, near Ragavendra Temple</p>
-                    <p>Nagercoil, Tamil Nadu 629704</p>
-                    <p class="contact">📞 +91 9363911500 | ✉️ detailingcommando@gmail.com</p>
+                    <h1>${userProfile?.companyName || settings?.businessName || 'Zwash ERP'}</h1>
+                    <p>${settings?.address || 'Business Address'}</p>
+                    <p class="contact">📞 ${settings?.phone || '+0 (000) 000-0000'} | ✉️ ${settings?.email || 'contact@business.com'}</p>
                     ${includeGST && settings?.gstNumber ? `<p style="margin-top:5px;font-weight:600;">GSTIN: ${settings.gstNumber}</p>` : ''}
                 </div>
             </div>
             <div class="invoice-title">
-                <h2>${includeGST ? 'Tax Invoice' : 'Invoice'}</h2>
+                <h2>${includeGST ? t('tax_invoice') : t('invoice')}</h2>
                 <p class="invoice-number">#${invoice.invoiceNumber || invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}</p>
-                <p class="invoice-date">Date: ${invoice.bookingDate || invoice.invoiceDate}</p>
+                <p class="invoice-date">${t('date')}: ${invoice.bookingDate || invoice.invoiceDate}</p>
             </div>
         </div>
         
         <div class="invoice-details">
             <div class="detail-section">
-                <h3>Bill To</h3>
-                <p><strong>${invoice.customerName || 'Walk-in Customer'}</strong></p>
-                <p>Phone: ${invoice.contactPhone || 'N/A'}</p>
+                <h3>${t('bill_to')}</h3>
+                <p><strong>${invoice.customerName || t('walk_in')}</strong></p>
+                <p>${t('phone')}: ${invoice.contactPhone || 'N/A'}</p>
             </div>
             <div class="detail-section">
-                <h3>Vehicle Info</h3>
-                <p><strong>${invoice.carMake || ''} ${invoice.carModel || ''}</strong></p>
-                <p>Plate: ${invoice.licensePlate || 'N/A'}</p>
-                <p>Service Time: ${formatTime12Hour(invoice.startTime)}</p>
+                <h3>${t('vehicle_info')}</h3>
+                <p><strong>${invoice.carMake || 'Demo'} ${invoice.carModel || 'Vehicle'}</strong></p>
+                <p>${t('license_plate')}: ${invoice.licensePlate}</p>
+                <p>${t('service_time')}: ${formatTime12Hour(invoice.startTime)}</p>
             </div>
         </div>
         
         <table class="items-table">
             <thead>
                 <tr>
-                    <th>Service Description</th>
-                    <th style="width:60px;">Qty</th>
-                    <th class="text-right" style="width:100px;">Rate</th>
-                    <th class="text-right" style="width:100px;">Amount</th>
+                    <th>${t('service_description')}</th>
+                    <th style="width:60px;">${t('qty')}</th>
+                    <th class="text-right" style="width:100px;">${t('rate')}</th>
+                    <th class="text-right" style="width:100px;">${t('amount')}</th>
                 </tr>
             </thead>
             <tbody>
@@ -690,7 +692,7 @@ const Invoices = () => {
         
         <div class="totals">
             <div class="totals-row">
-                <span>Subtotal</span>
+                <span>${t('subtotal')}</span>
                 <span>${formatCurrency(baseAmount)}</span>
             </div>
             ${includeGST ? `
@@ -704,41 +706,41 @@ const Invoices = () => {
             </div>
             ` : ''}
             <div class="totals-row total">
-                <span>Total Amount</span>
+                <span>${t('total_amount')}</span>
                 <span>${formatCurrency(totalAmount)}</span>
             </div>
             
             <div style="margin-top: 15px; padding: 12px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
-                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px;">
-                    <span style="color: #64748b;">Paid Amount</span>
+                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; flex-direction: ${isRtl ? 'row-reverse' : 'row'};">
+                    <span style="color: #64748b;">${t('paid_amount')}</span>
                     <span style="font-weight: 600; color: #047857;">${formatCurrency(invoice.paidAmount || 0)}</span>
                 </div>
-                <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; padding-top: 5px; border-top: 1px dashed #e2e8f0;">
-                    <span>Balance Due</span>
+                <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; padding-top: 5px; border-top: 1px dashed #e2e8f0; flex-direction: ${isRtl ? 'row-reverse' : 'row'};">
+                    <span>${t('balance_due')}</span>
                     <span style="color: ${(totalAmount - (invoice.paidAmount || 0)) > 0 ? '#ef4444' : '#047857'};">
                         ${formatCurrency(Math.max(0, totalAmount - (invoice.paidAmount || 0)))}
                     </span>
                 </div>
                 ${invoice.paymentMode && invoice.paymentMode !== 'none' ? `
                 <div style="font-size: 11px; color: #94a3b8; margin-top: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
-                    Payment Mode: ${invoice.paymentMode}
+                    ${t('payment_mode')}: ${t(invoice.paymentMode) || invoice.paymentMode}
                 </div>` : ''}
             </div>
         </div>
         
         ${includeGST && settings?.gstNumber ? `
         <div class="gst-info">
-            <h4>📋 GST Details</h4>
+            <h4>📋 ${t('gst_details')}</h4>
             <p><strong>GSTIN:</strong> ${settings.gstNumber}</p>
             <p><strong>HSN/SAC:</strong> 9992 (Washing and Cleaning Services)</p>
             <p><strong>CGST (${cgstPercentage}%):</strong> ${formatCurrency(cgstAmount)} | <strong>SGST (${sgstPercentage}%):</strong> ${formatCurrency(sgstAmount)}</p>
-            <p style="margin-top:5px;"><strong>Total Tax:</strong> ${formatCurrency(totalGst)}</p>
+            <p style="margin-top:5px;"><strong>${t('total_tax')}:</strong> ${formatCurrency(totalGst)}</p>
         </div>
         ` : ''}
         
         <div class="invoice-footer">
-            <p class="thank-you">Thank you for choosing us! 🙏</p>
-            <p class="note">This is a computer-generated ${includeGST ? 'tax invoice' : 'invoice'} and does not require a signature.</p>
+            <p class="thank-you">${t('thank_you_choosing')} 🙏</p>
+            <p class="note">${t('computer_generated_note', { type: includeGST ? t('tax_invoice') : t('invoice') })}</p>
         </div>
     </div>
 </body>
@@ -782,24 +784,23 @@ const Invoices = () => {
             breakdownLines = `\n*Amount:* ${formatCurrency(invoice.price)}`;
         }
 
-        const googleReviewLink = `https://www.google.com/search?q=Detailing+Commando+Reviews&si=AL3DRZEsmMGCryMMFSHJ3StBhOdZ2-6yYkXd_doETEE1OR-qORCfYOrPO9_r5Xrdz6OLn964mj5mum-Qd5jzlmEC3NzGY3rc7RSf9uLDn98lKI0GK6PNYXpax3VWlULxs2zb67zJBn8xu53xcXqOxgcv5ryhvPi0bQ%3D%3D&sa=X#lrd=0x47bf03f78d9c21fb:0xd9ce5265093065b2,3,,,,`;
+        const googleReviewLink = `#`;
 
 
         const message =
-            `Hi ${invoice.customerName ? invoice.customerName.split(' ')[0] : ''}! Here's your invoice from *${(settings?.businessName || 'Zwash Demo').trim()}*\n\n` +
+            `Hi ${invoice.customerName ? invoice.customerName.split(' ')[0] : ''}! Here's your invoice from *${(userProfile?.companyName || settings?.businessName || 'Business').trim()}*\n\n` +
             `*Invoice:* #${invoice.invoiceNumber || invoice.bookingReference || invoice.id.slice(0, 8).toUpperCase()}\n` +
             `*Service:* ${invoice.serviceName}` +
             breakdownLines +
             `\n*Date:* ${invoice.bookingDate || invoice.invoiceDate}\n\n` +
             `View your invoice online:\n${link}\n\n` +
-            `Thank you for choosing *Zwash Demo*! 🙏\n\n` +
-            `⭐ *Loved our service? Leave us a Google Review!*\n` +
+            `Thank you for choosing *${(userProfile?.companyName || settings?.businessName || 'Business').trim()}*! 🙏\n\n` +
+            `⭐ *Loved our service? Leave us a Review!*\n` +
             `It takes just 30 seconds and means the world to us 😊\n` +
             `👉 ${googleReviewLink}\n\n` +
-            `_Powered by Z3Connect_`;
+            `_Powered by Zwash_`;
 
         let phone = invoice.contactPhone?.replace(/[^0-9]/g, '') || '';
-        if (phone.length === 10) phone = '91' + phone;
         const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
         window.open(whatsappUrl, '_blank');
     };
@@ -808,7 +809,7 @@ const Invoices = () => {
     const copyInvoiceLink = (invoice) => {
         const link = getInvoiceLink(invoice);
         navigator.clipboard.writeText(link).then(() => {
-            alert('Invoice link copied to clipboard!');
+            alert(t('invoice_link_copied'));
         });
     };
 
@@ -916,9 +917,9 @@ const Invoices = () => {
         <div className="invoices-page">
             <div className="page-header">
                 <div>
-                    <h1><FileText size={28} /> Invoices</h1>
+                    <h1><FileText size={28} /> {t('invoices')}</h1>
                     <p className="subtitle">
-                        {isEmployee ? "Today's and yesterday's invoices" : 'Manage service invoices'}
+                        {isEmployee ? t('employee_invoices_subtitle') : t('manage_invoices_subtitle')}
                     </p>
                 </div>
                 <div className="header-actions">
@@ -940,7 +941,7 @@ const Invoices = () => {
                                 gap: '6px'
                             }}
                         >
-                            <FileText size={16} /> Active
+                            <FileText size={16} /> {t('active')}
                         </button>
                         <button
                             className={`tab-btn ${activeTab === 'archived' ? 'active' : ''}`}
@@ -958,7 +959,7 @@ const Invoices = () => {
                                 gap: '6px'
                             }}
                         >
-                            <Archive size={16} /> Archived ({archivedInvoices.length})
+                            <Archive size={16} /> {t('archived')} ({archivedInvoices.length})
                         </button>
                     </div>
                 </div>
@@ -970,7 +971,7 @@ const Invoices = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <ShieldCheck size={20} className="animate-pulse" style={{ color: '#b45309' }} />
                         <span style={{ fontWeight: '600', color: '#b45309' }}>
-                            Migrating Invoice Numbers... ({migrationProgress.current} / {migrationProgress.total})
+                            {t('migrating_invoice_numbers')}... ({migrationProgress.current} / {migrationProgress.total})
                         </span>
                     </div>
                     <div style={{ width: '300px', height: '8px', background: '#fde68a', borderRadius: '4px', overflow: 'hidden' }}>
@@ -984,8 +985,8 @@ const Invoices = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#065f46' }}>
                         <CheckCircle2 size={20} />
                         <span style={{ fontWeight: '600' }}>
-                            Migration Complete! {migrationResult.total} records updated.
-                            (Digital Seq: {migrationResult.digitalSeq}, Cash Seq: {migrationResult.cashSeq})
+                            {t('migration_complete')} {migrationResult.total} {t('records_updated')}.
+                            ({t('digital_seq')}: {migrationResult.digitalSeq}, {t('cash_seq')}: {migrationResult.cashSeq})
                         </span>
                     </div>
                     <button className="btn-icon" onClick={() => setMigrationResult(null)} style={{ color: '#065f46' }}><X size={16} /></button>
@@ -1000,7 +1001,7 @@ const Invoices = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{filteredInvoices.length}</span>
-                        <span className="stat-label">Shown Invoices</span>
+                        <span className="stat-label">{t('shown_invoices')}</span>
                     </div>
                 </div>
                 {/* Only show revenue to admins with finance permission */}
@@ -1011,7 +1012,7 @@ const Invoices = () => {
                         </div>
                         <div className="stat-info">
                             <span className="stat-value">{formatCurrency(filteredInvoices.reduce((sum, inv) => sum + (Number(inv.price) || 0), 0))}</span>
-                            <span className="stat-label">Revenue (Shown)</span>
+                            <span className="stat-label">{t('revenue_shown')}</span>
                         </div>
                     </div>
                 )}
@@ -1023,7 +1024,7 @@ const Invoices = () => {
                     <Search size={18} />
                     <input
                         type="text"
-                        placeholder="Search invoices..."
+                        placeholder={t('search_invoices_placeholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -1036,15 +1037,15 @@ const Invoices = () => {
                         value={dateFilter.start}
                         onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
                         className="date-input"
-                        title="Start Date"
+                        title={t('start_date')}
                     />
-                    <span className="date-separator">to</span>
+                    <span className="date-separator">{t('to_label')}</span>
                     <input
                         type="date"
                         value={dateFilter.end}
                         onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
                         className="date-input"
-                        title="End Date"
+                        title={t('end_date')}
                     />
                     {(dateFilter.start || dateFilter.end) && (
                         <button
@@ -1063,10 +1064,10 @@ const Invoices = () => {
                     onChange={(e) => setPaymentStatusFilter(e.target.value)}
                     style={{ padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid var(--navy-100)', outline: 'none', background: 'white', color: 'var(--navy-700)', fontSize: '0.9rem' }}
                 >
-                    <option value="all">All Payments</option>
-                    <option value="paid">Paid</option>
-                    <option value="unpaid">Unpaid</option>
-                    <option value="partial">Partial</option>
+                    <option value="all">{t('all_payments')}</option>
+                    <option value="paid">{t('paid')}</option>
+                    <option value="unpaid">{t('unpaid')}</option>
+                    <option value="partial">{t('partial')}</option>
                 </select>
 
                 <div className="invoice-header-actions">
@@ -1077,18 +1078,18 @@ const Invoices = () => {
                             className="export-select"
                             title="Filter Excel Export by Payment Method"
                         >
-                            <option value="all">All Methods</option>
-                            <option value="cash">Cash</option>
-                            <option value="upi">UPI</option>
-                            <option value="card">Card</option>
-                            <option value="upi+cash">UPI + Cash</option>
-                            <option value="upi+card">UPI + Card</option>
-                            <option value="bank_transfer">Bank Transfer</option>
-                            <option value="unpaid">Unpaid Only</option>
+                            <option value="all">{t('all_methods')}</option>
+                            <option value="cash">{t('cash')}</option>
+                            <option value="upi">{t('upi')}</option>
+                            <option value="card">{t('card')}</option>
+                            <option value="upi+cash">{t('upi_cash')}</option>
+                            <option value="upi+card">{t('upi_card')}</option>
+                            <option value="bank_transfer">{t('bank_transfer')}</option>
+                            <option value="unpaid">{t('unpaid_only')}</option>
                         </select>
                         <div className="divider-v"></div>
                         <button className="btn-export" onClick={exportToExcel}>
-                            <Download size={20} /> <span>Export</span>
+                            <Download size={20} /> <span>{t('export')}</span>
                         </button>
                     </div>
 
@@ -1098,10 +1099,10 @@ const Invoices = () => {
                             onClick={handleRunMigration}
                             disabled={isMigrating}
                             style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d' }}
-                            title="Update existing invoices to the new sequential format"
+                            title={t('migrate_ids_tooltip')}
                         >
                             <ShieldCheck size={18} style={{ marginRight: '6px' }} />
-                            {isMigrating ? 'Migrating...' : 'Migrate IDs'}
+                            {isMigrating ? t('migrating') : t('migrate_ids')}
                         </button>
                     )}
 
@@ -1110,7 +1111,7 @@ const Invoices = () => {
                             className="btn btn-primary btn-create-invoice"
                             onClick={() => setShowCreateModal(true)}
                         >
-                            <Plus size={20} /> <span>Create Manual Invoice</span>
+                            <Plus size={20} /> <span>{t('create_manual_invoice')}</span>
                         </button>
                     )}
                 </div>
@@ -1124,21 +1125,21 @@ const Invoices = () => {
                     ) : filteredInvoices.length === 0 ? (
                         <div className="empty-state">
                             <FileText size={48} />
-                            <p>No invoices found</p>
+                            <p>{t('no_invoices_found')}</p>
                         </div>
                     ) : (
                         <div className="table-container">
                             <table className="data-table">
                                 <thead>
                                     <tr>
-                                        <th>Invoice #</th>
-                                        <th>Date</th>
-                                        <th>Service</th>
-                                        <th>Amount</th>
-                                        <th>Payment</th>
-                                        <th>Owner Details</th>
-                                        <th>Vehicle</th>
-                                        <th>Actions</th>
+                                        <th>{t('invoice')} #</th>
+                                        <th>{t('date')}</th>
+                                        <th>{t('service')}</th>
+                                        <th>{t('amount')}</th>
+                                        <th>{t('payment')}</th>
+                                        <th>{t('owner_details')}</th>
+                                        <th>{t('vehicle')}</th>
+                                        <th>{t('actions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1148,16 +1149,16 @@ const Invoices = () => {
                                             <tr key={invoice.id}>
                                                 <td><strong>{invoice.invoiceNumber || invoice.bookingReference || invoice.id.slice(0, 8)}</strong></td>
                                                 <td>{invoice.bookingDate || invoice.invoiceDate}</td>
-                                                <td>{invoice.serviceName}</td>
+                                                <td>{t(invoice.serviceName)}</td>
                                                 <td>
                                                     <div>{formatCurrency(invoice.price)}</div>
                                                     {invoice.paidAmount > 0 && invoice.paidAmount < invoice.price && (
                                                         <>
-                                                            <small style={{ color: '#10b981', display: 'block' }}>Paid: {formatCurrency(invoice.paidAmount)}</small>
+                                                            <small style={{ color: '#10b981', display: 'block' }}>{t('paid_label')}: {formatCurrency(invoice.paidAmount)}</small>
                                                             {invoice.balanceNote && (
                                                                 <small style={{ color: '#f59e0b', display: 'block', fontStyle: 'italic' }}>
                                                                     "{invoice.balanceNote}"
-                                                                    {invoice.paymentDueDate && ` (Due: ${formatDate(invoice.paymentDueDate)})`}
+                                                                    {invoice.paymentDueDate && ` (${t('due_label')}: ${formatDate(invoice.paymentDueDate)})`}
                                                                 </small>
                                                             )}
                                                         </>
@@ -1167,9 +1168,9 @@ const Invoices = () => {
                                                     <span className={`badge ${payBadge.class}`}>{payBadge.label}</span>
                                                 </td>
                                                 <td>
-                                                    <strong>{invoice.customerName || 'Walk-in'}</strong>
+                                                    <strong>{invoice.customerName || t('walk_in')}</strong>
                                                     <br />
-                                                    <small style={{ color: 'var(--navy-500)' }}>{invoice.contactPhone || 'N/A'}</small>
+                                                    <small style={{ color: 'var(--navy-500)' }}>{invoice.contactPhone || t('not_available_short')}</small>
                                                 </td>
                                                 <td>{invoice.licensePlate}</td>
                                                 <td>
@@ -1197,15 +1198,15 @@ const Invoices = () => {
 
                                                                     setShowPaymentModal(true);
                                                                 }}
-                                                                title="Record Payment"
+                                                                title={t('record_payment')}
                                                             >
-                                                                💳 Pay
+                                                                💳 {t('pay')}
                                                             </button>
                                                         )}
                                                         <button
                                                             className="btn btn-sm btn-secondary"
                                                             onClick={() => generatePDF(invoice, false)}
-                                                            title="Print Invoice"
+                                                            title={t('print_invoice')}
                                                         >
                                                             <Printer size={14} />
                                                         </button>
@@ -1213,7 +1214,7 @@ const Invoices = () => {
                                                             <button
                                                                 className="btn btn-sm"
                                                                 onClick={() => generatePDF(invoice, true)}
-                                                                title="Print GST Bill"
+                                                                title={t('print_gst_bill')}
                                                                 style={{ background: '#10b981', color: 'white' }}
                                                             >
                                                                 <Receipt size={14} />
@@ -1222,7 +1223,7 @@ const Invoices = () => {
                                                         <button
                                                             className="btn btn-sm"
                                                             onClick={() => shareViaWhatsApp(invoice)}
-                                                            title="Share via WhatsApp"
+                                                            title={t('share_whatsapp')}
                                                             style={{ background: '#25D366', color: 'white' }}
                                                         >
                                                             <MessageCircle size={14} />
@@ -1232,7 +1233,7 @@ const Invoices = () => {
                                                             <button
                                                                 className="btn btn-sm btn-secondary"
                                                                 onClick={() => { setEditingInvoice(invoice); setShowEditModal(true); }}
-                                                                title="Edit Invoice"
+                                                                title={t('edit_invoice')}
                                                             >
                                                                 <Edit size={14} />
                                                             </button>
@@ -1242,7 +1243,7 @@ const Invoices = () => {
                                                             <button
                                                                 className="btn btn-sm btn-primary"
                                                                 onClick={() => restoreInvoice(invoice)}
-                                                                title="Restore Invoice"
+                                                                title={t('restore_invoice')}
                                                             >
                                                                 <RotateCcw size={14} />
                                                             </button>
@@ -1252,7 +1253,7 @@ const Invoices = () => {
                                                             <button
                                                                 className="btn btn-sm"
                                                                 onClick={() => archiveInvoice(invoice)}
-                                                                title="Archive Invoice"
+                                                                title={t('archive_invoice')}
                                                                 style={{ background: '#ef4444', color: 'white' }}
                                                             >
                                                                 <Trash2 size={14} />
@@ -1292,12 +1293,12 @@ const Invoices = () => {
                                     {invoice.paidAmount > 0 && invoice.paidAmount < invoice.price && (
                                         <div style={{ marginTop: '4px' }}>
                                             <p style={{ fontSize: '0.8rem', color: '#10b981' }}>
-                                                Paid: {formatCurrency(invoice.paidAmount)} (Bal: {formatCurrency(invoice.price - invoice.paidAmount)})
+                                                {t('paid_label')}: {formatCurrency(invoice.paidAmount)} ({t('balance_label')}: {formatCurrency(invoice.price - invoice.paidAmount)})
                                             </p>
                                             {invoice.balanceNote && (
                                                 <p style={{ fontSize: '0.8rem', color: '#f59e0b', fontStyle: 'italic' }}>
-                                                    Note: {invoice.balanceNote}
-                                                    {invoice.paymentDueDate && ` (Due: ${formatDate(invoice.paymentDueDate)})`}
+                                                    {t('note_label')}: {invoice.balanceNote}
+                                                    {invoice.paymentDueDate && ` (${t('due_label')}: ${formatDate(invoice.paymentDueDate)})`}
                                                 </p>
                                             )}
                                         </div>
@@ -1328,7 +1329,7 @@ const Invoices = () => {
                                                     setShowPaymentModal(true);
                                                 }}
                                             >
-                                                💳 Pay Now
+                                                💳 {t('pay_now')}
                                             </button>
                                         )}
                                         {/* Edit Button */}
@@ -1348,7 +1349,7 @@ const Invoices = () => {
                                                 onClick={() => restoreInvoice(invoice)}
                                                 style={{ flex: 1 }}
                                             >
-                                                <RotateCcw size={16} /> Restore
+                                                <RotateCcw size={16} /> {t('restore')}
                                             </button>
                                         )}
                                         {/* Archive Button */}
@@ -1566,18 +1567,16 @@ const Invoices = () => {
                     <div className="modal">
                         <div className="modal-content">
                             <div className="modal-header">
-                                <h2>💳 Record Payment</h2>
+                                <h2>💳 {t('record_payment')}</h2>
                                 <button className="modal-close" onClick={() => setShowPaymentModal(false)}>&times;</button>
                             </div>
                             <div className="modal-body">
                                 <div style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                                    <p><strong>Invoice:</strong> {paymentInvoice.bookingReference}</p>
-                                    <p><strong>Service:</strong> {paymentInvoice.serviceName}</p>
-                                    <p><strong>Invoice:</strong> {paymentInvoice.bookingReference}</p>
-                                    <p><strong>Service:</strong> {paymentInvoice.serviceName}</p>
+                                    <p><strong>{t('invoice')}:</strong> {paymentInvoice.bookingReference}</p>
+                                    <p><strong>{t('service')}:</strong> {paymentInvoice.serviceName}</p>
 
                                     <div className="form-group" style={{ marginBottom: '0.5rem' }}>
-                                        <label style={{ color: 'var(--navy-600)', fontSize: '0.85rem' }}>Base Service Price</label>
+                                        <label style={{ color: 'var(--navy-600)', fontSize: '0.85rem' }}>{t('base_service_price')}</label>
                                         <div style={{ fontSize: '1.1rem', fontWeight: '600' }}>
                                             {formatCurrency((paymentInvoice.price || 0) + (Number(paymentInvoice.discount) || 0) - (Number(paymentInvoice.extraCharge) || 0))}
                                             <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '400', marginLeft: '0.5rem' }}>(Original)</span>
@@ -1586,7 +1585,7 @@ const Invoices = () => {
 
                                     <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem' }}>
                                         <div className="form-group" style={{ flex: 1 }}>
-                                            <label style={{ color: 'var(--navy-600)', fontSize: '0.85rem' }}>Discount (-)</label>
+                                            <label style={{ color: 'var(--navy-600)', fontSize: '0.85rem' }}>{t('discount')} (-)</label>
                                             <input
                                                 type="number"
                                                 value={discount}
@@ -1609,7 +1608,7 @@ const Invoices = () => {
                                             />
                                         </div>
                                         <div className="form-group" style={{ flex: 1 }}>
-                                            <label style={{ color: 'var(--navy-600)', fontSize: '0.85rem' }}>Extra / Tip (+)</label>
+                                            <label style={{ color: 'var(--navy-600)', fontSize: '0.85rem' }}>{t('extra_charge')} (+)</label>
                                             <input
                                                 type="number"
                                                 value={extraCharge}
@@ -1633,6 +1632,25 @@ const Invoices = () => {
                                         </div>
                                     </div>
 
+                                    <div className="form-group" style={{ marginBottom: '0.5rem' }}>
+                                        <label>{t('balance_note_optional')}</label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g., Pending wallet settlement"
+                                            value={balanceNote}
+                                            onChange={(e) => setBalanceNote(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div className="form-group" style={{ marginBottom: '1rem' }}>
+                                        <label>{t('expected_due_date')}</label>
+                                        <input
+                                            type="date"
+                                            value={paymentDueDate}
+                                            onChange={(e) => setPaymentDueDate(e.target.value)}
+                                        />
+                                    </div>
+
                                     <div className="form-group" style={{ marginBottom: '1rem', paddingTop: '0.5rem', borderTop: '1px solid #e2e8f0' }}>
                                         <label style={{ color: 'var(--navy-800)', fontSize: '0.9rem', fontWeight: '600' }}>Final Bill Amount</label>
                                         <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--primary)' }}>
@@ -1648,6 +1666,12 @@ const Invoices = () => {
                                     </p>
                                 </div>
                                 <div style={{ marginBottom: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '8px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                        <label style={{ margin: 0 }}>{t('payment_splits')}</label>
+                                        <button className="btn btn-sm btn-secondary" onClick={handleAddSplit}>
+                                            <Plus size={14} /> {t('add_split')}
+                                        </button>
+                                    </div>
                                     <SplitPaymentSelector
                                         splits={paymentSplits}
                                         onAddSplit={handleAddSplit}
@@ -1658,9 +1682,9 @@ const Invoices = () => {
                                 </div>
                             </div>
                             <div className="modal-footer">
-                                <button className="btn btn-secondary" onClick={() => setShowPaymentModal(false)}>Cancel</button>
+                                <button className="btn btn-secondary" onClick={() => setShowPaymentModal(false)}>{t('cancel')}</button>
                                 <button className="btn btn-primary" onClick={updatePaymentStatus} disabled={processing}>
-                                    {processing ? 'Processing...' : 'Record Payment'}
+                                    {processing ? t('saving') : t('save_payment')}
                                 </button>
                             </div>
                         </div>
@@ -1690,6 +1714,8 @@ const Invoices = () => {
 };
 
 const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
+    const { t } = useTranslation();
+    const { formatCurrency } = useCurrency();
     const [formData, setFormData] = useState({
         customerName: invoice.customerName || '',
         contactPhone: invoice.contactPhone || '',
@@ -1745,7 +1771,7 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
             onClose();
         } catch (error) {
             console.error('Error updating invoice:', error);
-            alert('Failed to update invoice');
+            alert(t('error_occurred'));
         } finally {
             setLoading(false);
         }
@@ -1755,13 +1781,13 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
         <div className="modal">
             <div className="modal-content">
                 <div className="modal-header">
-                    <h2><Edit size={20} /> Edit Invoice</h2>
+                    <h2><Edit size={20} /> {t('edit_invoice')}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
                         <div className="form-group">
-                            <label>Customer Name</label>
+                            <label>{t('customer_name')}</label>
                             <input
                                 value={formData.customerName}
                                 onChange={e => setFormData({ ...formData, customerName: e.target.value })}
@@ -1769,7 +1795,7 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                             />
                         </div>
                         <div className="form-group">
-                            <label>Phone</label>
+                            <label>{t('phone')}</label>
                             <input
                                 value={formData.contactPhone}
                                 onChange={e => setFormData({ ...formData, contactPhone: e.target.value })}
@@ -1777,7 +1803,7 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                         </div>
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Make</label>
+                                <label>{t('make')}</label>
                                 <input
                                     value={formData.carMake}
                                     onChange={e => setFormData({ ...formData, carMake: e.target.value })}
@@ -1785,7 +1811,7 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                                 />
                             </div>
                             <div className="form-group">
-                                <label>Model</label>
+                                <label>{t('model')}</label>
                                 <input
                                     value={formData.carModel}
                                     onChange={e => setFormData({ ...formData, carModel: e.target.value })}
@@ -1794,7 +1820,7 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                             </div>
                         </div>
                         <div className="form-group">
-                            <label>License Plate</label>
+                            <label>{t('license_plate')}</label>
                             <input
                                 value={formData.licensePlate}
                                 onChange={e => setFormData({ ...formData, licensePlate: e.target.value })}
@@ -1802,7 +1828,7 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                             />
                         </div>
                         <div className="form-group">
-                            <label>Service Name</label>
+                            <label>{t('service_name')}</label>
                             <input
                                 value={formData.serviceName}
                                 onChange={e => setFormData({ ...formData, serviceName: e.target.value })}
@@ -1811,7 +1837,7 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                         </div>
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Amount (₹)</label>
+                                <label>{t('amount')}</label>
                                 <input
                                     type="number"
                                     value={formData.price}
@@ -1820,17 +1846,17 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                                 />
                             </div>
                             <div className="form-group">
-                                <label>Payment Method</label>
+                                <label>{t('payment_method')}</label>
                                 <select
                                     value={formData.paymentMode}
                                     onChange={e => setFormData({ ...formData, paymentMode: e.target.value })}
                                 >
-                                    <option value="none">None</option>
-                                    <option value="cash">Cash</option>
-                                    <option value="upi">UPI</option>
-                                    <option value="card">Card</option>
-                                    <option value="bank_transfer">Bank Transfer</option>
-                                    <option value="online">Online</option>
+                                    <option value="none">{t('none')}</option>
+                                    <option value="cash">{t('cash')}</option>
+                                    <option value="upi">{t('upi')}</option>
+                                    <option value="card">{t('card')}</option>
+                                    <option value="bank_transfer">{t('bank_transfer')}</option>
+                                    <option value="wallet">{t('wallet')}</option>
                                 </select>
                             </div>
                         </div>
@@ -1838,13 +1864,13 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                         {/* Additional Payment Status */}
                         <div style={{ padding: '0.75rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.5rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '4px' }}>
-                                <span style={{ color: '#64748b' }}>Currently Paid:</span>
-                                <span style={{ fontWeight: '600', color: 'var(--success)' }}>₹{(invoice.paidAmount || 0).toLocaleString()}</span>
+                                <span style={{ color: '#64748b' }}>{t('already_paid')}:</span>
+                                <span style={{ fontWeight: '600', color: 'var(--success)' }}>{formatCurrency(invoice.paidAmount || 0)}</span>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                                <span style={{ color: '#64748b' }}>Current Balance:</span>
+                                <span style={{ color: '#64748b' }}>{t('balance_due')}:</span>
                                 <span style={{ fontWeight: '700', color: (Number(formData.price) - (invoice.paidAmount || 0)) > 0 ? '#ef4444' : 'var(--success)' }}>
-                                    ₹{(Number(formData.price) - (invoice.paidAmount || 0)).toLocaleString()}
+                                    {formatCurrency(Number(formData.price) - (invoice.paidAmount || 0))}
                                 </span>
                             </div>
                         </div>
@@ -1879,10 +1905,10 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                                 </div>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: '600', color: isPaymentReceived ? '#166534' : 'var(--navy-800)', fontSize: '0.9rem' }}>
-                                        Add New Payment
+                                        {t('add_new_payment')}
                                     </div>
                                     <div style={{ fontSize: '0.75rem', color: isPaymentReceived ? '#166534' : '#64748b' }}>
-                                        Record an additional payment received right now
+                                        {t('record_additional_payment')}
                                     </div>
                                 </div>
                             </div>
@@ -1905,9 +1931,9 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
                         </div>
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancel')}</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Saving...' : 'Save Changes'}
+                            {loading ? t('saving') : t('save_changes')}
                         </button>
                     </div>
                 </form>
@@ -1917,6 +1943,7 @@ const EditInvoiceModal = ({ invoice, onClose, onSuccess }) => {
 };
 
 const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
+    const { t } = useTranslation();
     const [paymentSplits, setPaymentSplits] = useState([{ mode: 'cash', amount: '' }]);
     const [formData, setFormData] = useState({
         customerName: '',
@@ -2039,7 +2066,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                 }
 
                 await addDoc(collection(db, 'customer_amc_subscriptions'), {
-                    customerId: customerId,
+                    customerId: 'manual',
                     customerName: formData.customerName,
                     customerPhone: formData.contactPhone,
                     vehicleNumber: formData.licensePlate.toUpperCase(),
@@ -2068,7 +2095,13 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                 status: 'completed',
                 paymentStatus,
                 paidAmount,
-                paymentHistory,
+                paymentHistory: isPaymentReceived ? [{
+                    date: new Date().toISOString(),
+                    amount: paidAmount,
+                    splits: paymentSplits.filter(s => Number(s.amount) > 0).map(s => ({ mode: s.mode, amount: Number(s.amount) })),
+                    recordedBy: user?.uid || 'admin',
+                    note: 'Initial payment'
+                }] : [],
                 paymentMode: isPaymentReceived ? (paymentSplits[0]?.mode || 'cash') : 'none',
                 createdBy: user?.uid || 'unknown',
                 createdAt: serverTimestamp(),
@@ -2080,7 +2113,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
             onClose();
         } catch (error) {
             console.error('Error creating invoice:', error);
-            alert('Failed to create invoice');
+            alert(t('error_occurred'));
         } finally {
             setLoading(false);
         }
@@ -2090,7 +2123,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
         <div className="modal">
             <div className="modal-content modal-lg">
                 <div className="modal-header">
-                    <h2><Plus size={20} /> Create Manual Invoice</h2>
+                    <h2><Plus size={20} /> {t('create_manual_invoice')}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
 
@@ -2098,7 +2131,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                     <div className="modal-body">
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Date</label>
+                                <label>{t('date')}</label>
                                 <input
                                     type="date"
                                     value={formData.invoiceDate}
@@ -2107,7 +2140,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                                 />
                             </div>
                             <div className="form-group">
-                                <label>Phone</label>
+                                <label>{t('phone')}</label>
                                 <input
                                     value={formData.contactPhone}
                                     onChange={e => setFormData({ ...formData, contactPhone: e.target.value })}
@@ -2117,7 +2150,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                         </div>
 
                         <div className="form-group">
-                            <label>Customer Name *</label>
+                            <label>{t('customer_name')} *</label>
                             <input
                                 value={formData.customerName}
                                 onChange={e => setFormData({ ...formData, customerName: e.target.value })}
@@ -2127,7 +2160,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                         </div>
 
                         <div className="form-group">
-                            <label>Vehicle Class *</label>
+                            <label>{t('vehicle_class')} *</label>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
                                 {['hatchback', 'sedan', 'suv'].map(type => (
                                     <button
@@ -2145,7 +2178,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                                             textTransform: 'capitalize'
                                         }}
                                     >
-                                        {type === 'suv' ? 'SUV' : type}
+                                        {t(type)}
                                     </button>
                                 ))}
                             </div>
@@ -2153,7 +2186,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
 
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Make</label>
+                                <label>{t('make')}</label>
                                 <input
                                     value={formData.carMake}
                                     onChange={e => setFormData({ ...formData, carMake: e.target.value })}
@@ -2161,7 +2194,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                                 />
                             </div>
                             <div className="form-group">
-                                <label>Model</label>
+                                <label>{t('model')}</label>
                                 <input
                                     value={formData.carModel}
                                     onChange={e => setFormData({ ...formData, carModel: e.target.value })}
@@ -2170,7 +2203,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                             </div>
                         </div>
                         <div className="form-group">
-                            <label>License Plate</label>
+                            <label>{t('license_plate')}</label>
                             <input
                                 value={formData.licensePlate}
                                 onChange={e => setFormData({ ...formData, licensePlate: e.target.value })}
@@ -2181,7 +2214,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
 
                         {/* Searchable Service Dropdown */}
                         <div className="form-group" style={{ position: 'relative' }}>
-                            <label>Service Name *</label>
+                            <label>{t('service_name')} *</label>
                             <input
                                 value={formData.serviceName}
                                 onChange={e => {
@@ -2191,7 +2224,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                                 onFocus={() => setShowServiceDropdown(true)}
                                 onBlur={() => setTimeout(() => setShowServiceDropdown(false), 300)}
                                 required
-                                placeholder="Search or type service name..."
+                                placeholder={t('search_service_placeholder')}
                                 autoComplete="off"
                             />
                             {showServiceDropdown && formData.serviceName.length > 0 && filteredServices.length > 0 && (
@@ -2243,7 +2276,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
 
                         <div className="form-row" style={{ marginTop: '1rem', borderTop: '2px solid #f1f5f9', paddingTop: '1.5rem' }}>
                             <div className="form-group">
-                                <label style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--primary)' }}>Amount (₹)</label>
+                                <label style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--primary)' }}>{t('amount')}</label>
                                 <input
                                     type="number"
                                     value={formData.price}
@@ -2289,7 +2322,7 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                                         {isPaymentReceived && <CheckCircle2 size={16} color="white" />}
                                     </div>
                                     <div style={{ fontWeight: '600', color: isPaymentReceived ? '#166534' : 'var(--navy-800)', fontSize: '0.9rem' }}>
-                                        {isPaymentReceived ? 'Payment Recorded' : 'Mark as Paid'}
+                                        {isPaymentReceived ? t('payment_recorded_toggle') : t('mark_as_paid')}
                                     </div>
                                 </div>
                             </div>
@@ -2319,9 +2352,9 @@ const CreateInvoiceModal = ({ onClose, onSuccess, user }) => {
                         )}
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancel')}</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Creating...' : 'Create Invoice'}
+                            {loading ? t('creating') : t('create_invoice')}
                         </button>
                     </div>
                 </form>

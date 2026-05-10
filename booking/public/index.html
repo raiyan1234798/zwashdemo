@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zwash — Premium Car Care | Book Now</title>
+    <meta name="description" content="Zwash is the #1 platform for premium car wash businesses. Book your appointment online with any Zwash-powered partner near you.">
+    <link rel="icon" href="/logo.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+    <!-- NAV (language + currency now inline) -->
+    <nav id="nav">
+        <div class="nav-inner">
+            <a href="#" class="nav-logo">
+                <img src="/logo.png" alt="Zwash" class="nav-logo-img">
+            </a>
+            <div class="nav-links" id="navLinks">
+                <a href="#about" data-i18n="nav_about">About</a>
+                <a href="#services" data-i18n="nav_services">Services</a>
+                <a href="#pricing" data-i18n="nav_pricing">Plans</a>
+                <a href="#partners" data-i18n="nav_partners">Our Partners</a>
+                <a href="#contact" data-i18n="nav_contact">Contact</a>
+            </div>
+            <div class="nav-controls">
+                <!-- Language dropdown -->
+                <div class="nav-dropdown" id="langDropdown">
+                    <button class="nav-pill" id="langBtn">
+                        <span id="langFlag">🇺🇸</span>
+                        <span id="langLabel">EN</span>
+                        <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+                    </button>
+                    <div class="nav-dropdown-menu" id="langMenu">
+                        <div class="dropdown-search-wrap"><input type="text" id="langSearch" placeholder="Search language..." class="dropdown-search"></div>
+                        <div id="langList"></div>
+                    </div>
+                </div>
+                <!-- Currency dropdown -->
+                <div class="nav-dropdown" id="currDropdown">
+                    <button class="nav-pill" id="currBtn">
+                        <span id="currLabel">USD</span>
+                        <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+                    </button>
+                    <div class="nav-dropdown-menu" id="currMenu">
+                        <div class="dropdown-search-wrap"><input type="text" id="currSearch" placeholder="Search currency..." class="dropdown-search"></div>
+                        <div id="currList"></div>
+                    </div>
+                </div>
+                <a href="#booking" class="nav-cta" data-i18n="nav_book_now">Enquiries</a>
+            </div>
+            <button class="nav-hamburger" id="hamburger" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- HERO with scroll video -->
+    <section id="hero">
+        <div class="hero-video-wrap">
+            <canvas id="heroCanvas" width="1280" height="720"></canvas>
+            <div class="hero-overlay"></div>
+        </div>
+        <div class="hero-content">
+            <div class="hero-badge" data-i18n="hero_badge">🏆 #1 Premium Car Care Platform</div>
+            <h1 data-i18n="hero_title">Your Car Deserves<br><span class="gradient-text">The Royal Treatment</span></h1>
+            <p class="hero-sub" data-i18n="hero_sub">From ceramic coatings to detailed washes — we bring showroom-level care right to your door. Trusted by 500+ businesses worldwide.</p>
+            <div class="hero-actions">
+                <a href="#partners" class="btn-primary-lg" data-i18n="hero_btn_book">Find a Partner</a>
+                <a href="#about" class="btn-ghost-lg" data-i18n="hero_btn_explore">About Zwash ↓</a>
+            </div>
+            <div class="hero-stats">
+                <div class="hero-stat"><strong>12+</strong><span data-i18n="stat_countries">Countries</span></div>
+                <div class="hero-stat-divider"></div>
+                <div class="hero-stat"><strong>500+</strong><span data-i18n="stat_businesses">Businesses</span></div>
+                <div class="hero-stat-divider"></div>
+                <div class="hero-stat"><strong>4.9★</strong><span data-i18n="stat_rating">Rating</span></div>
+                <div class="hero-stat-divider"></div>
+                <div class="hero-stat"><strong>99.9%</strong><span data-i18n="stat_uptime">Uptime</span></div>
+            </div>
+        </div>
+        <div class="scroll-indicator">
+            <div class="scroll-arrow"></div>
+            <span data-i18n="scroll_explore">Scroll to explore</span>
+        </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section id="about">
+        <div class="container">
+            <div class="about-grid">
+                <div class="about-text">
+                    <span class="section-tag" data-i18n="about_tag">About the Platform</span>
+                    <h2 data-i18n="about_title">Why Zwash is the #1 Choice for Car Wash Owners</h2>
+                    <p data-i18n="about_p1">Running a car wash is chaotic. Between managing staff, dealing with customer disputes over pre-existing damage, and preventing inventory theft, it's hard to focus on growth.</p>
+                    <p data-i18n="about_p2">Zwash ERP solves this. From our <strong>Pre-Wash Vehicle Inspection module</strong> that logs damage before you touch a car, to an automated payroll and booking engine, Zwash brings enterprise-grade management to your local wash.</p>
+                    <ul class="about-bullets">
+                        <li data-i18n="about_b1">✅ Prevent liability claims with detailed damage inspections</li>
+                        <li data-i18n="about_b2">✅ Stop revenue leaks with automated material tracking</li>
+                        <li data-i18n="about_b3">✅ Get your own customized public booking page</li>
+                        <li data-i18n="about_b4">✅ Manage multiple locations and employees from one dashboard</li>
+                    </ul>
+                    <a href="#partners" class="btn-primary-lg" style="display:inline-block;margin-top:32px" data-i18n="about_cta">Find a Zwash Partner Near You</a>
+                </div>
+                <div class="about-image">
+                    <img src="/about-image.png" alt="Zwash Premium Car Care">
+                    <div class="about-float-card">
+                        <strong>500+</strong>
+                        <span>Businesses Trust Zwash</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SERVICES -->
+    <section id="services">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag" data-i18n="services_tag">Our Services</span>
+                <h2 data-i18n="services_title">Premium Car Care <span class="gradient-text">Services</span></h2>
+                <p data-i18n="services_sub">Choose from our professionally curated service catalogue</p>
+            </div>
+            <div class="category-tabs" id="categoryTabs">
+                <button class="cat-tab active" data-cat="all" data-i18n="cat_all">All</button>
+            </div>
+            <div class="services-grid" id="servicesGrid">
+                <div class="loading-spinner"><div class="spinner"></div><p data-i18n="loading_services">Loading services...</p></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section id="how-it-works">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag" data-i18n="how_tag">How It Works</span>
+                <h2 data-i18n="how_title">Book in <span class="gradient-text">3 Easy Steps</span></h2>
+            </div>
+            <div class="steps-row">
+                <div class="step-card">
+                    <div class="step-num">01</div>
+                    <h3 data-i18n="step1_title">Choose Your Partner</h3>
+                    <p data-i18n="step1_desc">Find a Zwash-powered car wash near you and browse their service catalogue.</p>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-card">
+                    <div class="step-num">02</div>
+                    <h3 data-i18n="step2_title">Pick a Time Slot</h3>
+                    <p data-i18n="step2_desc">Select your preferred date and time. We'll confirm instantly via WhatsApp.</p>
+                </div>
+                <div class="step-connector"></div>
+                <div class="step-card">
+                    <div class="step-num">03</div>
+                    <h3 data-i18n="step3_title">We Handle the Rest</h3>
+                    <p data-i18n="step3_desc">Sit back and relax. Your car will be returned in showroom condition.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PRICING -->
+    <section id="pricing">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag" data-i18n="pricing_tag">Zwash ERP Plans</span>
+                <h2 data-i18n="pricing_title">Business <span class="gradient-text">Plans</span></h2>
+                <p data-i18n="pricing_sub">Choose the perfect operating system for your car wash business.</p>
+            </div>
+            
+            <div class="erp-plans-grid">
+                <!-- Starter Plan -->
+                <div class="erp-plan-card">
+                    <div class="erp-plan-badge">Most Popular</div>
+                    <h3 data-i18n="plan1_name">Basic</h3>
+                    <div class="erp-plan-price" id="planPrice1"><span class="price-symbol">$</span>49<span class="price-period">/mo</span></div>
+                    <ul class="erp-plan-features">
+                        <li><span class="check">✓</span> <span data-i18n="p1_f1">1 Location</span></li>
+                        <li><span class="check">✓</span> <span data-i18n="p1_f2">Booking Portal</span></li>
+                        <li><span class="check">✓</span> <span data-i18n="p1_f3">Damage Inspection</span></li>
+                        <li><span class="check">✓</span> <span data-i18n="p1_f4">WhatsApp Notifications</span></li>
+                    </ul>
+                    <button class="btn-primary-lg erp-contact-trigger" data-plan="Basic" data-i18n="plan_cta">Get Started</button>
+                </div>
+                <!-- Professional Plan -->
+                <div class="erp-plan-card featured">
+                    <div class="erp-plan-badge">Best Value</div>
+                    <h3 data-i18n="plan2_name">Standard</h3>
+                    <div class="erp-plan-price" id="planPrice2"><span class="price-symbol">$</span>99<span class="price-period">/mo</span></div>
+                    <ul class="erp-plan-features">
+                        <li><span class="check">✓</span> <span data-i18n="p2_f1">3 Locations</span></li>
+                        <li><span class="check">✓</span> <span data-i18n="p2_f2">Inventory Management</span></li>
+                        <li><span class="check">✓</span> <span data-i18n="p2_f3">Employee Payroll</span></li>
+                        <li><span class="check">✓</span> <span data-i18n="p2_f4">Advanced Analytics</span></li>
+                    </ul>
+                    <button class="btn-primary-lg erp-contact-trigger" data-plan="Standard" data-i18n="plan_cta">Get Started</button>
+                </div>
+                <!-- Enterprise Plan -->
+                <div class="erp-plan-card">
+                    <h3 data-i18n="plan3_name">Premium</h3>
+                    <div class="erp-plan-price" id="planPrice3" style="font-size: 2rem;" data-i18n="plan_custom">Custom</div>
+                    <ul class="erp-plan-features">
+                        <li><span class="check">✓</span> <span data-i18n="p3_f1">Unlimited Locations</span></li>
+                        <li><span class="check">✓</span> <span data-i18n="p3_f2">Custom Branding</span></li>
+                        <li><span class="check">✓</span> <span data-i18n="p3_f3">API Access</span></li>
+                        <li><span class="check">✓</span> <span data-i18n="p3_f4">Dedicated Support</span></li>
+                    </ul>
+                    <button class="btn-ghost-lg erp-contact-trigger" data-plan="Premium" data-i18n="plan_cta">Contact Sales</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- OUR PARTNERS / COMPANIES -->
+    <section id="partners">
+        <div class="container">
+            <div class="section-header">
+                <span class="section-tag" data-i18n="partners_tag">Our Partners</span>
+                <h2 data-i18n="partners_title">Book with a <span class="gradient-text">Zwash Partner</span></h2>
+                <p data-i18n="partners_sub">Find verified Zwash-powered car wash businesses and book directly through their portal.</p>
+            </div>
+            <div class="partners-search">
+                <input type="text" id="partnerSearch" placeholder="🔍  Search by city, name..." class="partner-search-input">
+            </div>
+            <div class="partners-grid" id="partnersGrid">
+                <div class="loading-spinner"><div class="spinner"></div><p>Loading partners...</p></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- BOOKING FORM -->
+    <section id="booking">
+        <div class="container">
+            <div class="booking-wrapper">
+                <div class="booking-info">
+                    <span class="section-tag" data-i18n="book_tag">Book Now</span>
+                    <h2 data-i18n="book_title">Ready to Transform <span class="gradient-text">Your Car?</span></h2>
+                    <p data-i18n="book_sub">Fill out the form and our team will confirm your booking within minutes.</p>
+                    <div class="booking-features">
+                        <div class="bf"><span>✓</span> <span data-i18n="bf1">Instant WhatsApp Confirmation</span></div>
+                        <div class="bf"><span>✓</span> <span data-i18n="bf2">Trained &amp; Certified Technicians</span></div>
+                        <div class="bf"><span>✓</span> <span data-i18n="bf3">100% Satisfaction Guarantee</span></div>
+                        <div class="bf"><span>✓</span> <span data-i18n="bf4">Free Pickup &amp; Delivery</span></div>
+                    </div>
+                </div>
+                <form id="bookingForm" class="booking-form">
+                    <div class="form-row">
+                        <div class="form-group"><label data-i18n="form_name">Full Name *</label><input type="text" name="name" required placeholder="John Doe"></div>
+                        <div class="form-group"><label data-i18n="form_phone">Phone Number *</label><input type="tel" name="phone" required placeholder="+91 98765 43210"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label data-i18n="form_email">Email</label><input type="email" name="email" placeholder="john@example.com"></div>
+                        <div class="form-group">
+                            <label data-i18n="form_vehicle">Vehicle Type *</label>
+                            <select name="vehicleType" required>
+                                <option value="" data-i18n="select_vehicle">Select vehicle</option>
+                                <option value="hatchback">Hatchback</option>
+                                <option value="sedan">Sedan</option>
+                                <option value="suv">SUV</option>
+                                <option value="luxury_suv">Luxury SUV</option>
+                                <option value="bike">Bike</option>
+                                <option value="scooter">Scooter</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="form_service">Service *</label>
+                        <select name="service" id="serviceSelect" required>
+                            <option value="" data-i18n="choose_service">Choose a service</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label data-i18n="form_date">Preferred Date *</label><input type="date" name="date" required></div>
+                        <div class="form-group">
+                            <label data-i18n="form_time">Preferred Time *</label>
+                            <select name="time" required>
+                                <option value="" data-i18n="select_time">Select time</option>
+                                <option value="08:00">8:00 AM</option>
+                                <option value="09:00">9:00 AM</option>
+                                <option value="10:00">10:00 AM</option>
+                                <option value="11:00">11:00 AM</option>
+                                <option value="12:00">12:00 PM</option>
+                                <option value="14:00">2:00 PM</option>
+                                <option value="15:00">3:00 PM</option>
+                                <option value="16:00">4:00 PM</option>
+                                <option value="17:00">5:00 PM</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group"><label data-i18n="form_notes">Special Requests</label><textarea name="notes" rows="3" placeholder="Any special requirements..." id="notesArea"></textarea></div>
+                    <button type="submit" class="btn-submit" id="submitBtn" data-i18n="btn_submit">Submit Booking Request</button>
+                    <p class="form-note" data-i18n="form_note">We'll confirm your booking via WhatsApp within 15 minutes.</p>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA FOR BUSINESS OWNERS -->
+    <section id="cta-business" style="padding: 100px 0; background: linear-gradient(135deg, #0a0f1e, #060b18); border-top: 1px solid rgba(255,255,255,0.05);">
+        <div class="container" style="text-align: center;">
+            <div class="section-tag" data-i18n="cta_biz_tag">For Business Owners</div>
+            <h2 style="font-size: 2.5rem; font-weight: 800; margin-bottom: 20px;" data-i18n="cta_biz_title">Ready to Scale Your Car Wash Business?</h2>
+            <p style="color: #94a3b8; font-size: 1.1rem; max-width: 700px; margin: 0 auto 40px;" data-i18n="cta_biz_sub">Join 500+ successful businesses using Zwash ERP to automate bookings, prevent staff theft, and manage liability. Get your own booking portal today.</p>
+            <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+                <a href="https://zwash-erp.pages.dev" class="btn-primary-lg" data-i18n="cta_biz_btn">Start Free ERP Demo</a>
+                <a href="#contact" class="btn-ghost-lg" data-i18n="cta_biz_contact">Talk to an Expert</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ERP CONTACT MODAL -->
+    <div id="erpContactModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <button class="modal-close" onclick="closeModal('erpContactModal')">&times;</button>
+            <h2 id="erpModalTitle">Contact Zwash Sales</h2>
+            <p id="erpModalSub">Interested in the Professional Plan? Choose how you'd like to connect.</p>
+            
+            <div class="erp-contact-options" style="display: flex; flex-direction: column; gap: 16px; margin-top: 32px;">
+                <a href="mailto:zwash.official@gmail.com" class="btn-ghost-lg" style="justify-content: center; border: 1px solid rgba(255,255,255,0.1)">
+                    📧 Email: zwash.official@gmail.com
+                </a>
+                <a href="tel:+919876543210" class="btn-ghost-lg" style="justify-content: center; border: 1px solid rgba(255,255,255,0.1)">
+                    📞 Call: +91 9876543210
+                </a>
+                
+                <div style="margin: 24px 0; display: flex; align-items: center; gap: 16px;">
+                    <div style="flex:1; height:1px; background: rgba(255,255,255,0.1)"></div>
+                    <span style="color: #64748b; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em;">Or Send Message</span>
+                    <div style="flex:1; height:1px; background: rgba(255,255,255,0.1)"></div>
+                </div>
+
+                <form id="erpEnquiryForm">
+                    <div class="form-group">
+                        <input type="text" id="erpName" placeholder="Full Name" required style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 12px 16px; border-radius: 12px; width: 100%; margin-bottom: 12px;">
+                    </div>
+                    <div class="form-group">
+                        <input type="tel" id="erpPhone" placeholder="Phone Number" required style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 12px 16px; border-radius: 12px; width: 100%; margin-bottom: 12px;">
+                    </div>
+                    <div class="form-group">
+                        <input type="email" id="erpEmail" placeholder="Business Email" required style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 12px 16px; border-radius: 12px; width: 100%; margin-bottom: 12px;">
+                    </div>
+                    <div class="form-group">
+                        <textarea id="erpMessage" placeholder="How can we help you?" required style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 12px 16px; border-radius: 12px; width: 100%; min-height: 100px; margin-bottom: 20px;"></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary-lg" style="width: 100%; justify-content: center;">Send Message to Superadmin</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <footer id="contact">
+        <div class="container">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <img src="/logo.png" alt="Zwash" class="footer-logo">
+                    <h3>ZWASH</h3>
+                    <p data-i18n="footer_desc">The Operating System for Premium Car Care Businesses. Trusted globally.</p>
+                    <div class="footer-socials">
+                        <a href="#" class="social-link" title="WhatsApp">💬</a>
+                        <a href="#" class="social-link" title="Instagram">📸</a>
+                        <a href="#" class="social-link" title="LinkedIn">💼</a>
+                    </div>
+                </div>
+                <div class="footer-col">
+                    <h4 data-i18n="footer_links">Quick Links</h4>
+                    <a href="#about" data-i18n="nav_about">About</a>
+                    <a href="#services" data-i18n="nav_services">Services</a>
+                    <a href="#pricing" data-i18n="nav_pricing">Plans</a>
+                    <a href="#partners" data-i18n="nav_partners">Our Partners</a>
+                    <a href="#booking" data-i18n="nav_book_now">Book Now</a>
+                </div>
+                <div class="footer-col">
+                    <h4 data-i18n="footer_contact">Contact</h4>
+                    <p>📍 Demo Location, India</p>
+                    <p>📞 +91 98765 43210</p>
+                    <p>✉️ hello@zwash.in</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p data-i18n="footer_rights">© 2025 Zwash Technologies. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- SUCCESS MODAL -->
+    <div id="successModal" class="modal-overlay" style="display:none;">
+        <div class="modal-box">
+            <div class="modal-icon">✅</div>
+            <h3 data-i18n="modal_success">Booking Submitted!</h3>
+            <p data-i18n="modal_success_desc">We'll confirm your appointment via WhatsApp shortly.</p>
+            <button onclick="document.getElementById('successModal').style.display='none'" class="btn-primary-lg" style="width:100%" data-i18n="btn_done">Done</button>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="https://unpkg.com/i18next@23.10.1/i18next.min.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script type="module" src="/app.js"></script>
+</body>
+</html>

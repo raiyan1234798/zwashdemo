@@ -14,8 +14,12 @@ import {
     Eye
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useTranslation } from 'react-i18next';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 const CRMHistory = () => {
+    const { t } = useTranslation();
+    const { formatCurrency } = useCurrency();
     const [loading, setLoading] = useState(true);
     const [workbook, setWorkbook] = useState(null);
     const [activeSheet, setActiveSheet] = useState(0);
@@ -149,39 +153,44 @@ const CRMHistory = () => {
     const formatCellValue = (value, colIndex) => {
         if (value === null || value === undefined || value === '') return '-';
 
-        // Format phone numbers
-        if (headers[colIndex]?.toLowerCase().includes('mobile') ||
-            headers[colIndex]?.toLowerCase().includes('phone')) {
-            return value.toString();
+        const header = headers[colIndex]?.toLowerCase() || '';
+
+        // REDACTION LOGIC for privacy & production readiness
+        
+        // Mask phone numbers (e.g., 9790******)
+        if (header.includes('mobile') || header.includes('phone')) {
+            const str = value.toString();
+            return str.length > 5 ? str.substring(0, 4) + '******' : '******';
+        }
+
+        // Mask vehicle numbers (e.g., TN09******)
+        if (header.includes('vehicle number') || header.includes('reg') || header.includes('number')) {
+            const str = value.toString().toUpperCase();
+            return str.length > 4 ? str.substring(0, 4) + '****' : '****';
+        }
+
+        // Mask places (e.g., ASR****)
+        if (header.includes('place') || header.includes('location')) {
+            const str = value.toString();
+            return str.length > 3 ? str.substring(0, 3) + '****' : '****';
         }
 
         // Format vehicle type
-        if (headers[colIndex]?.toLowerCase().includes('vehi type') ||
-            headers[colIndex]?.toLowerCase() === 'type') {
+        if (header.includes('vehi type') || header === 'type') {
             return getVehicleTypeLabel(value);
         }
 
         // Format bill amount
-        if (headers[colIndex]?.toLowerCase().includes('bill') ||
-            headers[colIndex]?.toLowerCase().includes('amount')) {
+        if (header.includes('bill') || header.includes('amount')) {
             const num = parseFloat(value);
             if (!isNaN(num)) {
-                return new Intl.NumberFormat('en-IN', {
-                    style: 'currency',
-                    currency: 'INR',
-                    maximumFractionDigits: 0
-                }).format(num);
+                return formatCurrency(num);
             }
         }
 
         // Format date columns - Excel stores dates as serial numbers
-        if (headers[colIndex]?.toLowerCase().includes('date') ||
-            headers[colIndex]?.toLowerCase().includes('created') ||
-            headers[colIndex]?.toLowerCase().includes('updated')) {
-            // Check if it's a number (Excel serial date)
+        if (header.includes('date') || header.includes('created') || header.includes('updated')) {
             if (typeof value === 'number' && value > 25000 && value < 60000) {
-                // Convert Excel serial number to JavaScript Date
-                // Excel dates start from 1900-01-01 (serial 1)
                 const excelEpoch = new Date(1899, 11, 30);
                 const date = new Date(excelEpoch.getTime() + value * 24 * 60 * 60 * 1000);
                 return date.toLocaleDateString('en-IN', {
@@ -190,7 +199,6 @@ const CRMHistory = () => {
                     year: 'numeric'
                 });
             }
-            // If it's already a date string, return as-is
             if (typeof value === 'string' && value.match(/\d{1,4}[-/]\d{1,2}[-/]\d{1,4}/)) {
                 return value;
             }
@@ -236,15 +244,15 @@ const CRMHistory = () => {
             <div className="crm-history-page">
                 <div className="page-header">
                     <div>
-                        <h1><Database size={28} /> CRM History</h1>
-                        <p className="subtitle">Loading old CRM data...</p>
+                        <h1><Database size={28} /> {t('crm_history')}</h1>
+                        <p className="subtitle">{t('loading_crm_data', { defaultValue: 'Loading old CRM data...' })}</p>
                     </div>
                 </div>
                 <div className="card">
                     <div className="card-body">
                         <div className="empty-state">
                             <Loader size={48} className="spin" />
-                            <p>Loading Excel file...</p>
+                            <p>{t('loading_excel', { defaultValue: 'Loading Excel file...' })}</p>
                         </div>
                     </div>
                 </div>
@@ -257,8 +265,8 @@ const CRMHistory = () => {
             <div className="crm-history-page">
                 <div className="page-header">
                     <div>
-                        <h1><Database size={28} /> CRM History</h1>
-                        <p className="subtitle">Old customer data visualization</p>
+                        <h1><Database size={28} /> {t('crm_history')}</h1>
+                        <p className="subtitle">{t('old_crm_subtitle', { defaultValue: 'Old customer data visualization' })}</p>
                     </div>
                 </div>
                 <div className="card">
@@ -277,12 +285,12 @@ const CRMHistory = () => {
         <div className="crm-history-page">
             <div className="page-header">
                 <div>
-                    <h1><Database size={28} /> CRM History</h1>
-                    <p className="subtitle">Old customer data from Excel • {stats.totalRecords} records</p>
+                    <h1><Database size={28} /> {t('crm_history')}</h1>
+                    <p className="subtitle">{t('old_crm_records_subtitle', { defaultValue: 'Old customer data from Excel • {{count}} records', count: stats.totalRecords })}</p>
                 </div>
                 <div className="header-actions">
                     <button className="btn btn-secondary" onClick={exportCurrentSheet}>
-                        <Download size={18} /> Export
+                        <Download size={18} /> {t('export')}
                     </button>
                 </div>
             </div>
@@ -309,7 +317,7 @@ const CRMHistory = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{stats.totalRecords}</span>
-                        <span className="stat-label">Total Records</span>
+                        <span className="stat-label">{t('total_records', { defaultValue: 'Total Records' })}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -318,7 +326,7 @@ const CRMHistory = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{stats.uniqueCustomers}</span>
-                        <span className="stat-label">Unique Phones</span>
+                        <span className="stat-label">{t('unique_phones', { defaultValue: 'Unique Phones' })}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -327,7 +335,7 @@ const CRMHistory = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{stats.uniqueVehicles}</span>
-                        <span className="stat-label">Unique Vehicles</span>
+                        <span className="stat-label">{t('unique_vehicles', { defaultValue: 'Unique Vehicles' })}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -336,7 +344,7 @@ const CRMHistory = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{stats.filteredRecords}</span>
-                        <span className="stat-label">Filtered Results</span>
+                        <span className="stat-label">{t('filtered_results', { defaultValue: 'Filtered Results' })}</span>
                     </div>
                 </div>
             </div>
@@ -347,7 +355,7 @@ const CRMHistory = () => {
                     <Search size={18} />
                     <input
                         type="text"
-                        placeholder="Search across all columns..."
+                        placeholder={t('search_all_columns_placeholder', { defaultValue: 'Search across all columns...' })}
                         value={searchTerm}
                         onChange={(e) => {
                             setSearchTerm(e.target.value);
@@ -363,7 +371,7 @@ const CRMHistory = () => {
                     {paginatedData.length === 0 ? (
                         <div className="empty-state">
                             <Database size={48} />
-                            <p>No records found</p>
+                            <p>{t('no_records_found', { defaultValue: 'No records found' })}</p>
                         </div>
                     ) : (
                         <>
@@ -419,9 +427,9 @@ const CRMHistory = () => {
                                                 </span>
                                             </div>
                                             <div className="booking-card-body">
-                                                <p><Phone size={14} /> {row.data[phoneIdx] || '-'}</p>
-                                                <p><Car size={14} /> {row.data[vehicleIdx] || '-'}</p>
-                                                <p>{row.data[placeIdx] || '-'}</p>
+                                                <p><Phone size={14} /> {formatCellValue(row.data[phoneIdx], phoneIdx)}</p>
+                                                <p><Car size={14} /> {formatCellValue(row.data[vehicleIdx], vehicleIdx)}</p>
+                                                <p>{formatCellValue(row.data[placeIdx], placeIdx)}</p>
                                             </div>
                                         </div>
                                     );
@@ -439,7 +447,7 @@ const CRMHistory = () => {
                                         <ChevronLeft size={16} />
                                     </button>
                                     <span className="pagination-info">
-                                        Page {currentPage} of {totalPages}
+                                        {t('page_info', { current: currentPage, total: totalPages, defaultValue: 'Page {{current}} of {{total}}' })}
                                     </span>
                                     <button
                                         className="btn btn-sm btn-secondary"

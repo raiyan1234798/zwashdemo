@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { db } from '../config/firebase';
 import {
     collection,
@@ -39,12 +41,19 @@ import {
     CheckCircle,
     Trash2,
     Archive,
-    RotateCcw
+    RotateCcw,
+    MessageCircle
 } from 'lucide-react';
 import SplitPaymentSelector from '../components/SplitPaymentSelector';
 
 const Bookings = () => {
-    const { hasPermission, userProfile } = useAuth();
+    const { t } = useTranslation();
+    const { hasPermission, userProfile, user } = useAuth();
+    const { 
+        currency: currentCurrencyCode, 
+        currentCurrency,
+        formatCurrency: globalFormatCurrency 
+    } = useCurrency();
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
@@ -62,8 +71,10 @@ const Bookings = () => {
     const [dateFilter, setDateFilter] = useState({ start: '', end: '' });
 
     useEffect(() => {
-        fetchBookings();
-    }, [filter, viewMode]);
+        if (userProfile?.companyId) {
+            fetchBookings();
+        }
+    }, [filter, viewMode, currentCurrencyCode, userProfile?.companyId]);
 
     const fetchBookings = async () => {
         try {
@@ -73,17 +84,20 @@ const Bookings = () => {
             if (viewMode === 'archived') {
                 q = query(
                     collection(db, 'archivedBookings'),
+                    where('companyId', '==', userProfile?.companyId || 'NA'),
                     orderBy('bookingDate', 'desc')
                 );
             } else {
                 if (filter === 'all') {
                     q = query(
                         collection(db, 'bookings'),
+                        where('companyId', '==', userProfile?.companyId || 'NA'),
                         orderBy('bookingDate', 'desc')
                     );
                 } else {
                     q = query(
                         collection(db, 'bookings'),
+                        where('companyId', '==', userProfile?.companyId || 'NA'),
                         where('status', '==', filter),
                         orderBy('bookingDate', 'desc')
                     );
@@ -106,15 +120,15 @@ const Bookings = () => {
     const getStatusBadge = (status) => {
         switch (status) {
             case 'pending_confirmation':
-                return { label: 'Pending', class: 'badge-warning' };
+                return { label: t('pending'), class: 'badge-warning' };
             case 'confirmed':
-                return { label: 'Confirmed', class: 'badge-info' };
+                return { label: t('confirmed'), class: 'badge-info' };
             case 'in_progress':
-                return { label: 'In Progress', class: 'badge-primary' };
+                return { label: t('in_progress'), class: 'badge-primary' };
             case 'completed':
-                return { label: 'Completed', class: 'badge-success' };
+                return { label: t('completed'), class: 'badge-success' };
             case 'cancelled':
-                return { label: 'Cancelled', class: 'badge-danger' };
+                return { label: t('cancelled'), class: 'badge-danger' };
             default:
                 return { label: status || 'Unknown', class: 'badge-secondary' };
         }
@@ -129,7 +143,7 @@ const Bookings = () => {
 
             if (newStatus === 'completed' && completionData) {
                 updateData.completedAt = serverTimestamp();
-                updateData.completedByName = userProfile?.name || 'Staff';
+                updateData.completedByName = userProfile?.name || t('staff');
                 updateData.completedById = userProfile?.uid;
                 if (completionData.materialsUsed) {
                     updateData.materialsUsed = completionData.materialsUsed;
@@ -157,7 +171,7 @@ const Bookings = () => {
     };
 
     const handleRestoreBooking = async (booking) => {
-        if (!window.confirm('Are you sure you want to restore this archived booking?')) {
+        if (!window.confirm(t('restore_booking_confirm', { defaultValue: 'Are you sure you want to restore this archived booking?' }))) {
             return;
         }
         try {
@@ -176,10 +190,12 @@ const Bookings = () => {
         }
     };
 
+
+
     const handleDeleteBooking = async (booking) => {
         if (viewMode === 'archived') {
             // Permanently delete from archive
-            if (!window.confirm('Are you sure you want to permanently delete this booking? This cannot be undone.')) {
+            if (!window.confirm(t('delete_permanently_confirm', { defaultValue: 'Are you sure you want to permanently delete this booking? This cannot be undone.' }))) {
                 return;
             }
             try {
@@ -190,7 +206,7 @@ const Bookings = () => {
             }
         } else {
             // Archive the booking
-            if (!window.confirm('Are you sure you want to archive this booking?')) {
+            if (!window.confirm(t('archive_booking_confirm', { defaultValue: 'Are you sure you want to archive this booking?' }))) {
                 return;
             }
             try {
@@ -224,31 +240,25 @@ const Bookings = () => {
         return (
             booking.bookingReference?.toLowerCase().includes(search) ||
             booking.serviceName?.toLowerCase().includes(search) ||
-            booking.contactPhone?.toLowerCase().includes(search) ||
-            (booking.customerName && booking.customerName.toLowerCase().includes(search)) ||
-            booking.licensePlate?.toLowerCase().includes(search)
+            (booking.customerName && booking.customerName.toLowerCase().includes(search))
         );
     });
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0
-        }).format(amount || 0);
+        return globalFormatCurrency(amount || 0);
     };
 
     return (
         <div className="bookings-page">
             <div className="page-header">
                 <div>
-                    <h1><ClipboardList size={28} /> Bookings</h1>
-                    <p className="subtitle">Manage all booking requests</p>
+                    <h1><ClipboardList size={28} /> {t('bookings')}</h1>
+                    <p className="subtitle">{t('manage_all_bookings', { defaultValue: 'Manage all booking requests' })}</p>
                 </div>
                 <div className="header-actions">
                     {hasPermission('bookings', 'create') && (
                         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                            <Plus size={18} /> Add Walk-in
+                            <Plus size={18} /> {t('add_walk_in')}
                         </button>
                     )}
                 </div>
@@ -260,14 +270,14 @@ const Bookings = () => {
                     onClick={() => setViewMode('active')}
                 >
                     <ClipboardList size={16} />
-                    Active Bookings
+                    {t('active_bookings_tab')}
                 </button>
                 <button
                     className={`btn ${viewMode === 'archived' ? 'active' : ''}`}
                     onClick={() => setViewMode('archived')}
                 >
                     <Archive size={16} />
-                    Archived Bookings
+                    {t('archived_bookings_tab')}
                 </button>
             </div>
 
@@ -277,7 +287,7 @@ const Bookings = () => {
                     <Search size={18} />
                     <input
                         type="text"
-                        placeholder="Search by reference, phone, plate..."
+                        placeholder={t('search_placeholder_bookings')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -290,21 +300,21 @@ const Bookings = () => {
                         value={dateFilter.start}
                         onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
                         style={{ border: 'none', background: 'transparent', fontSize: '0.9rem', color: 'var(--navy-700)', padding: '0.5rem' }}
-                        title="Start Date"
+                        title={t('start_date')}
                     />
-                    <span style={{ color: 'var(--navy-400)' }}>to</span>
+                    <span style={{ color: 'var(--navy-400)' }}>{t('to')}</span>
                     <input
                         type="date"
                         value={dateFilter.end}
                         onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
                         style={{ border: 'none', background: 'transparent', fontSize: '0.9rem', color: 'var(--navy-700)', padding: '0.5rem' }}
-                        title="End Date"
+                        title={t('end_date')}
                     />
                     {(dateFilter.start || dateFilter.end) && (
                         <button
                             onClick={() => setDateFilter({ start: '', end: '' })}
                             style={{ border: 'none', background: '#fee2e2', color: '#ef4444', borderRadius: '4px', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', marginRight: '4px' }}
-                            title="Clear Date Filter"
+                            title={t('clear_date_filter')}
                         >
                             <X size={14} />
                         </button>
@@ -316,12 +326,12 @@ const Bookings = () => {
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                 >
-                    <option value="all">All Status</option>
-                    <option value="pending_confirmation">Pending</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
+                    <option value="all">{t('all_status')}</option>
+                    <option value="pending_confirmation">{t('pending')}</option>
+                    <option value="confirmed">{t('confirmed')}</option>
+                    <option value="in_progress">{t('in_progress')}</option>
+                    <option value="completed">{t('completed')}</option>
+                    <option value="cancelled">{t('cancelled')}</option>
                 </select>
             </div>
 
@@ -335,7 +345,7 @@ const Bookings = () => {
                         <span className="stat-value">
                             {bookings.filter(b => b.status === 'pending_confirmation').length}
                         </span>
-                        <span className="stat-label">Pending</span>
+                        <span className="stat-label">{t('pending')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -346,7 +356,7 @@ const Bookings = () => {
                         <span className="stat-value">
                             {bookings.filter(b => b.status === 'confirmed').length}
                         </span>
-                        <span className="stat-label">Confirmed</span>
+                        <span className="stat-label">{t('confirmed')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -357,7 +367,7 @@ const Bookings = () => {
                         <span className="stat-value">
                             {bookings.filter(b => b.status === 'in_progress').length}
                         </span>
-                        <span className="stat-label">In Progress</span>
+                        <span className="stat-label">{t('in_progress')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -368,7 +378,7 @@ const Bookings = () => {
                         <span className="stat-value">
                             {bookings.filter(b => b.status === 'completed').length}
                         </span>
-                        <span className="stat-label">Completed</span>
+                        <span className="stat-label">{t('completed')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -379,7 +389,7 @@ const Bookings = () => {
                         <span className="stat-value">
                             {bookings.filter(b => ['hatchback', 'sedan', 'suv', 'luxury_suv'].includes(b.vehicleType)).length}
                         </span>
-                        <span className="stat-label">Car Bookings</span>
+                        <span className="stat-label">{t('car_bookings')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -390,7 +400,7 @@ const Bookings = () => {
                         <span className="stat-value">
                             {bookings.filter(b => ['scooter', 'bike', 'superbike'].includes(b.vehicleType)).length}
                         </span>
-                        <span className="stat-label">Bike Bookings</span>
+                        <span className="stat-label">{t('bike_bookings')}</span>
                     </div>
                 </div>
             </div>
@@ -401,12 +411,12 @@ const Bookings = () => {
                     {loading ? (
                         <div className="empty-state">
                             <div className="loader"></div>
-                            <p>Loading bookings...</p>
+                            <p>{t('loading_bookings')}</p>
                         </div>
                     ) : filteredBookings.length === 0 ? (
                         <div className="empty-state">
                             <ClipboardList size={48} />
-                            <p>No bookings found</p>
+                            <p>{t('no_bookings_found')}</p>
                         </div>
                     ) : (
                         <>
@@ -415,13 +425,13 @@ const Bookings = () => {
                                 <table className="data-table">
                                     <thead>
                                         <tr>
-                                            <th>Reference</th>
-                                            <th>Service</th>
-                                            <th>Vehicle</th>
-                                            <th>Date & Time</th>
-                                            <th>Amount</th>
-                                            <th>Status</th>
-                                            <th>Actions</th>
+                                            <th>{t('reference')}</th>
+                                            <th>{t('service')}</th>
+                                            <th>{t('vehicle')}</th>
+                                            <th>{t('date_time')}</th>
+                                            <th>{t('amount')}</th>
+                                            <th>{t('status')}</th>
+                                            <th>{t('actions')}</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -433,27 +443,21 @@ const Bookings = () => {
                                                         <strong>{booking.bookingReference || booking.id.slice(0, 8)}</strong>
                                                         <br />
                                                         <small style={{ fontSize: '0.7em', color: 'var(--navy-400)' }}>
-                                                            {booking.createdByName ? `By: ${booking.createdByName.split(' ')[0]}` : ''}
+                                                            {booking.createdByName ? `${t('by')}: ${booking.createdByName.split(' ')[0]}` : ''}
                                                         </small>
                                                         <br />
                                                         <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--navy-700)' }}>
-                                                            {booking.customerName || 'N/A'}
+                                                            {booking.customerName || t('na')}
                                                         </span>
-                                                        <br />
-                                                        <small style={{ color: 'var(--navy-500)' }}>
-                                                            <Phone size={12} /> {booking.contactPhone}
-                                                        </small>
                                                         {booking.assignedEmployeeName && (
                                                             <div style={{ marginTop: '4px', padding: '2px 6px', background: 'var(--navy-50)', borderRadius: '4px', fontSize: '0.75rem', color: 'var(--navy-600)', display: 'inline-block' }}>
                                                                 👤 {booking.assignedEmployeeName}
                                                             </div>
                                                         )}
                                                     </td>
-                                                    <td>{booking.serviceName}</td>
+                                                    <td>{t(booking.serviceName)}</td>
                                                     <td>
                                                         {booking.carMake} {booking.carModel}
-                                                        <br />
-                                                        <small>{booking.licensePlate}</small>
                                                     </td>
                                                     <td>{booking.bookingDate}<br />{booking.startTime}</td>
                                                     <td>{formatCurrency(booking.price)}</td>
@@ -472,18 +476,18 @@ const Bookings = () => {
                                                                 }}
                                                                 style={{ cursor: 'pointer', border: 'none', outline: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23000%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right .7rem top 50%', backgroundSize: '.65rem auto' }}
                                                             >
-                                                                <option value="pending_confirmation">Pending</option>
-                                                                <option value="confirmed">Confirmed</option>
-                                                                <option value="in_progress">In Progress</option>
-                                                                <option value="completed">Completed</option>
-                                                                <option value="cancelled">Cancelled</option>
+                                                                <option value="pending_confirmation">{t('pending')}</option>
+                                                                <option value="confirmed">{t('confirmed')}</option>
+                                                                <option value="in_progress">{t('in_progress')}</option>
+                                                                <option value="completed">{t('completed')}</option>
+                                                                <option value="cancelled">{t('cancelled')}</option>
                                                             </select>
                                                         ) : (
                                                             <span className={`badge ${badge.class}`}>{badge.label}</span>
                                                         )}
                                                         {booking.completedByName && booking.status === 'completed' && (
                                                             <div style={{ fontSize: '0.7rem', color: 'var(--success)', marginTop: '4px', whiteSpace: 'nowrap' }}>
-                                                                Done: {booking.completedByName.split(' ')[0]}
+                                                                {t('done')}: {booking.completedByName.split(' ')[0]}
                                                             </div>
                                                         )}
                                                     </td>
@@ -491,7 +495,7 @@ const Bookings = () => {
                                                         <div style={{ display: 'flex', gap: '0.25rem' }}>
                                                             <button
                                                                 className="btn-icon"
-                                                                title="View"
+                                                                title={t('view')}
                                                                 onClick={() => setSelectedBooking(booking)}
                                                             >
                                                                 <Eye size={16} />
@@ -499,7 +503,7 @@ const Bookings = () => {
                                                             {hasPermission('bookings', 'edit') && booking.status !== 'completed' && booking.status !== 'cancelled' && viewMode !== 'archived' && (
                                                                 <button
                                                                     className="btn-icon"
-                                                                    title="Edit"
+                                                                    title={t('edit')}
                                                                     onClick={() => handleEditBooking(booking)}
                                                                 >
                                                                     <Edit size={16} />
@@ -510,7 +514,7 @@ const Bookings = () => {
                                                                     {hasPermission('bookings', 'edit') && booking.status === 'pending_confirmation' && (
                                                                         <button
                                                                             className="btn-icon"
-                                                                            title="Confirm"
+                                                                            title={t('confirm')}
                                                                             onClick={() => updateBookingStatus(booking.id, 'confirmed')}
                                                                         >
                                                                             <Check size={16} />
@@ -519,7 +523,7 @@ const Bookings = () => {
                                                                     {hasPermission('bookings', 'edit') && booking.status === 'confirmed' && (
                                                                         <button
                                                                             className="btn-icon"
-                                                                            title="Start"
+                                                                            title={t('start')}
                                                                             onClick={() => updateBookingStatus(booking.id, 'in_progress')}
                                                                         >
                                                                             <Clock size={16} />
@@ -528,7 +532,7 @@ const Bookings = () => {
                                                                     {hasPermission('bookings', 'edit') && booking.status === 'in_progress' && (
                                                                         <button
                                                                             className="btn-icon"
-                                                                            title="Complete"
+                                                                            title={t('complete')}
                                                                             onClick={() => handleCompleteClick(booking)}
                                                                             style={{ color: 'var(--success)' }}
                                                                         >
@@ -540,7 +544,7 @@ const Bookings = () => {
                                                             {viewMode === 'archived' && (
                                                                 <button
                                                                     className="btn-icon"
-                                                                    title="Recover/Restore"
+                                                                    title={t('restore')}
                                                                     onClick={() => handleRestoreBooking(booking)}
                                                                     style={{ color: 'var(--primary)' }}
                                                                 >
@@ -550,7 +554,7 @@ const Bookings = () => {
                                                             {hasPermission('bookings', 'delete') && (
                                                                 <button
                                                                     className="btn-icon header-actions"
-                                                                    title={viewMode === 'archived' ? "Delete Permanently" : "Archive"}
+                                                                    title={viewMode === 'archived' ? t('delete_permanently') : t('archive')}
                                                                     onClick={() => handleDeleteBooking(booking)}
                                                                     style={{ color: 'var(--danger)' }}
                                                                 >
@@ -573,96 +577,74 @@ const Bookings = () => {
                                     return (
                                         <div key={booking.id} className="booking-card">
                                             <div className="booking-card-header">
-                                                <div>
+                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
                                                     <strong>{booking.bookingReference || booking.id.slice(0, 8)}</strong>
-                                                    <div style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--primary)', marginTop: '2px' }}>
-                                                        {booking.customerName || 'N/A'}
-                                                    </div>
-                                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>
-                                                        {booking.createdByName ? `By: ${booking.createdByName.split(' ')[0]}` : ''}
-                                                    </div>
-                                                    {booking.assignedEmployeeName && (
-                                                        <div style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: '600', marginTop: '2px' }}>
-                                                            👤 {booking.assignedEmployeeName}
-                                                        </div>
-                                                    )}
+                                                    <span style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--primary)', marginTop: '2px' }}>
+                                                        {booking.customerName || t('na')}
+                                                    </span>
                                                 </div>
-                                                {hasPermission('bookings', 'edit') && viewMode !== 'archived' ? (
-                                                    <select
-                                                        className={`badge ${badge.class}`}
-                                                        value={booking.status}
-                                                        onChange={(e) => {
-                                                            const newStatus = e.target.value;
-                                                            if (newStatus === 'completed') {
-                                                                handleCompleteClick(booking);
-                                                            } else {
-                                                                updateBookingStatus(booking.id, newStatus);
-                                                            }
-                                                        }}
-                                                        style={{ cursor: 'pointer', border: 'none', outline: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23000%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right .5rem top 50%', backgroundSize: '.5rem auto' }}
-                                                    >
-                                                        <option value="pending_confirmation">Pending</option>
-                                                        <option value="confirmed">Confirmed</option>
-                                                        <option value="in_progress">In Progress</option>
-                                                        <option value="completed">Completed</option>
-                                                        <option value="cancelled">Cancelled</option>
-                                                    </select>
-                                                ) : (
-                                                    <span className={`badge ${badge.class}`}>{badge.label}</span>
-                                                )}
+                                                <span className={`badge ${badge.class}`}>{badge.label}</span>
                                             </div>
                                             <div className="booking-card-body">
-                                                <p><CarIcon size={14} /> {booking.serviceName}</p>
-                                                <p>{booking.carMake} {booking.carModel} - {booking.licensePlate}</p>
-                                                <p>{booking.bookingDate} at {booking.startTime}</p>
-                                                <p><strong>{formatCurrency(booking.price)}</strong></p>
+                                                <p><CarIcon size={14} /> {booking.carMake} {booking.carModel}</p>
+                                                <p><Clock size={14} /> {booking.bookingDate} at {booking.startTime}</p>
+                                                <p><Droplets size={14} /> {t(booking.serviceName)}</p>
+                                                {booking.assignedEmployeeName && (
+                                                    <p style={{ color: 'var(--success)', fontWeight: '600' }}>👤 {booking.assignedEmployeeName}</p>
+                                                )}
                                             </div>
                                             <div className="booking-card-footer">
-                                                <button className="btn btn-sm btn-secondary" onClick={() => setSelectedBooking(booking)}>
-                                                    View Details
+                                                <button 
+                                                    className="btn btn-sm btn-secondary" 
+                                                    onClick={() => setSelectedBooking(booking)}
+                                                >
+                                                    {t('details')}
                                                 </button>
-                                                {hasPermission('bookings', 'edit') && booking.status !== 'completed' && booking.status !== 'cancelled' && viewMode !== 'archived' && (
-                                                    <button
-                                                        className="btn btn-sm btn-secondary icon-only"
-                                                        onClick={() => handleEditBooking(booking)}
-                                                        title="Edit"
-                                                    >
-                                                        <Edit size={16} />
-                                                    </button>
-                                                )}
-                                                {viewMode !== 'archived' && hasPermission('bookings', 'edit') && booking.status !== 'completed' && booking.status !== 'cancelled' && (
-                                                    <button
-                                                        className="btn btn-sm btn-primary"
-                                                        onClick={() => {
-                                                            if (booking.status === 'in_progress') {
-                                                                handleCompleteClick(booking);
-                                                            } else {
-                                                                const nextStatus = {
-                                                                    'pending_confirmation': 'confirmed',
-                                                                    'confirmed': 'in_progress'
-                                                                };
-                                                                updateBookingStatus(booking.id, nextStatus[booking.status]);
-                                                            }
-                                                        }}
-                                                    >
-                                                        {booking.status === 'pending_confirmation' ? 'Confirm' :
-                                                            booking.status === 'confirmed' ? 'Start' : 'Complete'}
-                                                    </button>
-                                                )}
-                                                {viewMode === 'archived' && (
-                                                    <button className="btn btn-sm btn-primary" onClick={() => handleRestoreBooking(booking)}>
-                                                        <RotateCcw size={14} style={{ marginRight: '4px' }} /> Restore
-                                                    </button>
-                                                )}
-                                                {hasPermission('bookings', 'delete') && (
-                                                    <button
-                                                        className="btn btn-sm btn-danger icon-only"
-                                                        onClick={() => handleDeleteBooking(booking)}
-                                                        title={viewMode === 'archived' ? "Delete Permanently" : "Archive"}
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                )}
+                                                
+                                                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                    {hasPermission('bookings', 'edit') && booking.status !== 'completed' && booking.status !== 'cancelled' && viewMode !== 'archived' && (
+                                                        <button
+                                                            className="btn btn-sm btn-secondary icon-only"
+                                                            onClick={() => handleEditBooking(booking)}
+                                                            title={t('edit')}
+                                                        >
+                                                            <Edit size={16} />
+                                                        </button>
+                                                    )}
+                                                    {viewMode !== 'archived' && hasPermission('bookings', 'edit') && booking.status !== 'completed' && booking.status !== 'cancelled' && (
+                                                        <button
+                                                            className="btn btn-sm btn-primary"
+                                                            onClick={() => {
+                                                                if (booking.status === 'in_progress') {
+                                                                    handleCompleteClick(booking);
+                                                                } else {
+                                                                    const nextStatus = {
+                                                                        'pending_confirmation': 'confirmed',
+                                                                        'confirmed': 'in_progress'
+                                                                    };
+                                                                    updateBookingStatus(booking.id, nextStatus[booking.status]);
+                                                                }
+                                                            }}
+                                                        >
+                                                            {booking.status === 'pending_confirmation' ? t('confirm') :
+                                                                booking.status === 'confirmed' ? t('start') : t('complete')}
+                                                        </button>
+                                                    )}
+                                                    {viewMode === 'archived' && (
+                                                        <button className="btn btn-sm btn-primary" onClick={() => handleRestoreBooking(booking)}>
+                                                            <RotateCcw size={14} style={{ marginRight: '4px' }} /> {t('restore')}
+                                                        </button>
+                                                    )}
+                                                    {hasPermission('bookings', 'delete') && (
+                                                        <button
+                                                            className="btn btn-sm btn-danger icon-only"
+                                                            onClick={() => handleDeleteBooking(booking)}
+                                                            title={viewMode === 'archived' ? t('delete_permanently') : t('archive')}
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     );
@@ -711,7 +693,7 @@ const Bookings = () => {
 
                             const invoiceItems = [
                                 {
-                                    description: completingBooking.serviceName,
+                                    description: t(completingBooking.serviceName),
                                     quantity: 1,
                                     price: Number(completingBooking.price || 0),
                                     total: Number(completingBooking.price || 0)
@@ -733,9 +715,9 @@ const Bookings = () => {
                                 invoiceNumber: sequentialInv,
                                 bookingId: completingBooking.id,
                                 customerId: completingBooking.customerId || 'walk-in',
-                                customerName: completingBooking.customerName || 'Guest',
-                                customerPhone: completingBooking.contactPhone || '',
-                                vehicleNumber: completingBooking.licensePlate || '',
+                                customerName: completingBooking.customerName || t('guest'),
+                                customerPhone: 'HIDDEN',
+                                vehicleNumber: 'DEMO',
                                 type: 'Service',
                                 items: invoiceItems,
                                 subtotal: finalTotal,
@@ -964,6 +946,7 @@ const Bookings = () => {
 
 // Walk-in Booking Modal
 const WalkInModal = ({ onClose, onSuccess }) => {
+    const { t } = useTranslation();
     const { user, userProfile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [services, setServices] = useState([]);
@@ -1148,14 +1131,14 @@ const WalkInModal = ({ onClose, onSuccess }) => {
 
             // Add explicit customers first (they take precedence)
             customersData.forEach(c => {
-                const key = c.phone || c.licensePlate;
+                const key = c.customerName;
                 if (key) customerMap.set(key, c);
             });
 
             // Add customers from bookings if not already in map
             bookingsSnapshot.docs.forEach(doc => {
                 const booking = doc.data();
-                const key = booking.contactPhone || booking.licensePlate;
+                const key = booking.customerName;
                 if (key && !customerMap.has(key)) {
                     customerMap.set(key, {
                         id: `booking-${doc.id}`,
@@ -1164,7 +1147,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                         email: booking.contactEmail || '',
                         carMake: booking.carMake || '',
                         carModel: booking.carModel || '',
-                        licensePlate: booking.licensePlate || '',
+                        licensePlate: 'DEMO',
                         source: 'booking',
                         createdAt: booking.createdAt,
                         // Infer vehicle type if possible, or leave undefined
@@ -1193,12 +1176,10 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         const searchDigits = search.replace(/[^0-9]/g, '');
 
         // Search by license plate (vehicle number) - clean both for comparison
-        const plate = (c.licensePlate || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const licensePlateMatch = searchClean.length > 0 && plate.includes(searchClean);
+        const licensePlateMatch = false;
 
         // Search by phone number - match any digits
-        const phone = (c.phone || '').toString().replace(/[^0-9]/g, '');
-        const phoneMatch = searchDigits.length >= 2 && phone.includes(searchDigits);
+        const phoneMatch = false;
 
         // Search by customer name - partial match
         const nameMatch = (c.name || '').toLowerCase().includes(search);
@@ -1207,28 +1188,28 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         const carMakeMatch = (c.carMake || '').toLowerCase().includes(search);
         const carModelMatch = (c.carModel || '').toLowerCase().includes(search);
 
-        return licensePlateMatch || phoneMatch || nameMatch || carMakeMatch || carModelMatch;
+        return nameMatch || carMakeMatch || carModelMatch;
     });
-
-    // Group customers by vehicle type for display
-    const groupedCustomersByVehicle = filteredCustomers.reduce((groups, customer) => {
-        const type = customer.vehicleType || 'other';
-        if (!groups[type]) groups[type] = [];
-        groups[type].push(customer);
-        return groups;
+    
+    // Group filtered customers by vehicle type for better UI organization
+    const groupedCustomersByVehicle = filteredCustomers.reduce((acc, customer) => {
+        const type = (customer.vehicleType || 'other').toLowerCase();
+        if (!acc[type]) acc[type] = [];
+        acc[type].push(customer);
+        return acc;
     }, {});
 
     // Vehicle type display order and labels
     const vehicleTypeOrder = ['hatchback', 'sedan', 'suv', 'luxury_suv', 'scooter', 'bike', 'superbike', 'other'];
     const vehicleTypeLabels = {
-        hatchback: '🚗 Hatchback',
-        sedan: '🚙 Sedan',
-        suv: '🚐 SUV',
-        luxury_suv: '🏎️ Luxury SUV',
-        scooter: '🛵 Scooter',
-        bike: '🏍️ Bike',
-        superbike: '🏍️ Superbike',
-        other: '🚘 Other/Unknown'
+        hatchback: `🚗 ${t('hatchback')}`,
+        sedan: `🚙 ${t('sedan')}`,
+        suv: `🚐 ${t('suv')}`,
+        luxury_suv: `🏎️ ${t('luxury_suv')}`,
+        scooter: `🛵 ${t('scooter')}`,
+        bike: `🏍️ ${t('bike')}`,
+        superbike: `🏍️ ${t('superbike')}`,
+        other: `🚘 ${t('other')}`
     };
 
     const selectCustomer = (customer) => {
@@ -1239,8 +1220,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
             customerName: customer.name || '',
             carMake: customer.carMake || '',
             carModel: customer.carModel || '',
-            licensePlate: customer.licensePlate || '',
-            phone: customer.phone || ''
+            licensePlate: 'DEMO',
+            phone: 'HIDDEN'
         }));
         // Also set the vehicle type from customer if available
         if (customer.vehicleType) {
@@ -1317,8 +1298,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
             setLoading(true);
             await addDoc(collection(db, 'customers'), {
                 name: formData.customerName,
-                phone: formData.phone,
-                licensePlate: formData.licensePlate.toUpperCase(),
+                phone: 'HIDDEN',
+                licensePlate: 'DEMO',
                 carMake: formData.carMake,
                 carModel: formData.carModel,
                 bookingCount: 1,
@@ -1377,12 +1358,10 @@ const WalkInModal = ({ onClose, onSuccess }) => {
 
             // Auto-save new customer to database if we're in new customer mode
             let customerIdToLink = formData.customerId || null;
-            if (customerMode === 'new' && formData.customerName && formData.phone) {
+            if (customerMode === 'new' && formData.customerName) {
                 try {
                     const newCustomerRef = await addDoc(collection(db, 'customers'), {
                         name: formData.customerName,
-                        phone: formData.phone,
-                        licensePlate: formData.licensePlate.toUpperCase(),
                         carMake: formData.carMake,
                         carModel: formData.carModel,
                         bookingCount: 1,
@@ -1396,48 +1375,37 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                 }
             }
 
+            const companyIdForBooking = userProfile?.companyId || userProfile?.uid || 'default';
             await addDoc(collection(db, 'bookings'), {
                 bookingReference: bookingRef,
                 createdBy: user?.uid || 'unknown',
                 createdByName: userProfile?.displayName || user?.email || 'Staff',
-                // Store primary service ID for legacy support/simple queries (first one)
+                companyId: companyIdForBooking,
                 serviceId: selectedServices[0].id,
-                // New field: store ALL service IDs
                 serviceIds: selectedServices.map(s => s.id),
-
-                // Combined name
                 serviceName: selectedServices.map(s => s.name).join(' + '),
                 serviceCategory: selectedServices[0].category || 'Detailed Wash',
-
-                // Per-service breakdown for invoice PDF itemisation
                 serviceBreakdown: selectedServices.map(s => ({
                     name: s.name,
                     price: getServicePrice(s),
                     quantity: 1
                 })),
-
-                // Totals
                 serviceDuration: totalDuration,
                 extraTime: extraTime,
                 price: totalPrice,
-
-                // Payment Tracking
                 totalAmount: totalPrice,
                 advancePayment: currentPaymentTotal,
                 balanceAmount: balanceAmt,
                 paymentStatus: paymentStatus,
                 paymentHistory,
                 paymentMode: paymentSplits[0]?.mode || 'cash',
-
                 vehicleType: vehicleType,
                 bookingDate: formData.bookingDate,
                 startTime: formData.startTime || new Date().toTimeString().slice(0, 5),
-                customerId: customerIdToLink, // Link to customer (new or existing)
+                customerId: customerIdToLink,
                 customerName: formData.customerName,
                 carMake: formData.carMake,
                 carModel: formData.carModel,
-                licensePlate: formData.licensePlate.toUpperCase(),
-                contactPhone: formData.phone,
                 location: formData.location || '',
                 assignedEmployees: assignedEmployees,
                 assignedEmployeeName: employees.filter(e => assignedEmployees.includes(e.id)).map(e => e.displayName).join(', '),
@@ -1461,8 +1429,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
         <div className="full-page-form">
             <div className="full-page-form-container">
                 <div className="full-page-form-header">
-                    <h2><Plus size={20} /> Add Walk-in Booking</h2>
-                    <button className="btn btn-secondary" onClick={onClose}>← Back to Bookings</button>
+                    <h2><Plus size={20} /> {t('add_walk_in')}</h2>
+                    <button className="btn btn-secondary" onClick={onClose}>← {t('cancel')}</button>
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="full-page-form-body">
@@ -1492,24 +1460,23 @@ const WalkInModal = ({ onClose, onSuccess }) => {
 
                             {/* MODE: EXISTING CUSTOMER SEARCH */}
                             {customerMode === 'existing' && (
-                                <div style={{ background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #86efac' }}>
+                                <>
+                                    <div style={{ background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #86efac' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                                         <label style={{ marginBottom: 0, fontWeight: '600', fontSize: '0.9rem', color: '#166534' }}>Search Database</label>
                                         <span style={{ fontSize: '0.75rem', color: '#166534', background: '#bbf7d0', padding: '2px 8px', borderRadius: '12px' }}>{customers.length} customers</span>
                                     </div>
                                     <div style={{ position: 'relative' }}>
-                                        <div style={{ position: 'relative' }}>
-                                            <input
-                                                type="text"
-                                                value={customerSearch}
-                                                onChange={(e) => { setCustomerSearch(e.target.value); setShowCustomerDropdown(true); }}
-                                                onFocus={() => setShowCustomerDropdown(true)}
-                                                placeholder="🔎 Search by name, phone, or plate..."
-                                                autoComplete="off"
-                                                style={{ background: 'white', border: '2px solid #22c55e', fontSize: '1rem', padding: '0.75rem', paddingRight: '40px', width: '100%', borderRadius: '8px' }}
-                                            />
-                                            {customerSearch && (
-                                                <button
+                                        <input
+                                            type="text"
+                                            placeholder={t('search_customers_placeholder', { defaultValue: "Search by name, phone or plate..." })}
+                                            value={customerSearch}
+                                            onChange={(e) => handleCustomerSearch(e.target.value)}
+                                            onFocus={() => setShowCustomerDropdown(true)}
+                                            style={{ width: '100%', padding: '12px 40px 12px 12px', borderRadius: '10px', border: '2px solid #86efac', fontSize: '1rem', background: 'white' }}
+                                        />
+                                        {customerSearch && (
+                                            <button
                                                     type="button"
                                                     onClick={() => { setCustomerSearch(''); setShowCustomerDropdown(false); }}
                                                     style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#166534', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5 }}
@@ -1532,8 +1499,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                                             <div style={{ padding: '6px 12px', background: '#f1f5f9', fontWeight: '600', fontSize: '0.8rem', color: '#475569', position: 'sticky', top: '36px' }}>{vehicleTypeLabels[type] || type} ({groupedCustomersByVehicle[type].length})</div>
                                                             {groupedCustomersByVehicle[type].map(c => (
                                                                 <div key={c.id} onClick={() => { selectCustomer(c); setShowCustomerDropdown(false); }} style={{ padding: '10px 12px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onMouseOver={(e) => e.currentTarget.style.background = '#ecfdf5'} onMouseOut={(e) => e.currentTarget.style.background = 'white'}>
-                                                                    <div><div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.9rem' }}>{c.name || 'Unnamed'}</div><div style={{ fontSize: '0.8rem', color: '#64748b' }}>📞 {c.phone}</div></div>
-                                                                    <div style={{ textAlign: 'right' }}><div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#059669' }}>{c.licensePlate}</div><div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{c.carMake} {c.carModel}</div></div>
+                                                                    <div><div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.9rem' }}>{c.name || 'Unnamed'}</div></div>
+                                                                    <div style={{ textAlign: 'right' }}><div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#059669' }}>{c.carMake} {c.carModel}</div></div>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -1541,79 +1508,45 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                                 )}
                                             </div>
                                         )}
-                                    </div>
                                     {formData.customerId && (
                                         <div style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'white', borderRadius: '8px', fontSize: '0.9rem', color: '#166534', border: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                             <div>
                                                 <div><strong>{formData.customerName}</strong></div>
-                                                <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>{formData.licensePlate} • {formData.phone}</div>
+                                                <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>{formData.carMake} {formData.carModel}</div>
                                             </div>
-                                            <button type="button" className="btn-sm btn-outline" onClick={() => setCustomerMode('new')} title="Edit Details">Edit</button>
+                                            <button type="button" className="btn-sm btn-outline" onClick={() => setCustomerMode('new')} title={t('edit_details')}>{t('edit')}</button>
                                         </div>
                                     )}
                                     {/* Location field for existing customer */}
                                     <div className="form-group" style={{ marginTop: '0.75rem' }}>
-                                        <label>Location (Optional)</label>
+                                        <label>{t('location_optional')}</label>
                                         <input
                                             value={formData.location}
                                             onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                                            placeholder="Area / City (e.g. Koramangala)"
+                                            placeholder={t('area_city_placeholder')}
                                             style={{ background: 'white' }}
                                         />
                                     </div>
                                 </div>
-                            )}
+                            </>
+                        )}
 
                             {/* MODE: NEW CUSTOMER / EDIT FORM */}
                             {customerMode === 'new' && (
                                 <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', marginBottom: '1.5rem', border: '1px solid #e2e8f0' }}>
                                     <div className="form-group">
-                                        <label>Customer Name *</label>
+                                        <label>{t('customer_name_required')}</label>
                                         <input
                                             value={formData.customerName}
                                             onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                                            placeholder="Enter customer name"
+                                            placeholder={t('enter_customer_name')}
                                             required
                                             style={{ background: 'white' }}
                                         />
                                     </div>
                                     <div className="form-row">
                                         <div className="form-group">
-                                            <label>Phone Number *</label>
-                                            <input
-                                                value={formData.phone}
-                                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                                type="tel"
-                                                required
-                                                placeholder="+91 98765 43210"
-                                                style={{ background: 'white' }}
-                                            />
-                                        </div>
-                                        <div className="form-group">
-                                            <label>License Plate</label>
-                                            <input
-                                                value={formData.licensePlate}
-                                                onChange={(e) => handlePlateChange(e.target.value)}
-                                                placeholder="TN-01-AB-1234"
-                                                style={{
-                                                    textTransform: 'uppercase',
-                                                    background: 'white'
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="form-group">
-                                            <label>Location (Optional)</label>
-                                            <input
-                                                value={formData.location}
-                                                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                                                placeholder="Area/City"
-                                                style={{ background: 'white' }}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="form-row">
-                                        <div className="form-group">
-                                            <label>Car Make *</label>
+                                            <label>{t('car_make_required')}</label>
                                             <input
                                                 value={formData.carMake}
                                                 onChange={(e) => setFormData({ ...formData, carMake: e.target.value })}
@@ -1623,7 +1556,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                             />
                                         </div>
                                         <div className="form-group">
-                                            <label>Car Model *</label>
+                                            <label>{t('car_model_required')}</label>
                                             <input
                                                 value={formData.carModel}
                                                 onChange={(e) => setFormData({ ...formData, carModel: e.target.value })}
@@ -1750,7 +1683,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                             <div>
                                                 <div style={{ fontWeight: '500', fontSize: '0.9rem' }}>{service.name}</div>
                                                 <div style={{ fontSize: '0.8rem', color: 'var(--navy-500)' }}>
-                                                    {service.durationMinutes || 30} mins • ₹{getServicePrice(service)}
+                                                    {service.durationMinutes || 30} mins • {globalFormatCurrency(getServicePrice(service))}
                                                 </div>
                                             </div>
                                             <button
@@ -1783,7 +1716,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                             <span>Total</span>
                                             <span style={{ textAlign: 'right' }}>
-                                                {totalDuration} mins • ₹{totalPrice}
+                                                {totalDuration} mins • {globalFormatCurrency(totalPrice)}
                                             </span>
                                         </div>
                                         {hasMultiServiceBuffer && (
@@ -1840,7 +1773,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                                             value={service.id}
                                                             disabled={isSelected}
                                                         >
-                                                            {service.name} ({service.durationMinutes || 30}m - ₹{getServicePrice(service)}) {isSelected ? '✓' : ''}
+                                                            {service.name} ({service.durationMinutes || 30}m - {globalFormatCurrency(getServicePrice(service))}) {isSelected ? '✓' : ''}
                                                         </option>
                                                     );
                                                 })}
@@ -1865,7 +1798,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                             autoFocus
                                         />
                                         <input
-                                            placeholder="Price (₹)"
+                                            placeholder={`Price (${currentCurrency.symbol})`}
                                             type="number"
                                             value={customServiceData.price}
                                             onChange={e => setCustomServiceData({ ...customServiceData, price: e.target.value })}
@@ -2008,8 +1941,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                 border: '1px solid #86efac'
                             }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                                    <span style={{ fontWeight: '600', color: '#166534' }}>Total Amount:</span>
-                                    <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#166534' }}>₹{totalPrice.toLocaleString()}</span>
+                                    <span style={{ fontWeight: '600', color: '#166534' }}>{t('total_amount_label')}</span>
+                                    <span style={{ fontWeight: '700', fontSize: '1.1rem', color: '#166534' }}>{globalFormatCurrency(totalPrice)}</span>
                                 </div>
 
                                 <SplitPaymentSelector
@@ -2031,13 +1964,13 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                     borderTop: '1px dashed #86efac',
                                     marginTop: '0.5rem'
                                 }}>
-                                    <span style={{ fontWeight: '500', color: '#166534' }}>Balance Due:</span>
+                                    <span style={{ fontWeight: '500', color: '#166534' }}>{t('balance_due_label')}</span>
                                     <span style={{
                                         fontWeight: '700',
                                         fontSize: '1.1rem',
                                         color: (totalPrice - paymentSplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0)) > 0 ? '#dc2626' : '#166534'
                                     }}>
-                                        ₹{(totalPrice - paymentSplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0)).toLocaleString()}
+                                        {globalFormatCurrency(totalPrice - paymentSplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0))}
                                     </span>
                                 </div>
 
@@ -2051,7 +1984,7 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                                         color: '#92400e',
                                         textAlign: 'center'
                                     }}>
-                                        ⚠️ Partial payment - Balance to be collected
+                                        {t('partial_payment_warning')}
                                     </div>
                                 )}
                             </div>
@@ -2059,10 +1992,10 @@ const WalkInModal = ({ onClose, onSuccess }) => {
 
                         {/* STEP 5: Assign Employees */}
                         <div className="form-section" style={{ background: 'var(--navy-50)', padding: '1rem', borderRadius: '12px', border: '1px solid var(--navy-200)', marginBottom: '1.5rem' }}>
-                            <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>👥 Step 5: Assign Employees (Optional)</label>
+                            <label style={{ fontSize: '1rem', color: 'var(--navy-800)', fontWeight: '600', marginBottom: '0.75rem', display: 'block' }}>👥 {t('step_5_assign_employees')}</label>
                             <div style={{ maxHeight: '150px', overflowY: 'auto', background: 'white', padding: '0.5rem', borderRadius: '8px', border: '1px solid var(--navy-200)' }}>
                                 {employees.length === 0 ? (
-                                    <p style={{ fontSize: '0.85rem', color: 'var(--navy-400)', textAlign: 'center', padding: '1rem' }}>Loading employees...</p>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--navy-400)', textAlign: 'center', padding: '1rem' }}>{t('loading_employees')}...</p>
                                 ) : (
                                     employees.map(emp => (
                                         <label key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem', cursor: 'pointer', fontSize: '0.9rem', borderBottom: '1px solid var(--navy-50)' }}>
@@ -2088,9 +2021,9 @@ const WalkInModal = ({ onClose, onSuccess }) => {
                         </div>
                     </div>
                     <div className="full-page-form-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancel')}</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Creating...' : 'Create Booking'}
+                            {loading ? t('creating_booking') : t('create_booking_btn')}
                         </button>
                     </div>
                 </form>
@@ -2101,6 +2034,8 @@ const WalkInModal = ({ onClose, onSuccess }) => {
 
 // Booking Details Modal - Enhanced with Employee Assignment, Reschedule, Notes, WhatsApp
 const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick, onRefresh }) => {
+    const { t } = useTranslation();
+    const { formatCurrency: globalFormatCurrency } = useCurrency();
     const { hasPermission } = useAuth();
     const [employees, setEmployees] = useState([]);
     const [assignedEmployees, setAssignedEmployees] = useState(booking.assignedEmployees || (booking.assignedEmployee ? [booking.assignedEmployee] : []));
@@ -2111,11 +2046,11 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
     const [saving, setSaving] = useState(false);
 
     const badge = {
-        'pending_confirmation': { class: 'badge-pending', label: 'Pending' },
-        'confirmed': { class: 'badge-confirmed', label: 'Confirmed' },
-        'in_progress': { class: 'badge-progress', label: 'In Progress' },
-        'completed': { class: 'badge-completed', label: 'Completed' },
-        'cancelled': { class: 'badge-cancelled', label: 'Cancelled' }
+        'pending_confirmation': { class: 'badge-pending', label: t('pending') },
+        'confirmed': { class: 'badge-confirmed', label: t('confirmed') },
+        'in_progress': { class: 'badge-progress', label: t('in_progress') },
+        'completed': { class: 'badge-completed', label: t('completed') },
+        'cancelled': { class: 'badge-cancelled', label: t('cancelled') }
     }[booking.status] || { class: 'badge-pending', label: booking.status };
 
     useEffect(() => {
@@ -2191,26 +2126,27 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
             setSaving(false);
         }
     };
-
     const sendWhatsAppReminder = () => {
-        let phone = booking.contactPhone?.replace(/\D/g, '') || '';
-        // Add India country code if not present
-        if (phone.length === 10) phone = '91' + phone;
-        const message = `Hi! This is a reminder for your car wash appointment:\n\n` +
-            `📅 Date: ${booking.bookingDate}\n` +
-            `⏰ Time: ${booking.startTime}\n` +
-            `🚗 Service: ${booking.serviceName}\n` +
-            `💰 Amount: ₹${booking.price}\n\n` +
-            `We look forward to seeing you!\n- Zwash Demo`;
-        const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-        window.open(whatsappUrl, '_blank');
+        const phone = booking.customerPhone || booking.phone;
+        const message = `Hello ${booking.customerName || 'Customer'}, this is a reminder for your booking (${booking.bookingReference || booking.id.slice(0, 8)}) at Zwash. Looking forward to seeing you!`;
+        
+        if (!phone || phone === 'HIDDEN') {
+            const manualPhone = prompt('Please enter the customer phone number (with country code):', '');
+            if (manualPhone) {
+                const cleanPhone = manualPhone.replace(/\D/g, '');
+                window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+            }
+        } else {
+            const cleanPhone = phone.replace(/\D/g, '');
+            window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+        }
     };
 
     return (
         <div className="modal">
             <div className="modal-content modal-lg">
                 <div className="modal-header">
-                    <h2><ClipboardList size={20} /> Booking Details</h2>
+                    <h2><ClipboardList size={20} /> {t('booking_details_title')}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <div className="modal-body">
@@ -2218,42 +2154,37 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
                         <div>
                             <strong style={{ fontSize: '1.25rem' }}>{booking.bookingReference || booking.id.slice(0, 8)}</strong>
                             <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'var(--primary)', marginTop: '4px' }}>
-                                {booking.customerName || 'N/A'}
+                                {booking.customerName || t('na')}
                             </div>
-                            {booking.isWalkIn && <span className="badge badge-progress" style={{ marginTop: '0.5rem' }}>Walk-in</span>}
+                            {booking.isWalkIn && <span className="badge badge-progress" style={{ marginTop: '0.5rem' }}>{t('walk_in_badge')}</span>}
                         </div>
                         <span className={`badge ${badge.class}`}>{badge.label}</span>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
                         <div>
-                            <h4 style={{ marginBottom: '0.5rem', color: 'var(--navy-600)' }}>Service</h4>
+                            <h4 style={{ marginBottom: '0.5rem', color: 'var(--navy-600)' }}>{t('service_label')}</h4>
                             <p><strong>{booking.serviceName}</strong></p>
-                            <p>₹{booking.price}</p>
+                            <p>{globalFormatCurrency(booking.price)}</p>
                         </div>
                         <div>
-                            <h4 style={{ marginBottom: '0.5rem', color: 'var(--navy-600)' }}>Schedule</h4>
+                            <h4 style={{ marginBottom: '0.5rem', color: 'var(--navy-600)' }}>{t('schedule_label')}</h4>
                             <p>{booking.bookingDate}</p>
                             <p>{booking.startTime}</p>
                         </div>
                         <div>
-                            <h4 style={{ marginBottom: '0.5rem', color: 'var(--navy-600)' }}>Vehicle</h4>
+                            <h4 style={{ marginBottom: '0.5rem', color: 'var(--navy-600)' }}>{t('vehicle_label')}</h4>
                             <p>{booking.carMake} {booking.carModel}</p>
-                            <p><strong>{booking.licensePlate}</strong></p>
-                        </div>
-                        <div>
-                            <h4 style={{ marginBottom: '0.5rem', color: 'var(--navy-600)' }}>Contact</h4>
-                            <p>{booking.contactPhone}</p>
                         </div>
                     </div>
 
                     {/* Assign Employee */}
                     {hasPermission('bookings', 'edit') && booking.status !== 'completed' && (
                         <div style={{ marginBottom: '1rem', padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px' }}>
-                            <h4 style={{ marginBottom: '0.5rem' }}>Assign Employees</h4>
+                            <h4 style={{ marginBottom: '0.5rem' }}>{t('assign_employees_title')}</h4>
                             <div style={{ maxHeight: '150px', overflowY: 'auto', background: 'white', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--navy-200)', marginBottom: '0.5rem' }}>
                                 {employees.length === 0 ? (
-                                    <p style={{ fontSize: '0.85rem', color: 'var(--navy-400)' }}>Loading employees...</p>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--navy-400)' }}>{t('loading_employees')}</p>
                                 ) : (
                                     employees.map(emp => (
                                         <label key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.25rem 0', cursor: 'pointer', fontSize: '0.9rem' }}>
@@ -2274,11 +2205,11 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
                                 )}
                             </div>
                             <button className="btn btn-primary btn-sm w-100" onClick={saveAssignment} disabled={saving || employees.length === 0}>
-                                {saving ? 'Saving...' : 'Save Assignments'}
+                                {saving ? t('saving') : t('save_assignments_btn')}
                             </button>
                             {booking.assignedEmployeeName && (
                                 <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--success)' }}>
-                                    Currently assigned to: <strong>{booking.assignedEmployeeName}</strong>
+                                    {t('currently_assigned_to')} <strong>{booking.assignedEmployeeName}</strong>
                                 </p>
                             )}
                         </div>
@@ -2289,20 +2220,20 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
                         <div style={{ marginBottom: '1rem' }}>
                             {!showReschedule ? (
                                 <button className="btn btn-secondary btn-sm" onClick={() => setShowReschedule(true)}>
-                                    📅 Reschedule Booking
+                                    {t('reschedule_booking_btn')}
                                 </button>
                             ) : (
                                 <div style={{ padding: '1rem', background: '#fef3c7', borderRadius: '8px' }}>
-                                    <h4 style={{ marginBottom: '0.5rem' }}>Reschedule</h4>
+                                    <h4 style={{ marginBottom: '0.5rem' }}>{t('reschedule_title')}</h4>
                                     <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
                                         <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
                                         <input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} />
                                     </div>
                                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                                         <button className="btn btn-primary btn-sm" onClick={rescheduleBooking} disabled={saving}>
-                                            {saving ? 'Saving...' : 'Confirm Reschedule'}
+                                            {saving ? t('saving') : t('confirm_reschedule_btn')}
                                         </button>
-                                        <button className="btn btn-secondary btn-sm" onClick={() => setShowReschedule(false)}>Cancel</button>
+                                        <button className="btn btn-secondary btn-sm" onClick={() => setShowReschedule(false)}>{t('cancel')}</button>
                                     </div>
                                 </div>
                             )}
@@ -2311,18 +2242,18 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
 
                     {/* Notes Section */}
                     <div style={{ marginBottom: '1rem' }}>
-                        <h4 style={{ marginBottom: '0.5rem' }}>Notes</h4>
+                        <h4 style={{ marginBottom: '0.5rem' }}>{t('notes')}</h4>
                         <textarea
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Add notes about this booking..."
+                            placeholder={t('add_notes_placeholder')}
                             rows={3}
                             style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--navy-200)' }}
                             disabled={!hasPermission('bookings', 'edit')}
                         />
                         {hasPermission('bookings', 'edit') && (
                             <button className="btn btn-secondary btn-sm" onClick={saveNotes} disabled={saving} style={{ marginTop: '0.5rem' }}>
-                                Save Notes
+                                {t('save_notes_btn')}
                             </button>
                         )}
                     </div>
@@ -2330,7 +2261,7 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
                 <div className="modal-footer">
                     {/* WhatsApp Reminder */}
                     <button className="btn btn-secondary" onClick={sendWhatsAppReminder} style={{ background: '#25d366', color: 'white', border: 'none' }}>
-                        📱 WhatsApp Reminder
+                        {t('whatsapp_reminder_btn')}
                     </button>
 
                     {hasPermission('bookings', 'edit') && booking.status !== 'completed' && booking.status !== 'cancelled' && (
@@ -2340,7 +2271,7 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
                                     className="btn btn-primary"
                                     onClick={() => { onStatusChange(booking.id, 'confirmed'); onClose(); }}
                                 >
-                                    Confirm Booking
+                                    {t('confirm_booking_btn')}
                                 </button>
                             )}
                             {booking.status === 'confirmed' && (
@@ -2348,7 +2279,7 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
                                     className="btn btn-primary"
                                     onClick={() => { onStatusChange(booking.id, 'in_progress'); onClose(); }}
                                 >
-                                    Start Service
+                                    {t('start_service_btn')}
                                 </button>
                             )}
                             {booking.status === 'in_progress' && (
@@ -2356,12 +2287,12 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
                                     className="btn btn-success"
                                     onClick={() => { onCompleteClick(booking); onClose(); }}
                                 >
-                                    Mark Complete
+                                    {t('mark_complete_btn')}
                                 </button>
                             )}
                         </>
                     )}
-                    <button className="btn btn-secondary" onClick={onClose}>Close</button>
+                    <button className="btn btn-secondary" onClick={onClose}>{t('close')}</button>
                 </div>
             </div>
         </div>
@@ -2370,7 +2301,9 @@ const BookingDetailsModal = ({ booking, onClose, onStatusChange, onCompleteClick
 
 // Completion Modal with Water Usage & Material Deduction
 const CompletionModal = ({ booking, onClose, onComplete }) => {
+    const { t } = useTranslation();
     const { user, userProfile } = useAuth();
+    const { formatCurrency, currentCurrency } = useCurrency();
     const [waterUsage, setWaterUsage] = useState('');
     const [notes, setNotes] = useState('');
     const [materials, setMaterials] = useState([]);
@@ -2466,7 +2399,7 @@ const CompletionModal = ({ booking, onClose, onComplete }) => {
             // Create expense entry for materials used
             if (totalMaterialCost > 0) {
                 await addDoc(collection(db, 'expenses'), {
-                    title: `Materials for ${booking.serviceName} - ${booking.licensePlate}`,
+                    title: `Materials for ${booking.serviceName}`,
                     amount: totalMaterialCost,
                     category: 'supplies',
                     date: new Date().toISOString().split('T')[0],
@@ -2510,7 +2443,7 @@ const CompletionModal = ({ booking, onClose, onComplete }) => {
                         <div className="completion-info" style={{ background: '#f0fdf4', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
                             <p><strong>{booking.customerName || 'N/A'}</strong></p>
                             <p><strong>{booking.serviceName}</strong></p>
-                            <p style={{ fontSize: '0.875rem', color: '#666' }}>{booking.carMake} {booking.carModel} • {booking.licensePlate}</p>
+                            <p style={{ fontSize: '0.875rem', color: '#666' }}>{booking.carMake} {booking.carModel}</p>
                         </div>
 
                         <div className="form-group">
@@ -2611,13 +2544,16 @@ const CompletionModal = ({ booking, onClose, onComplete }) => {
 
 // Booking Edit Modal
 const BookingEditModal = ({ booking, onClose, onSuccess }) => {
+    const { t } = useTranslation();
+    const { userProfile } = useAuth();
+    const { formatCurrency, currentCurrency } = useCurrency();
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
         customerName: booking.customerName || '',
-        phone: booking.contactPhone || '',
+        phone: 'HIDDEN',
         carMake: booking.carMake || '',
         carModel: booking.carModel || '',
-        licensePlate: booking.licensePlate || '',
+        licensePlate: 'DEMO',
         location: booking.location || '',
         bookingDate: booking.bookingDate || '',
         startTime: booking.startTime || '',
@@ -2709,10 +2645,10 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
         try {
             await updateDoc(doc(db, 'bookings', booking.id), {
                 customerName: formData.customerName,
-                contactPhone: formData.phone,
+                contactPhone: 'HIDDEN',
                 carMake: formData.carMake,
                 carModel: formData.carModel,
-                licensePlate: formData.licensePlate.toUpperCase(),
+                licensePlate: 'DEMO',
                 location: formData.location || '',
                 bookingDate: formData.bookingDate,
                 startTime: formData.startTime,
@@ -2754,30 +2690,13 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                                     required
                                 />
                             </div>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label>Phone</label>
-                                    <input
-                                        value={formData.phone}
-                                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>License Plate</label>
-                                    <input
-                                        value={formData.licensePlate}
-                                        onChange={e => setFormData({ ...formData, licensePlate: e.target.value })}
-                                        style={{ textTransform: 'uppercase' }}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label>Location</label>
-                                    <input
-                                        value={formData.location}
-                                        onChange={e => setFormData({ ...formData, location: e.target.value })}
-                                        placeholder="Area/City"
-                                    />
-                                </div>
+                            <div className="form-group">
+                                <label>Customer Name</label>
+                                <input
+                                    value={formData.customerName}
+                                    onChange={e => setFormData({ ...formData, customerName: e.target.value })}
+                                    required
+                                />
                             </div>
                             <div className="form-row">
                                 <div className="form-group">
@@ -2929,9 +2848,9 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                                                             <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.category}</div>
                                                         </div>
                                                         <span style={{ color: 'var(--primary)', fontWeight: '600', whiteSpace: 'nowrap', flexShrink: 0, paddingRight: '0.5rem' }}>
-                                                            ₹{(s.prices && s.prices[(booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_')] > 0)
+                                                            {formatCurrency((s.prices && s.prices[(booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_')] > 0)
                                                                 ? s.prices[(booking.vehicleType || 'sedan').toLowerCase().replace(' ', '_')]
-                                                                : (s.price || 0)}
+                                                                : (s.price || 0))}
                                                         </span>
                                                     </div>
                                                 ))}
@@ -2944,7 +2863,7 @@ const BookingEditModal = ({ booking, onClose, onSuccess }) => {
                                     )}
                                 </div>
                                 <div className="form-group">
-                                    <label>Amount (₹)</label>
+                                    <label>Amount ({currentCurrency.symbol})</label>
                                     <input
                                         type="number"
                                         value={formData.price}

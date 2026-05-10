@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
 import { db } from '../config/firebase';
 import {
     collection,
@@ -20,6 +21,7 @@ import {
 
 const EmployeeDashboard = () => {
     const { userProfile } = useAuth();
+    const { currentCurrency, formatCurrency } = useCurrency();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         todayJobs: 0,
@@ -150,7 +152,7 @@ const EmployeeDashboard = () => {
                 <div className="stat-card-compact teal">
                     <div className="stat-icon-sm"><Briefcase size={18} /></div>
                     <div className="stat-content">
-                        <span className="stat-number">₹{stats.revenueMonth.toLocaleString('en-IN')}</span>
+                        <span className="stat-number">{formatCurrency(stats.revenueMonth)}</span>
                         <span className="stat-text">Revenue (Month)</span>
                     </div>
                 </div>

@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useCurrency } from '../contexts/CurrencyContext';
+import { useTranslation } from 'react-i18next';
 import { db, storage } from '../config/firebase';
 import {
     collection,
@@ -14,14 +16,20 @@ import {
     orderBy
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Receipt, Download, Users, Edit, Check, X, IndianRupee, TrendingUp, CreditCard, History, AlertCircle, Calendar, CheckCircle, XCircle, PlusSquare, Calculator, Search, Filter, Eye, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Receipt, Download, Users, Edit, Check, X, Wallet, TrendingUp, CreditCard, History, AlertCircle, Calendar, CheckCircle, XCircle, PlusSquare, Calculator, Search, Filter, Eye, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
 const Payroll = () => {
-    const { hasPermission } = useAuth();
+    const { t } = useTranslation();
+    const { hasPermission, userProfile } = useAuth();
+    const { 
+        currency: currentCurrencyCode, 
+        currentCurrency,
+        formatCurrency: globalFormatCurrency 
+    } = useCurrency();
     const [employees, setEmployees] = useState([]);
     const [payrollRecords, setPayrollRecords] = useState({});
     const [paymentHistory, setPaymentHistory] = useState([]);
@@ -51,23 +59,28 @@ const Payroll = () => {
 
     useEffect(() => {
         fetchPayrollData();
-    }, [month, companyWorkingDays]);
+    }, [month, companyWorkingDays, currentCurrencyCode]);
 
     const fetchPayrollData = async () => {
         try {
             setLoading(true);
+            const companyId = userProfile?.companyId;
+            if (!companyId) {
+                if (loading) setLoading(false);
+                return;
+            }
             
             // Fetch month's advances
             const startOfMonth = `${month}-01`;
             const endOfMonthDate = new Date(new Date(startOfMonth).getFullYear(), new Date(startOfMonth).getMonth() + 1, 0);
             const endOfMonth = endOfMonthDate.toISOString().split('T')[0];
             const advancesRef = collection(db, 'advances');
-            const advancesQuery = query(advancesRef, where('date', '>=', startOfMonth), where('date', '<=', endOfMonth));
+            const advancesQuery = query(advancesRef, where('companyId', '==', companyId), where('date', '>=', startOfMonth), where('date', '<=', endOfMonth));
             const advancesSnapshot = await getDocs(advancesQuery);
             const allMonthAdvances = advancesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
             // Fetch approved employees
-            const q = query(collection(db, 'adminUsers'), where('status', '==', 'approved'));
+            const q = query(collection(db, 'adminUsers'), where('companyId', '==', companyId), where('status', '==', 'approved'));
             const snapshot = await getDocs(q);
             const employeeList = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -76,7 +89,7 @@ const Payroll = () => {
 
             // Fetch payroll records for the selected month
             const payrollRef = collection(db, 'payroll');
-            const payrollQuery = query(payrollRef, where('month', '==', month));
+            const payrollQuery = query(payrollRef, where('companyId', '==', companyId), where('month', '==', month));
             const payrollSnapshot = await getDocs(payrollQuery);
 
             const records = {};
@@ -87,7 +100,7 @@ const Payroll = () => {
 
             // Fetch attendance for overtime calculation
             const attRef = collection(db, 'attendance');
-            const attQuery = query(attRef, where('date', '>=', startOfMonth), where('date', '<=', endOfMonth));
+            const attQuery = query(attRef, where('companyId', '==', companyId), where('date', '>=', startOfMonth), where('date', '<=', endOfMonth));
             const attSnap = await getDocs(attQuery);
             
             const overtimeMap = {};
@@ -174,12 +187,19 @@ const Payroll = () => {
 
     const processUnpay = async (emp) => {
         try {
+            const companyId = userProfile?.companyId;
+            if (!companyId) {
+                alert('Cannot process: Company ID missing');
+                return;
+            }
+
             setProcessing(true);
             const monthName = new Date(month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
             // 1. Delete the auto-generated expense for this employee+month
             const expQ = query(
                 collection(db, 'expenses'),
+                where('companyId', '==', companyId),
                 where('employeeId', '==', emp.id),
                 where('month', '==', month),
                 where('isAutoGenerated', '==', true)
@@ -213,7 +233,7 @@ const Payroll = () => {
     // Generate PDF Blob from Payslip HTML
     const generatePdfBlob = async (emp) => {
         const monthLabel = new Date(month + '-01').toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-        const fmt = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v || 0);
+        const fmt = (v) => globalFormatCurrency(v || 0);
         const gross = (emp.baseSalary || 0) + (emp.allowances || 0) + (emp.bonus || 0);
         const status = emp.processedToExpenses ? 'PAID' : 'PENDING';
         const statusColor = emp.processedToExpenses ? '#16a34a' : '#b45309';
@@ -330,11 +350,12 @@ const Payroll = () => {
             // 1. Create Expense Entry
             await addDoc(collection(db, 'expenses'), {
                 title: `Salary - ${emp.displayName} (${monthName})`,
+                companyId: userProfile?.companyId,
                 amount: emp.netPay,
                 category: 'salary',
                 date: new Date().toISOString().split('T')[0],
                 paymentMode: 'bank_transfer',
-                note: `Monthly salary payment for ${monthName}. Base: ₹${emp.baseSalary}, Allowances: ₹${emp.allowances || 0}, Bonus: ₹${emp.bonus}, OT: ₹${emp.overtimeAmount || 0}, Deductions: ₹${emp.deductions}`,
+                note: `Monthly salary payment for ${monthName}. Base: ${currentCurrencyCode} ${emp.baseSalary}, Allowances: ${currentCurrencyCode} ${emp.allowances || 0}, Bonus: ${currentCurrencyCode} ${emp.bonus}, OT: ${currentCurrencyCode} ${emp.overtimeAmount || 0}, Deductions: ${currentCurrencyCode} ${emp.deductions}`,
                 employeeId: emp.id,
                 month: month,
                 isAutoGenerated: true,
@@ -350,6 +371,7 @@ const Payroll = () => {
             } else {
                 await addDoc(collection(db, 'payroll'), {
                     employeeId: emp.id,
+                    companyId: userProfile?.companyId,
                     month: month,
                     baseSalary: emp.baseSalary,
                     allowances: emp.allowances || 0,
@@ -407,11 +429,7 @@ const Payroll = () => {
     };
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0
-        }).format(amount || 0);
+        return globalFormatCurrency(amount || 0);
     };
 
     const handlePrevMonth = () => {
@@ -441,6 +459,7 @@ const Payroll = () => {
             // 1. Save to advances collection
             await addDoc(collection(db, 'advances'), {
                 ...advanceData,
+                companyId: userProfile?.companyId,
                 amount: amt,
                 employeeName: emp?.displayName || 'Unknown',
                 createdAt: serverTimestamp()
@@ -449,6 +468,7 @@ const Payroll = () => {
             // 2. Save as Expense immediately
             await addDoc(collection(db, 'expenses'), {
                 title: `Advance Salary - ${emp?.displayName || 'Employee'}`,
+                companyId: userProfile?.companyId,
                 amount: amt,
                 category: 'salary',
                 date: advanceData.date,
@@ -629,9 +649,9 @@ const Payroll = () => {
             <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                 <div>
                     <h1 style={{ fontSize: '1.6rem', fontWeight: '700', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.6rem', margin: 0 }}>
-                        <Receipt size={24} color="#3b82f6" /> Payroll Management
+                        <Receipt size={24} color="#3b82f6" /> {t('payroll_management_title')}
                     </h1>
-                    <p style={{ color: '#64748b', margin: '0.2rem 0 0 0', fontSize: '0.875rem' }}>Manage employee salaries, bonuses, and payments</p>
+                    <p style={{ color: '#64748b', margin: '0.2rem 0 0 0', fontSize: '0.875rem' }}>{t('payroll_subtitle')}</p>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
@@ -640,7 +660,7 @@ const Payroll = () => {
                         <button onClick={handleNextMonth} style={{ padding: '0.4rem 0.5rem', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', borderLeft: '1px solid #e2e8f0' }}><ChevronRight size={18} /></button>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '0.2rem 0.5rem', overflow: 'hidden' }}>
-                        <span style={{ fontSize: '0.8rem', color: '#64748b', marginRight: '0.5rem' }}>Working Days:</span>
+                        <span style={{ fontSize: '0.8rem', color: '#64748b', marginRight: '0.5rem' }}>{t('working_days_label')}:</span>
                         <input 
                             type="number" 
                             value={companyWorkingDays} 
@@ -651,17 +671,17 @@ const Payroll = () => {
                     </div>
                     {hasPermission('payroll', 'edit') && (
                         <button onClick={() => setShowManualEntryModal(true)} title="Manual Entry" style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '0.45rem 0.75rem', borderRadius: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer' }}>
-                            <Calculator size={16} /> Entry
+                            <Calculator size={16} /> {t('entry')}
                         </button>
                     )}
                     <button onClick={handleGeneratePayslips} title="Generate Payslips" style={{ background: 'white', color: '#334155', border: '1px solid #e2e8f0', padding: '0.45rem 0.75rem', borderRadius: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer' }}>
-                        <FileText size={16} /> Payslips
+                        <FileText size={16} /> {t('payslips')}
                     </button>
                     <button className="btn btn-primary" onClick={() => setShowAdvanceModal(true)} style={{ background: '#f59e0b', color: 'white', border: 'none', padding: '0.45rem 0.75rem', borderRadius: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer' }}>
-                        <PlusSquare size={16} /> Record Advance
+                        <PlusSquare size={16} /> {t('record_advance')}
                     </button>
                     <button onClick={exportToExcel} title="Export" style={{ background: 'white', color: '#334155', border: '1px solid #e2e8f0', padding: '0.45rem 0.75rem', borderRadius: '8px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', cursor: 'pointer' }}>
-                        <Download size={16} /> Export
+                        <Download size={16} /> {t('export')}
                     </button>
                 </div>
             </div>
@@ -671,21 +691,21 @@ const Payroll = () => {
                 <div style={{ background: 'white', padding: '1rem 1.25rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div style={{ background: '#f3e8ff', color: '#a855f7', padding: '0.75rem', borderRadius: '10px', flexShrink: 0 }}><Users size={22} /></div>
                     <div>
-                        <div style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: '500', marginBottom: '0.2rem' }}>Total Employees</div>
+                        <div style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: '500', marginBottom: '0.2rem' }}>{t('total_employees')}</div>
                         <div style={{ color: '#0f172a', fontSize: '1.4rem', fontWeight: '700' }}>{filteredEmployees.length}</div>
                     </div>
                 </div>
                 <div style={{ background: 'white', padding: '1rem 1.25rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div style={{ background: '#dcfce7', color: '#22c55e', padding: '0.75rem', borderRadius: '10px', flexShrink: 0 }}><Receipt size={22} /></div>
                     <div>
-                        <div style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: '500', marginBottom: '0.2rem' }}>Total Payroll Cost</div>
+                        <div style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: '500', marginBottom: '0.2rem' }}>{t('total_payroll_cost')}</div>
                         <div style={{ color: '#0f172a', fontSize: '1.25rem', fontWeight: '700' }}>{formatCurrency(totalPayroll)}</div>
                     </div>
                 </div>
                 <div style={{ background: 'white', padding: '1rem 1.25rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <div style={{ background: '#e0f2fe', color: '#0ea5e9', padding: '0.75rem', borderRadius: '10px', flexShrink: 0 }}><TrendingUp size={22} /></div>
                     <div>
-                        <div style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: '500', marginBottom: '0.2rem' }}>Total Bonuses</div>
+                        <div style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: '500', marginBottom: '0.2rem' }}>{t('total_bonuses')}</div>
                         <div style={{ color: '#0f172a', fontSize: '1.25rem', fontWeight: '700' }}>{formatCurrency(totalBonus)}</div>
                     </div>
                 </div>
@@ -693,16 +713,20 @@ const Payroll = () => {
             {/* Summary Cards — Row 2: 2 cards */}
             <div className="summary-cards-row2" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div style={{ background: 'white', padding: '1rem 1.25rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ background: '#fee2e2', color: '#ef4444', padding: '0.75rem', borderRadius: '10px', flexShrink: 0 }}><IndianRupee size={22} /></div>
+                    <div style={{ background: '#fee2e2', color: '#ef4444', padding: '0.75rem', borderRadius: '10px', flexShrink: 0 }}>
+                        <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>
+                            {currentCurrencyCode}
+                        </span>
+                    </div>
                     <div>
-                        <div style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: '500', marginBottom: '0.2rem' }}>Total Deductions</div>
+                        <div style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: '500', marginBottom: '0.2rem' }}>{t('total_deductions')}</div>
                         <div style={{ color: '#0f172a', fontSize: '1.25rem', fontWeight: '700' }}>{formatCurrency(totalDeductions)}</div>
                     </div>
                 </div>
                 <div style={{ background: 'white', padding: '1rem 1.25rem', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: '4px solid #f59e0b' }}>
                     <div style={{ background: '#fef3c7', color: '#f59e0b', padding: '0.75rem', borderRadius: '10px', flexShrink: 0 }}><AlertCircle size={22} /></div>
                     <div>
-                        <div style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: '500', marginBottom: '0.2rem' }}>Pending Payments</div>
+                        <div style={{ color: '#64748b', fontSize: '0.8rem', fontWeight: '500', marginBottom: '0.2rem' }}>{t('pending_payments')}</div>
                         <div style={{ color: '#b45309', fontSize: '1.25rem', fontWeight: '700' }}>{formatCurrency(totalPending)}</div>
                     </div>
                 </div>
@@ -714,7 +738,7 @@ const Payroll = () => {
                     <Search size={16} color="#64748b" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                     <input
                         type="text"
-                        placeholder="Search employee..."
+                        placeholder={t('search_employee')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         style={{ width: '100%', padding: '0.5rem 0.75rem 0.5rem 2.25rem', borderRadius: '7px', border: '1px solid #e2e8f0', outline: 'none', fontSize: '0.875rem', boxSizing: 'border-box' }}
@@ -724,9 +748,9 @@ const Payroll = () => {
                     {uniqueRoles.map(role => <option key={role} value={role}>{role}</option>)}
                 </select>
                 <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ padding: '0.5rem 0.75rem', borderRadius: '7px', border: '1px solid #e2e8f0', outline: 'none', background: 'white', color: '#334155', fontSize: '0.875rem' }}>
-                    <option value="All">All Statuses</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Paid">Paid</option>
+                    <option value="All">{t('all_statuses')}</option>
+                    <option value="Pending">{t('pending')}</option>
+                    <option value="Paid">{t('paid')}</option>
                 </select>
             </div>
 
@@ -745,17 +769,17 @@ const Payroll = () => {
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                                 <thead>
                                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em', color: '#64748b' }}>
-                                        <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: '600' }}>Employee</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', fontWeight: '600' }}>Role</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600' }}>Base</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600' }}>Allow.</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#10b981' }}>Bonus</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#8b5cf6' }}>Overtime</th>
-                                         <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#ef4444' }}>Deduct.</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#f59e0b' }}>Advances</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#0f172a' }}>Net Pay</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: '600' }}>Status</th>
-                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: '600' }}>Actions</th>
+                                        <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: '600' }}>{t('employee')}</th>
+                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'left', fontWeight: '600' }}>{t('role')}</th>
+                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600' }}>{t('base_salary_label')}</th>
+                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600' }}>{t('allowances_label')}</th>
+                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#10b981' }}>{t('bonus_label')}</th>
+                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#8b5cf6' }}>{t('overtime_amount_label')}</th>
+                                         <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#ef4444' }}>{t('deductions_label')}</th>
+                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#f59e0b' }}>{t('advances_label')}</th>
+                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', fontWeight: '600', color: '#0f172a' }}>{t('net_pay_label')}</th>
+                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: '600' }}>{t('status')}</th>
+                                        <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', fontWeight: '600' }}>{t('actions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -903,7 +927,7 @@ const Payroll = () => {
                                 <BarChart data={roleCostData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} tickFormatter={(value) => `₹${value / 1000}k`} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} tickFormatter={(value) => `${currentCurrency.symbol}${value / 1000}k`} />
                                     <RechartsTooltip cursor={{ fill: '#f1f5f9' }} formatter={(value) => formatCurrency(value)} />
                                     <Bar dataKey="cost" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                                 </BarChart>
@@ -917,7 +941,7 @@ const Payroll = () => {
                                 <LineChart data={monthlyTrendData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                     <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} tickFormatter={(value) => `₹${value / 1000}k`} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} tickFormatter={(value) => `${currentCurrency.symbol}${value / 1000}k`} />
                                     <RechartsTooltip formatter={(value) => formatCurrency(value)} />
                                     <Line type="monotone" dataKey="cost" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6 }} />
                                 </LineChart>
@@ -1033,7 +1057,7 @@ const Payroll = () => {
                                     </select>
                                 </div>
                                 <div style={{ marginBottom: '1rem' }}>
-                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}>Advance Amount (₹)</label>
+                                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: '500' }}>Advance Amount ({currentCurrency.symbol})</label>
                                     <input 
                                         type="number" 
                                         style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}
@@ -1203,6 +1227,9 @@ const Payroll = () => {
 };
 
 const PayrollModal = ({ employee, month, onClose, onSuccess }) => {
+    const { t } = useTranslation();
+    const { globalFormatCurrency } = useCurrency();
+    const { userProfile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
         baseSalary: employee.baseSalary,
@@ -1227,6 +1254,7 @@ const PayrollModal = ({ employee, month, onClose, onSuccess }) => {
         try {
             const data = {
                 employeeId: employee.id,
+                companyId: userProfile?.companyId,
                 month: month,
                 baseSalary: Number(formData.baseSalary) || 0,
                 allowances: Number(formData.allowances) || 0,
@@ -1328,7 +1356,7 @@ const PayrollModal = ({ employee, month, onClose, onSuccess }) => {
                         <div style={{ marginTop: '1rem', padding: '1rem', background: '#f0fdf4', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ fontWeight: '500' }}>Net Pay:</span>
                             <span style={{ fontSize: '1.25rem', fontWeight: '700', color: '#166534' }}>
-                                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(netPay)}
+                                {globalFormatCurrency(netPay)}
                             </span>
                         </div>
                     </div>
@@ -1345,14 +1373,20 @@ const PayrollModal = ({ employee, month, onClose, onSuccess }) => {
 };
 
 const EmployeePayrollHistoryModal = ({ employee, onClose, onManualEntry, hasEditPermission }) => {
+    const { t } = useTranslation();
+    const { globalFormatCurrency } = useCurrency();
+    const { userProfile } = useAuth();
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchHistory = async () => {
             try {
+                if (!userProfile?.companyId) return;
+
                 const q = query(
                     collection(db, 'payroll'),
+                    where('companyId', '==', userProfile.companyId),
                     where('employeeId', '==', employee.id),
                     orderBy('month', 'desc')
                 );
@@ -1369,11 +1403,7 @@ const EmployeePayrollHistoryModal = ({ employee, onClose, onManualEntry, hasEdit
     }, [employee.id]);
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            maximumFractionDigits: 0
-        }).format(amount || 0);
+        return globalFormatCurrency(amount || 0);
     };
 
     const totalEarnings = history.reduce((sum, record) => sum + (record.netPay || 0), 0);
@@ -1470,6 +1500,9 @@ const EmployeePayrollHistoryModal = ({ employee, onClose, onManualEntry, hasEdit
 };
 
 const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
+    const { t } = useTranslation();
+    const { globalFormatCurrency } = useCurrency();
+    const { userProfile } = useAuth();
     const [selectedMonth, setSelectedMonth] = useState(initialMonth);
     const [attendanceStats, setAttendanceStats] = useState({
         present: 0,
@@ -1506,8 +1539,15 @@ const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
             const lastDay = new Date(year, month + 1, 0).getDate();
             const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
+            if (!userProfile?.companyId) {
+                console.warn('Cannot fetch attendance: companyId is missing');
+                setLoadingStats(false);
+                return;
+            }
+
             const q = query(
                 collection(db, 'attendance'),
+                where('companyId', '==', userProfile.companyId),
                 where('date', '>=', startDate),
                 where('date', '<=', endDate)
             );
@@ -1558,12 +1598,23 @@ const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
             // 2. Create Payroll Record
             // Check if exists first to update or create
             const payrollRef = collection(db, 'payroll');
-            const q = query(payrollRef, where('employeeId', '==', employee.id), where('month', '==', selectedMonth));
+            if (!userProfile?.companyId) {
+                alert('Error: Company ID missing. Please refresh.');
+                setSubmitting(false);
+                return;
+            }
+
+            const q = query(payrollRef, 
+                where('companyId', '==', userProfile.companyId),
+                where('employeeId', '==', employee.id), 
+                where('month', '==', selectedMonth)
+            );
             const snapshot = await getDocs(q);
 
             let payrollId;
             const payrollData = {
                 employeeId: employee.id,
+                companyId: userProfile?.companyId,
                 month: selectedMonth,
                 baseSalary: Number(formData.baseSalary),
                 allowances: Number(formData.allowances) || 0,
@@ -1589,6 +1640,7 @@ const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
             // 3. Create Expense Entry
             await addDoc(collection(db, 'expenses'), {
                 title: `Salary - ${employee.displayName} (${monthName})`,
+                companyId: userProfile?.companyId,
                 amount: netPay,
                 category: 'salary',
                 date: new Date().toISOString().split('T')[0],
@@ -1737,7 +1789,7 @@ const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
                             {employee.advances > 0 && (
                                 <div style={{ fontSize: '0.8rem', color: '#f59e0b', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                     <AlertCircle size={14} />
-                                    Note: Recorded advances (₹{employee.advances}) will be automatically deducted.
+                                    Note: Recorded advances ({globalFormatCurrency(employee.advances)}) will be automatically deducted.
                                 </div>
                             )}
                         </div>
@@ -1749,7 +1801,7 @@ const ManualPayrollModal = ({ employee, initialMonth, onClose, onSuccess }) => {
                                 <span style={{ fontSize: '0.8rem', color: '#666' }}>Amount to be paid</span>
                             </div>
                             <span style={{ fontSize: '1.5rem', fontWeight: '700', color: '#166534' }}>
-                                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(netPay)}
+                                {globalFormatCurrency(netPay)}
                             </span>
                         </div>
                     </div>

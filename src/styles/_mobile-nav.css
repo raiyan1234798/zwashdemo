@@ -82,6 +82,10 @@
         transform: translateX(-100%);
     }
 
+    [dir="rtl"] .sidebar {
+        transform: translateX(100%);
+    }
+
     .sidebar.mobile-open {
         transform: translateX(0);
     }
@@ -325,7 +329,7 @@
         font-size: 15px;
         font-weight: 500;
         transition: all 0.2s ease;
-        border-left: 3px solid transparent;
+        border-inline-start: 3px solid transparent;
     }
 
     .more-menu-item:active {
@@ -335,7 +339,7 @@
     .more-menu-item.active {
         color: var(--primary);
         background: rgba(4, 120, 87, 0.08);
-        border-left-color: var(--primary);
+        border-inline-start-color: var(--primary);
     }
 
     .more-menu-item svg:first-child {

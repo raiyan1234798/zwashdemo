@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth, ROLES, PERMISSIONS } from '../contexts/AuthContext';
+import { useAuth, ROLES, PERMISSIONS, PLANS, PLAN_USER_LIMITS } from '../contexts/AuthContext';
 import { db } from '../config/firebase';
 import { logAction } from '../utils/logger';
 import {
@@ -33,8 +33,10 @@ import {
     Users
 } from 'lucide-react';
 import PermissionSelector from '../components/PermissionSelector';
+import { useTranslation } from 'react-i18next';
 
 const Employees = () => {
+    const { t } = useTranslation();
     const { hasPermission, isAdmin, userProfile } = useAuth();
     const canCreate = hasPermission('employees', 'create');
     const canEdit = hasPermission('employees', 'edit');
@@ -51,22 +53,36 @@ const Employees = () => {
     const navigate = useNavigate();
 
     useEffect(() => {
-        fetchEmployees();
-    }, []);
+        if (userProfile) {
+            fetchEmployees();
+        }
+    }, [userProfile]);
 
     const fetchEmployees = async () => {
         try {
             setLoading(true);
 
-            // Fetch approved employees
             const usersRef = collection(db, 'adminUsers');
-            const approvedQuery = query(usersRef, where('status', '==', 'approved'));
+            // Filter by companyId to isolate tenant data
+            const cid = userProfile?.companyId || userProfile?.uid;
+            const isSA = userProfile?.role === 'superadmin';
+
+            let approvedQuery, pendingQuery;
+            if (isSA) {
+                approvedQuery = query(usersRef, where('status', '==', 'approved'));
+                pendingQuery  = query(usersRef, where('status', '==', 'pending'));
+            } else if (cid) {
+                approvedQuery = query(usersRef, where('companyId', '==', cid), where('status', '==', 'approved'));
+                pendingQuery  = query(usersRef, where('companyId', '==', cid), where('status', '==', 'pending'));
+            } else {
+                approvedQuery = query(usersRef, where('status', '==', 'approved'));
+                pendingQuery  = query(usersRef, where('status', '==', 'pending'));
+            }
+
             const approvedSnapshot = await getDocs(approvedQuery);
             const approved = approvedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            // Fetch pending users for admin/manager
             if (isAdmin || canEdit) {
-                const pendingQuery = query(usersRef, where('status', '==', 'pending'));
                 const pendingSnapshot = await getDocs(pendingQuery);
                 const pending = pendingSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setPendingUsers(pending);
@@ -75,7 +91,6 @@ const Employees = () => {
             setEmployees(approved);
         } catch (error) {
             console.error('Error fetching employees:', error);
-
         } finally {
             setLoading(false);
         }
@@ -97,7 +112,7 @@ const Employees = () => {
     };
 
     const rejectUser = async (userId) => {
-        if (!window.confirm('Reject this user?')) return;
+        if (!window.confirm(t('reject_user_confirm'))) return;
         try {
             await updateDoc(doc(db, 'adminUsers', userId), {
                 status: 'rejected',
@@ -111,15 +126,15 @@ const Employees = () => {
     };
 
     const deleteUser = async (userId, userName) => {
-        if (!window.confirm(`Are you sure you want to permanently delete "${userName}"? This action cannot be undone.`)) return;
+        if (!window.confirm(t('confirm_delete_employee', { name: userName, defaultValue: `Are you sure you want to permanently delete "${userName}"? This action cannot be undone.` }))) return;
         try {
             await deleteDoc(doc(db, 'adminUsers', userId));
             await logAction(userProfile, 'delete', 'employees', `Deleted employee: ${userName}`, { userId, userName });
             fetchEmployees();
-            alert('User deleted successfully');
+            alert(t('user_deleted_success'));
         } catch (error) {
             console.error('Error deleting user:', error);
-            alert('Error deleting user. Please try again.');
+            alert(t('user_deleted_error'));
         }
     };
 
@@ -135,17 +150,17 @@ const Employees = () => {
         <div className="employees-page">
             <div className="page-header">
                 <div>
-                    <h1><UserCog size={28} /> Employees</h1>
-                    <p className="subtitle">Manage team members and access</p>
+                    <h1><UserCog size={28} /> {t('employees')}</h1>
+                    <p className="subtitle">{t('manage_team_subtitle')}</p>
                 </div>
                 <div className="header-actions" style={{ display: 'flex', gap: '0.5rem' }}>
                     {canCreate && (
                         <>
-                            <button className="btn btn-secondary" onClick={() => setShowAddWorkerModal(true)} title="Add worker without login access">
-                                <Plus size={18} /> Add Worker
+                            <button className="btn btn-secondary" onClick={() => setShowAddWorkerModal(true)} title={t('add_worker_title')}>
+                                <Plus size={18} /> {t('add_worker')}
                             </button>
                             <button className="btn btn-primary" onClick={() => setShowInviteModal(true)}>
-                                <Plus size={18} /> Invite Employee
+                                <Plus size={18} /> {t('invite_employee')}
                             </button>
                         </>
                     )}
@@ -156,7 +171,7 @@ const Employees = () => {
             {(isAdmin || canEdit) && pendingUsers.length > 0 && (
                 <div className="card" style={{ marginBottom: '1.5rem', borderLeft: '4px solid var(--warning)' }}>
                     <div className="card-header">
-                        <h3>Pending Approvals ({pendingUsers.length})</h3>
+                        <h3>{t('pending_approvals')} ({pendingUsers.length})</h3>
                     </div>
                     <div className="card-body">
                         {pendingUsers.map(user => (
@@ -164,7 +179,7 @@ const Employees = () => {
                                 <div className="user-info-row">
                                     {user.photoURL && <img src={user.photoURL} alt="" className="user-thumb" />}
                                     <div className="user-details">
-                                        <strong>{user.displayName || 'No Name'}</strong>
+                                        <strong>{user.displayName || t('no_name')}</strong>
                                         <span className="user-email">{user.email}</span>
                                         {user.phone && <span className="user-phone"><Phone size={12} /> {user.phone}</span>}
                                     </div>
@@ -175,10 +190,10 @@ const Employees = () => {
                                         defaultValue={ROLES.EMPLOYEE}
                                         id={`role-${user.id}`}
                                     >
-                                        <option value={ROLES.EMPLOYEE}>Employee</option>
-                                        <option value={ROLES.SENIOR_EMPLOYEE}>Senior Employee</option>
-                                        <option value={ROLES.MANAGER}>Manager</option>
-                                        <option value={ROLES.ADMIN}>Admin</option>
+                                        <option value={ROLES.EMPLOYEE}>{t('employee')}</option>
+                                        <option value={ROLES.SENIOR_EMPLOYEE}>{t('senior_employee')}</option>
+                                        <option value={ROLES.MANAGER}>{t('manager')}</option>
+                                        <option value={ROLES.ADMIN}>{t('admin')}</option>
                                     </select>
                                     <button
                                         className="btn btn-sm btn-success"
@@ -187,7 +202,7 @@ const Employees = () => {
                                             approveUser(user.id, role);
                                         }}
                                     >
-                                        <Check size={14} /> Approve
+                                        <Check size={14} /> {t('approve')}
                                     </button>
                                     <button
                                         className="btn btn-sm btn-danger"
@@ -210,7 +225,7 @@ const Employees = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{employees.length}</span>
-                        <span className="stat-label">Total Employees</span>
+                        <span className="stat-label">{t('total_employees')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -219,7 +234,7 @@ const Employees = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{employees.filter(e => e.role === ROLES.SENIOR_EMPLOYEE).length}</span>
-                        <span className="stat-label">Senior Employees</span>
+                        <span className="stat-label">{t('senior_employees')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -228,7 +243,7 @@ const Employees = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{employees.filter(e => e.role === ROLES.MANAGER).length}</span>
-                        <span className="stat-label">Managers</span>
+                        <span className="stat-label">{t('managers')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -237,7 +252,7 @@ const Employees = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{pendingUsers.length}</span>
-                        <span className="stat-label">Pending</span>
+                        <span className="stat-label">{t('pending')}</span>
                     </div>
                 </div>
                 <div className="quick-stat-card">
@@ -246,7 +261,7 @@ const Employees = () => {
                     </div>
                     <div className="stat-info">
                         <span className="stat-value">{employees.filter(e => e.role === 'worker').length}</span>
-                        <span className="stat-label">Workers</span>
+                        <span className="stat-label">{t('workers')}</span>
                     </div>
                 </div>
             </div>
@@ -257,7 +272,7 @@ const Employees = () => {
                     <Search size={18} />
                     <input
                         type="text"
-                        placeholder="Search employees..."
+                        placeholder={t('search_employees_placeholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
@@ -267,12 +282,12 @@ const Employees = () => {
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                 >
-                    <option value="all">All Roles</option>
-                    <option value={ROLES.ADMIN}>Admin</option>
-                    <option value={ROLES.MANAGER}>Manager</option>
-                    <option value={ROLES.SENIOR_EMPLOYEE}>Senior Employee</option>
-                    <option value={ROLES.EMPLOYEE}>Employee</option>
-                    <option value="worker">Worker (No Login)</option>
+                    <option value="all">{t('all_roles')}</option>
+                    <option value={ROLES.ADMIN}>{t('admin')}</option>
+                    <option value={ROLES.MANAGER}>{t('manager')}</option>
+                    <option value={ROLES.SENIOR_EMPLOYEE}>{t('senior_employee')}</option>
+                    <option value={ROLES.EMPLOYEE}>{t('employee')}</option>
+                    <option value="worker">{t('worker_no_login')}</option>
                 </select>
             </div>
 
@@ -285,7 +300,7 @@ const Employees = () => {
                 ) : filteredEmployees.length === 0 ? (
                     <div className="empty-state">
                         <UserCog size={48} />
-                        <p>No employees found</p>
+                        <p>{t('no_employees_found')}</p>
                     </div>
                 ) : (
                     filteredEmployees.map(employee => (
@@ -299,9 +314,9 @@ const Employees = () => {
                                     </div>
                                 )}
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                                    <span className={`badge badge-${employee.role}`}>{employee.role === 'worker' ? 'Worker' : employee.role}</span>
+                                    <span className={`badge badge-${employee.role}`}>{employee.role === 'worker' ? t('worker') : t(employee.role)}</span>
                                     {employee.hasLogin === false && (
-                                        <span style={{ fontSize: '0.65rem', color: '#92400e', background: '#fef3c7', padding: '2px 6px', borderRadius: '4px' }}>No Login</span>
+                                        <span style={{ fontSize: '0.65rem', color: '#92400e', background: '#fef3c7', padding: '2px 6px', borderRadius: '4px' }}>{t('no_login')}</span>
                                     )}
                                 </div>
                             </div>
@@ -310,17 +325,17 @@ const Employees = () => {
                                 {employee.email ? (
                                     <p><Mail size={14} /> {employee.email}</p>
                                 ) : employee.hasLogin === false ? (
-                                    <p style={{ color: '#ca8a04' }}><Users size={14} /> Attendance Only</p>
+                                    <p style={{ color: '#ca8a04' }}><Users size={14} /> {t('attendance_only')}</p>
                                 ) : null}
                                 {employee.phone && <p><Phone size={14} /> {employee.phone}</p>}
                             </div>
-                            <div className="employee-card-footer">
+                             <div className="employee-card-footer">
                                 <button className="btn btn-sm btn-secondary" onClick={() => navigate(`/employees/${employee.id}`)}>
-                                    <Eye size={14} /> View
+                                    <Eye size={14} /> {t('view')}
                                 </button>
                                 {canEdit && (
                                     <button className="btn btn-sm btn-primary" onClick={() => navigate(`/employees/${employee.id}`)}>
-                                        <Edit size={14} /> {employee.hasLogin === false ? 'Edit' : 'Edit Role'}
+                                        <Edit size={14} /> {employee.hasLogin === false ? t('edit') : t('edit_role')}
                                     </button>
                                 )}
                             </div>
@@ -610,6 +625,7 @@ const Employees = () => {
 };
 
 const InviteModal = ({ onClose, onSuccess }) => {
+    const { t } = useTranslation();
     const { userProfile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [selectedRole, setSelectedRole] = useState(ROLES.EMPLOYEE);
@@ -630,23 +646,43 @@ const InviteModal = ({ onClose, onSuccess }) => {
         const form = e.target;
         const formData = new FormData(form);
         const email = formData.get('email').toLowerCase();
+        const companyId = userProfile?.companyId || userProfile?.uid || '';
+        const plan = userProfile?.plan || PLANS.BASIC;
+        const userLimit = PLAN_USER_LIMITS[plan];
 
         try {
+            // Enforce plan user limit
+            const existingUsersSnap = await getDocs(
+                query(collection(db, 'adminUsers'), where('companyId', '==', companyId))
+            );
+            if (existingUsersSnap.size >= userLimit) {
+                alert(`User limit (${userLimit}) reached for your ${plan} plan. Please upgrade your plan to add more users.`);
+                setLoading(false);
+                return;
+            }
+
             await addDoc(collection(db, 'employeeInvites'), {
                 email: email,
-                role: selectedRole, // Use state instead of form data for consistency
-                permissions: customPermissions, // Save custom permissions
+                role: selectedRole,
+                permissions: customPermissions,
                 invitedBy: userProfile?.email,
+                companyId: companyId,
+                companyName: userProfile?.companyName || '',
+                logoURL: userProfile?.logoURL || '',
+                isDemoClient: userProfile?.isDemoClient || false,
+                plan: plan,
                 status: 'pending',
                 createdAt: serverTimestamp()
             });
 
             await logAction(userProfile, 'create', 'employees', `Invited user: ${email}`, { email, role: selectedRole });
 
-            alert(`Invitation sent to ${email}`);
+            alert(`✅ Invite sent to ${email}!\n\nThey can sign in with their Gmail account at the login page and will be added to ${userProfile?.companyName || 'your company'} automatically.`);
+            onSuccess();
             onClose();
         } catch (error) {
             console.error('Error sending invite:', error);
+            alert('Error: ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -659,32 +695,32 @@ const InviteModal = ({ onClose, onSuccess }) => {
         <div className="modal">
             <div className="modal-content">
                 <div className="modal-header">
-                    <h2><Mail size={20} /> Invite Employee</h2>
+                    <h2><Mail size={20} /> {t('invite_employee')}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
                         <div className="form-group">
-                            <label>Email Address *</label>
+                            <label>{t('email_address')} *</label>
                             <input name="email" type="email" required placeholder="employee@example.com" />
                         </div>
                         <div className="form-group">
-                            <label>Role *</label>
+                            <label>{t('role')} *</label>
                             <select
                                 name="role"
                                 required
                                 value={selectedRole}
                                 onChange={(e) => setSelectedRole(e.target.value)}
                             >
-                                <option value={ROLES.EMPLOYEE}>Employee</option>
-                                <option value={ROLES.SENIOR_EMPLOYEE}>Senior Employee</option>
-                                <option value={ROLES.MANAGER}>Manager</option>
-                                <option value={ROLES.ADMIN}>Admin</option>
+                                <option value={ROLES.EMPLOYEE}>{t('employee')}</option>
+                                <option value={ROLES.SENIOR_EMPLOYEE}>{t('senior_employee')}</option>
+                                <option value={ROLES.MANAGER}>{t('manager')}</option>
+                                <option value={ROLES.ADMIN}>{t('admin')}</option>
                             </select>
                         </div>
 
                         <div className="permissions-section" style={{ marginTop: '1.5rem' }}>
-                            <h3 style={{ fontSize: '1rem', marginBottom: '1rem' }}>Customize Permissions</h3>
+                            <h3 style={{ fontSize: '1rem', marginBottom: '1rem' }}>{t('customize_permissions')}</h3>
                             <PermissionSelector
                                 currentPermissions={customPermissions}
                                 onChange={setCustomPermissions}
@@ -693,13 +729,13 @@ const InviteModal = ({ onClose, onSuccess }) => {
                         </div>
 
                         <div className="alert alert-info">
-                            The invited user will be able to sign in and complete their profile. You'll need to approve them before they can access the system.
+                            {t('invite_modal_info_text', { defaultValue: "The invited user will be able to sign in and complete their profile. You'll need to approve them before they can access the system." })}
                         </div>
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancel')}</button>
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Sending...' : 'Send Invitation'}
+                            {loading ? t('sending') : t('send_invitation')}
                         </button>
                     </div>
                 </form>
@@ -710,6 +746,7 @@ const InviteModal = ({ onClose, onSuccess }) => {
 
 // Add Worker Modal - For workers without login access (appear in Attendance & Payroll only)
 const AddWorkerModal = ({ onClose, onSuccess }) => {
+    const { t } = useTranslation();
     const { userProfile } = useAuth();
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState({
@@ -726,6 +763,7 @@ const AddWorkerModal = ({ onClose, onSuccess }) => {
         setLoading(true);
 
         try {
+            const workerCompanyId = userProfile?.companyId || userProfile?.uid || '';
             await addDoc(collection(db, 'adminUsers'), {
                 displayName: formData.displayName,
                 phone: formData.phone,
@@ -737,6 +775,8 @@ const AddWorkerModal = ({ onClose, onSuccess }) => {
                 hasLogin: false,
                 status: 'approved',
                 email: null,
+                companyId: workerCompanyId,
+                companyName: userProfile?.companyName || '',
                 createdBy: userProfile?.email,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
@@ -744,12 +784,12 @@ const AddWorkerModal = ({ onClose, onSuccess }) => {
 
             await logAction(userProfile, 'create', 'employees', `Added worker: ${formData.displayName}`, { name: formData.displayName, role: 'worker' });
 
-            alert(`Worker "${formData.displayName}" added successfully!`);
+            alert(t('worker_added_success', { name: formData.displayName, defaultValue: `Worker "${formData.displayName}" added successfully!` }));
             onSuccess();
             onClose();
         } catch (error) {
             console.error('Error adding worker:', error);
-            alert('Error adding worker: ' + error.message);
+            alert(t('worker_added_error', { message: error.message, defaultValue: 'Error adding worker: ' + error.message }));
         } finally {
             setLoading(false);
         }
@@ -759,42 +799,42 @@ const AddWorkerModal = ({ onClose, onSuccess }) => {
         <div className="modal">
             <div className="modal-content">
                 <div className="modal-header">
-                    <h2><Users size={20} /> Add Worker (No Login)</h2>
+                    <h2><Users size={20} /> {t('add_worker_no_login')}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="modal-body">
                         <div className="alert alert-info" style={{ marginBottom: '1rem', background: '#fef9c3', border: '1px solid #fcd34d', color: '#92400e' }}>
-                            ⚠️ Workers don't have login access. They will appear in Attendance and Payroll for tracking purposes only.
+                            {t('worker_login_warning')}
                         </div>
                         <div className="form-group">
-                            <label>Worker Name *</label>
-                            <input type="text" required placeholder="Full name" value={formData.displayName} onChange={(e) => setFormData({ ...formData, displayName: e.target.value })} />
+                            <label>{t('worker_name_label')}</label>
+                            <input type="text" required placeholder={t('full_name_placeholder')} value={formData.displayName} onChange={(e) => setFormData({ ...formData, displayName: e.target.value })} />
                         </div>
                         <div className="form-group">
-                            <label>Phone Number</label>
-                            <input type="tel" placeholder="+91 98765 43210" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+                            <label>{t('phone_number_label')}</label>
+                            <input type="tel" placeholder={t('phone_number_label')} value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
                         </div>
                         <div className="form-group">
-                            <label>Date of Joining</label>
+                            <label>{t('date_joining_label')}</label>
                             <input type="date" value={formData.dateOfJoining} onChange={(e) => setFormData({ ...formData, dateOfJoining: e.target.value })} />
                         </div>
                         <div className="form-group">
-                            <label>Base Salary (₹/month)</label>
-                            <input type="number" placeholder="15000" value={formData.baseSalary} onChange={(e) => setFormData({ ...formData, baseSalary: e.target.value })} />
+                            <label>{t('base_salary_label')}</label>
+                            <input type="number" placeholder={t('enter_salary_placeholder')} value={formData.baseSalary} onChange={(e) => setFormData({ ...formData, baseSalary: e.target.value })} />
                         </div>
                         <div className="form-group">
-                            <label>Address</label>
-                            <textarea placeholder="Home address" rows="2" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
+                            <label>{t('address_label')}</label>
+                            <textarea placeholder={t('address_label')} rows="2" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
                         </div>
                         <div className="form-group">
-                            <label>Emergency Contact</label>
-                            <input type="text" placeholder="Name & Phone" value={formData.emergencyContact} onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })} />
+                            <label>{t('emergency_contact_label')}</label>
+                            <input type="text" placeholder={t('contact_person_placeholder')} value={formData.emergencyContact} onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })} />
                         </div>
                     </div>
                     <div className="modal-footer">
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-                        <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Adding...' : 'Add Worker'}</button>
+                        <button type="button" className="btn btn-secondary" onClick={onClose}>{t('cancel')}</button>
+                        <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? t('adding') : t('add_worker_btn')}</button>
                     </div>
                 </form>
             </div>
@@ -803,6 +843,8 @@ const AddWorkerModal = ({ onClose, onSuccess }) => {
 };
 
 const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, onUpdate, onDelete }) => {
+    const { t } = useTranslation();
+    const { currentCurrency } = useCurrency();
     const [role, setRole] = useState(employee.role);
     const [permissions, setPermissions] = useState(employee.permissions || (PERMISSIONS[employee.role] ? JSON.parse(JSON.stringify(PERMISSIONS[employee.role])) : {}));
 
@@ -924,7 +966,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
             onClose();
         } catch (error) {
             console.error('Error updating employee:', error);
-            alert('Error updating employee details');
+            alert(t('update_employee_error', { defaultValue: 'Error updating employee details' }));
         } finally {
             setLoading(false);
         }
@@ -945,7 +987,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
         <div className="modal">
             <div className="modal-content modal-lg" style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
                 <div className="modal-header">
-                    <h2>Employee Details</h2>
+                    <h2>{t('employee_details_title')}</h2>
                     <button className="modal-close" onClick={onClose}>&times;</button>
                 </div>
 
@@ -991,7 +1033,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                                 textTransform: 'capitalize'
                             }}
                         >
-                            {tab}
+                            {t(tab)}
                         </button>
                     ))}
                 </div>
@@ -1006,15 +1048,15 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                             <div className="employee-stats-grid">
                                 <div style={{ padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--primary)' }}>{kpiStats.totalBookings}</div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Total Bookings</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('total_bookings_label')}</div>
                                 </div>
                                 <div style={{ padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--success)' }}>{kpiStats.thisMonth}</div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>This Month</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('this_month_label')}</div>
                                 </div>
                                 <div style={{ padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: '#10b981' }}>{kpiStats.completedServices}</div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Completed</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('completed_label')}</div>
                                 </div>
                             </div>
 
@@ -1028,31 +1070,31 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                             {canEdit && (
                                 <>
                                     <div className="form-group">
-                                        <label>Role</label>
+                                        <label>{t('role')}</label>
                                         <select value={role} onChange={(e) => setRole(e.target.value)}>
-                                            <option value={ROLES.EMPLOYEE}>Employee</option>
-                                            <option value={ROLES.SENIOR_EMPLOYEE}>Senior Employee</option>
-                                            <option value={ROLES.MANAGER}>Manager</option>
-                                            <option value={ROLES.ADMIN}>Admin</option>
+                                            <option value={ROLES.EMPLOYEE}>{t('employee')}</option>
+                                            <option value={ROLES.SENIOR_EMPLOYEE}>{t('senior_employee')}</option>
+                                            <option value={ROLES.MANAGER}>{t('manager')}</option>
+                                            <option value={ROLES.ADMIN}>{t('admin')}</option>
                                         </select>
                                     </div>
                                     <div style={{ padding: '1rem', background: 'var(--navy-50)', borderRadius: '8px', marginTop: '1rem' }}>
-                                        <h4 style={{ marginBottom: '0.75rem', fontSize: '0.9rem' }}>Additional Details</h4>
+                                        <h4 style={{ marginBottom: '0.75rem', fontSize: '0.9rem' }}>{t('additional_details')}</h4>
                                         <div className="form-group" style={{ margin: '0 0 0.5rem' }}>
-                                            <label style={{ fontSize: '0.75rem' }}>Phone Number</label>
-                                            <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number..." />
+                                            <label style={{ fontSize: '0.75rem' }}>{t('phone_number_label')}</label>
+                                            <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t('phone_number_label')} />
                                         </div>
                                         <div className="form-group" style={{ margin: '0 0 0.5rem' }}>
-                                            <label style={{ fontSize: '0.75rem' }}>Address</label>
-                                            <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Employee address..." />
+                                            <label style={{ fontSize: '0.75rem' }}>{t('address_label')}</label>
+                                            <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder={t('address_label')} />
                                         </div>
                                         <div className="employee-info-grid">
                                             <div className="form-group" style={{ margin: 0 }}>
-                                                <label style={{ fontSize: '0.75rem' }}>Emergency Contact</label>
-                                                <input type="text" value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value)} placeholder="Phone..." />
+                                                <label style={{ fontSize: '0.75rem' }}>{t('emergency_contact_label')}</label>
+                                                <input type="text" value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value)} placeholder={t('phone_number_label')} />
                                             </div>
                                             <div className="form-group" style={{ margin: 0 }}>
-                                                <label style={{ fontSize: '0.75rem' }}>Date of Joining</label>
+                                                <label style={{ fontSize: '0.75rem' }}>{t('date_joining_label')}</label>
                                                 <input type="date" value={dateOfJoining} onChange={(e) => setDateOfJoining(e.target.value)} />
                                             </div>
                                         </div>
@@ -1067,7 +1109,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                         <div className="tab-content" style={{ padding: '0 0.5rem' }}>
                             <div className="alert alert-info" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
                                 <Shield size={16} />
-                                <span>Adjusting permissions here will override the default role-based permissions for this user.</span>
+                                <span>{t('permissions_warning')}</span>
                             </div>
                             <PermissionSelector
                                 currentPermissions={permissions}
@@ -1084,30 +1126,30 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                             <div className="employee-stats-grid">
                                 <div style={{ padding: '1rem', background: '#dcfce7', borderRadius: '8px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: '#16a34a' }}>{attendanceStats.present}</div>
-                                    <div style={{ fontSize: '0.75rem', color: '#166534' }}>Present</div>
+                                    <div style={{ fontSize: '0.75rem', color: '#166534' }}>{t('present')}</div>
                                 </div>
                                 <div style={{ padding: '1rem', background: '#fee2e2', borderRadius: '8px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: '#dc2626' }}>{attendanceStats.absent}</div>
-                                    <div style={{ fontSize: '0.75rem', color: '#991b1b' }}>Absent</div>
+                                    <div style={{ fontSize: '0.75rem', color: '#991b1b' }}>{t('absent')}</div>
                                 </div>
                                 <div style={{ padding: '1rem', background: '#fef3c7', borderRadius: '8px', textAlign: 'center' }}>
                                     <div style={{ fontSize: '1.5rem', fontWeight: 600, color: '#d97706' }}>{attendanceStats.late}</div>
-                                    <div style={{ fontSize: '0.75rem', color: '#92400e' }}>Late</div>
+                                    <div style={{ fontSize: '0.75rem', color: '#92400e' }}>{t('late')}</div>
                                 </div>
                             </div>
 
                             {/* Attendance History */}
                             {attendanceRecords.length === 0 ? (
-                                <p style={{ textAlign: 'center', color: 'var(--navy-400)' }}>No attendance records found</p>
+                                <p style={{ textAlign: 'center', color: 'var(--navy-400)' }}>{t('no_attendance_records', { defaultValue: 'No attendance records found' })}</p>
                             ) : (
                                 <div className="table-container" style={{ maxHeight: '200px', overflowY: 'auto' }}>
                                     <table className="data-table">
                                         <thead>
                                             <tr>
-                                                <th>Date</th>
-                                                <th>Check In</th>
-                                                <th>Check Out</th>
-                                                <th>Status</th>
+                                                <th>{t('date')}</th>
+                                                <th>{t('check_in')}</th>
+                                                <th>{t('check_out')}</th>
+                                                <th>{t('status')}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1118,7 +1160,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                                                     <td>{formatTime(record.checkOut)}</td>
                                                     <td>
                                                         <span className={`badge ${record.isLate ? 'badge-pending' : 'badge-confirmed'}`}>
-                                                            {record.isLate ? 'Late' : 'On Time'}
+                                                            {record.isLate ? t('late') : t('on_time')}
                                                         </span>
                                                     </td>
                                                 </tr>
@@ -1136,14 +1178,14 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                             {payrollData ? (
                                 <div style={{ display: 'grid', gap: '1rem' }}>
                                     <div style={{ padding: '1.5rem', background: 'var(--navy-50)', borderRadius: '8px' }}>
-                                        <h4 style={{ marginBottom: '1rem' }}>Salary Information</h4>
+                                        <h4 style={{ marginBottom: '1rem' }}>{t('salary_info')}</h4>
                                         <div className="employee-info-grid">
                                             <div>
-                                                <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Base Salary</div>
-                                                <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>₹{payrollData.baseSalary?.toLocaleString() || 'N/A'}</div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('base_salary_label')}</div>
+                                                <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{currentCurrency.symbol}{payrollData.baseSalary?.toLocaleString() || 'N/A'}</div>
                                             </div>
                                             <div>
-                                                <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>Last Paid</div>
+                                                <div style={{ fontSize: '0.75rem', color: 'var(--navy-500)' }}>{t('last_paid')}</div>
                                                 <div style={{ fontSize: '1.25rem', fontWeight: 600 }}>{formatDate(payrollData.lastPaidDate)}</div>
                                             </div>
                                         </div>
@@ -1151,8 +1193,8 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                                 </div>
                             ) : (
                                 <div style={{ textAlign: 'center', padding: '2rem' }}>
-                                    <p style={{ color: 'var(--navy-400)' }}>No payroll data available</p>
-                                    <p style={{ fontSize: '0.85rem', color: 'var(--navy-400)' }}>Set up payroll in the Payroll section</p>
+                                    <p style={{ color: 'var(--navy-400)' }}>{t('no_payroll_data', { defaultValue: 'No payroll data available' })}</p>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--navy-400)' }}>{t('setup_payroll_hint', { defaultValue: 'Set up payroll in the Payroll section' })}</p>
                                 </div>
                             )}
                         </div>
@@ -1166,15 +1208,15 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                             onClick={() => setShowDeleteConfirm(true)}
                             style={{ marginRight: 'auto' }}
                         >
-                            <Trash2 size={16} /> Delete
+                            <Trash2 size={16} /> {t('delete')}
                         </button>
                     )}
                     {canEdit && (
                         <button className="btn btn-primary" onClick={updateEmployeeDetails} disabled={loading}>
-                            {loading ? 'Saving...' : 'Save Changes'}
+                            {loading ? t('saving') : t('save_changes')}
                         </button>
                     )}
-                    <button className="btn btn-secondary" onClick={onClose}>Close</button>
+                    <button className="btn btn-secondary" onClick={onClose}>{t('close')}</button>
                 </div>
 
                 {/* Delete Confirmation */}
@@ -1182,11 +1224,11 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                     <div className="delete-confirm-overlay">
                         <div className="delete-confirm-box">
                             <AlertTriangle size={48} color="#ef4444" />
-                            <h3>Delete Employee?</h3>
-                            <p>Are you sure you want to permanently delete <strong>{employee.displayName}</strong>?</p>
-                            <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>This action cannot be undone.</p>
+                            <h3>{t('delete_employee_q')}</h3>
+                            <p>{t('are_you_sure_delete')} <strong>{employee.displayName}</strong>?</p>
+                            <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>{t('cannot_be_undone')}</p>
                             <div className="delete-confirm-actions">
-                                <button className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)}>Cancel</button>
+                                <button className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)}>{t('cancel')}</button>
                                 <button
                                     className="btn btn-danger"
                                     onClick={() => {
@@ -1194,7 +1236,7 @@ const EmployeeDetailsModal = ({ employee, onClose, isAdmin, canEdit, canDelete, 
                                         onClose();
                                     }}
                                 >
-                                    <Trash2 size={16} /> Delete Permanently
+                                    <Trash2 size={16} /> {t('delete_permanently')}
                                 </button>
                             </div>
                         </div>
