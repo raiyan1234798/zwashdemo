@@ -544,17 +544,12 @@ export function AuthProvider({ children }) {
             setError(null);
             setLoading(true);
 
-            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-            if (!isLocal) {
-                await signInWithRedirect(auth, googleProvider);
-                return;
-            }
-
             try {
+                // Since COOP headers are now fixed on production, popup will work normally
                 await signInWithPopup(auth, googleProvider);
             } catch (popupErr) {
                 console.log('Popup failed, falling back to redirect...', popupErr);
+                // Fallback for strict browsers (e.g. mobile Safari)
                 await signInWithRedirect(auth, googleProvider);
             }
         } catch (err) {
